@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 100% Passed](https://img.shields.io/badge/tests-56%2F56%20passed-brightgreen.svg)](tests/)
+[![Tests: 100% Passed](https://img.shields.io/badge/tests-61%2F61%20passed-brightgreen.svg)](tests/)
 
 Continuum is a portable, mathematically verifiable, and model-independent AI work continuity engine designed to preserve the physical truth of an ongoing software engineering project across different AI models, sessions, and platforms.
 
@@ -78,8 +78,8 @@ When evidence conflicts, Continuum arbitrates truth according to strict seniorit
 | | **Phase 5** | Conversation & Agent State Ingestion | ✅ **VERIFIED** |
 | **Milestone 3** | **Phase 6** | Evidence Resolution Engine | ✅ **VERIFIED** |
 | | **Phase 7** | Contradiction Detection Engine | ✅ **VERIFIED** |
-| | **Phase 8** | Confidence Calculation & Verified Status Evaluation | ⏳ *Next Phase* |
-| **Milestone 4** | **Phase 9** | State Graph (DAG) Construction | ⏳ *Pending* |
+| | **Phase 8** | Confidence Calculation & Verified Status Evaluation | ✅ **VERIFIED** |
+| **Milestone 4** | **Phase 9** | State Graph (DAG) Construction | ⏳ *Next Phase* |
 | | **Phase 10** | Dependency Invalidation & Status Propagation | ⏳ *Pending* |
 | | **Phase 11** | Graph Persistence, Querying & Visualization | ⏳ *Pending* |
 | **Milestone 5** | **Phase 12** | Task-Driven Context Selection | ⏳ *Pending* |
@@ -125,12 +125,15 @@ CONTINUUM/
 │   │   └── comment_parser.py    # Universal TODO/FIXME/BUG marker extractor
 │   └── verification/
 │       └── runners.py           # Test runners & structured output parsers
-├── resolution/                  # Truth Resolution & State Synthesis (Milestone 3)
+├── resolution/                  # Truth Resolution & State Synthesis (Milestone 3 - Phase 6)
 │   └── resolver.py              # Phase 6: Seniority arbitration & conflict preservation
-├── contradictions/              # Discrepancy & Hallucination Defense (Milestone 3)
+├── contradictions/              # Discrepancy & Hallucination Defense (Milestone 3 - Phase 7)
 │   ├── models.py                # ContradictionType, severity, and DiscrepancyLedger
 │   └── detector.py              # Phase 7: Cross-boundary contradiction detector
-├── tests/                       # Complete Test Suite (56 unit & integration tests)
+├── confidence/                  # Confidence & Status Evaluation (Milestone 3 - Phase 8)
+│   ├── models.py                # ConfidenceBreakdown & scoring schema
+│   └── calculator.py            # Phase 8: Multi-dimensional confidence engine
+├── tests/                       # Complete Test Suite (61 unit & integration tests)
 │   ├── run_all_tests.py         # Test runner
 │   ├── test_enums_and_evidence.py
 │   ├── test_state_isolation.py
@@ -142,7 +145,8 @@ CONTINUUM/
 │   ├── test_verification_extractor.py
 │   ├── test_conversation_extractor.py
 │   ├── test_evidence_resolver.py
-│   └── test_contradiction_detector.py
+│   ├── test_contradiction_detector.py
+│   └── test_confidence_calculator.py
 ├── docs/reports/                # Phase Verification & Completion Reports
 └── pyproject.toml
 ```
