@@ -74,9 +74,9 @@ When evidence conflicts, Continuum arbitrates truth according to strict seniorit
 | **Milestone 2** | **Phase 1** | Workspace & Source Code Evidence Extraction | ✅ **VERIFIED** |
 | | **Phase 2** | Configuration, Environment & Metadata Extraction | ✅ **VERIFIED** |
 | | **Phase 3** | Git History & Workspace Delta Analysis | ✅ **VERIFIED** |
-| | **Phase 4** | Test, Build & Verification Evidence Collection | ⏳ *Next Phase* |
-| | **Phase 5** | Conversation & Agent State Ingestion | ⏳ *Pending* |
-| **Milestone 3** | **Phase 6** | Evidence Resolution Engine | ⏳ *Pending* |
+| | **Phase 4** | Test, Build & Verification Evidence Collection | ✅ **VERIFIED** |
+| | **Phase 5** | Conversation & Agent State Ingestion | ✅ **VERIFIED** |
+| **Milestone 3** | **Phase 6** | Evidence Resolution Engine | ⏳ *Next Phase* |
 | | **Phase 7** | Contradiction Detection Engine | ⏳ *Pending* |
 | | **Phase 8** | Confidence Calculation & Verified Status Evaluation | ⏳ *Pending* |
 | **Milestone 4** | **Phase 9** | State Graph (DAG) Construction | ⏳ *Pending* |
