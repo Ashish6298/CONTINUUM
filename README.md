@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 100% Passed](https://img.shields.io/badge/tests-67%2F67%20passed-brightgreen.svg)](tests/)
+[![Tests: 100% Passed](https://img.shields.io/badge/tests-77%2F77%20passed-brightgreen.svg)](tests/)
 
 Continuum is a portable, mathematically verifiable, and model-independent AI work continuity engine designed to preserve the physical truth of an ongoing software engineering project across different AI models, sessions, and platforms.
 
@@ -80,9 +80,9 @@ When evidence conflicts, Continuum arbitrates truth according to strict seniorit
 | | **Phase 7** | Contradiction Detection Engine | ✅ **VERIFIED** |
 | | **Phase 8** | Confidence Calculation & Verified Status Evaluation | ✅ **VERIFIED** |
 | **Milestone 4** | **Phase 9** | State Graph (DAG) Construction | ✅ **VERIFIED** |
-| | **Phase 10** | Dependency Invalidation & Status Propagation | ⏳ *Next Phase* |
-| | **Phase 11** | Graph Persistence, Querying & Visualization | ⏳ *Pending* |
-| **Milestone 5** | **Phase 12** | Task-Driven Context Selection | ⏳ *Pending* |
+| | **Phase 10** | Dependency Invalidation & Status Propagation | ✅ **VERIFIED** |
+| | **Phase 11** | Graph Persistence, Querying & Visualization | ✅ **VERIFIED** |
+| **Milestone 5** | **Phase 12** | Task-Driven Context Selection | ⏳ *Next Phase* |
 | | **Phase 13** | Context Pruning & Token Budget Optimization | ⏳ *Pending* |
 | **Milestone 6** | **Phase 14** | Universal Handoff Package Generation | ⏳ *Pending* |
 | | **Phase 15** | Model-Specific Handoff Adapters (Claude, Codex, Gemini) | ⏳ *Pending* |
@@ -133,10 +133,14 @@ CONTINUUM/
 ├── confidence/                  # Confidence & Status Evaluation (Milestone 3 - Phase 8)
 │   ├── models.py                # ConfidenceBreakdown & scoring schema
 │   └── calculator.py            # Phase 8: Multi-dimensional confidence engine
-├── graph/                       # Canonical Project State Graph (Milestone 4 - Phase 9)
-│   ├── models.py                # GraphValidationResult & GraphStats
-│   └── manager.py               # Phase 9: State Graph (DAG) manager & Mermaid export
-├── tests/                       # Complete Test Suite (67 unit & integration tests)
+├── graph/                       # Canonical Project State Graph (Milestone 4 - Phases 9, 10 & 11)
+│   ├── models.py                # GraphValidationResult, GraphStats, PropagationResult
+│   ├── manager.py               # Phase 9: State Graph (DAG) manager & visualizer
+│   ├── propagator.py            # Phase 10: Invalidation propagation & actionable work engine
+│   ├── snapshot.py              # Phase 11: Atomic versioned graph persistence & load
+│   ├── diff.py                  # Phase 11: Semantic graph comparison & delta engine
+│   └── query.py                 # Phase 11: Topologically indexed graph query engine
+├── tests/                       # Complete Test Suite (77 unit & integration tests)
 │   ├── run_all_tests.py         # Test runner
 │   ├── test_enums_and_evidence.py
 │   ├── test_state_isolation.py
@@ -150,7 +154,9 @@ CONTINUUM/
 │   ├── test_evidence_resolver.py
 │   ├── test_contradiction_detector.py
 │   ├── test_confidence_calculator.py
-│   └── test_state_graph.py
+│   ├── test_state_graph.py
+│   ├── test_dependency_propagation.py
+│   └── test_graph_persistence_and_querying.py
 ├── docs/reports/                # Phase Verification & Completion Reports
 └── pyproject.toml
 ```

@@ -1,8 +1,8 @@
 """
 Project Continuum - State Graph Models & Validation
 ===================================================
-Milestone 4 - Phase 9: State Graph (DAG) Construction.
-Defines graph statistics, topology validation results, and traversal types.
+Milestone 4 - Phase 9 & 10: State Graph (DAG) & Dependency Invalidation.
+Defines graph statistics, topology validation results, traversal types, and propagation outcomes.
 """
 
 from dataclasses import dataclass, field, asdict
@@ -41,4 +41,22 @@ class GraphStats:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GraphStats":
+        return cls(**data)
+
+
+@dataclass
+class PropagationResult:
+    """Outcome of dependency status propagation and invalidation."""
+    changed_node_id: str
+    affected_node_ids: List[str] = field(default_factory=list)
+    stale_node_ids: List[str] = field(default_factory=list)
+    blocked_node_ids: List[str] = field(default_factory=list)
+    unresolved_prerequisites: Dict[str, List[str]] = field(default_factory=dict)
+    explanation: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "PropagationResult":
         return cls(**data)

@@ -262,20 +262,34 @@ class StateGraphManager(IStateGraphManager):
             leaf_node_ids=leaves
         )
 
-    def propagate_invalidation(self, changed_node_id: str) -> List[str]:
+    def propagate_invalidation(self, changed_node_id: str, new_status: Optional[Status] = None) -> List[str]:
         """
         Propagates status invalidation to all downstream dependents when a dependency changes.
         Marks affected dependents STALE (or BLOCKED if failed).
         Implements IStateGraphManager Protocol.
         """
-        dependents = self.get_dependents(changed_node_id, recursive=True)
-        affected_ids: List[str] = []
+        from graph.propagator import DependencyPropagator
+        propagator = DependencyPropagator(self)
+        res = propagator.propagate_change(changed_node_id=changed_node_id, new_status=new_status)
+        return res.affected_node_ids
 
-        for dep in dependents:
-            dep.status = Status.STALE
-            affected_ids.append(dep.id)
+    def get_unresolved_dependencies(self, node_id: str) -> List[GraphNode]:
+        """Returns direct upstream prerequisites that are not VERIFIED."""
+        from graph.propagator import DependencyPropagator
+        propagator = DependencyPropagator(self)
+        return propagator.get_unresolved_dependencies(node_id)
 
-        return affected_ids
+    def get_actionable_nodes(self) -> List[GraphNode]:
+        """Returns nodes whose prerequisites are satisfied and ready to work on."""
+        from graph.propagator import DependencyPropagator
+        propagator = DependencyPropagator(self)
+        return propagator.determine_next_actionable_nodes()
+
+    def recommend_next_action(self) -> Optional[Any]:
+        """Synthesizes the optimal next tactical action."""
+        from graph.propagator import DependencyPropagator
+        propagator = DependencyPropagator(self)
+        return propagator.recommend_next_action()
 
     def export_mermaid(self) -> str:
         """
@@ -406,3 +420,54 @@ class StateGraphManager(IStateGraphManager):
                         target_id=f"sym_{sym.name}",
                         relation=RelationType.VERIFIES
                     ))
+
+    def save_snapshot(self, file_path: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+        """Saves current graph state to a versioned atomic snapshot file."""
+        from graph.snapshot import GraphSnapshot
+        snapshot = GraphSnapshot.from_graph_manager(self, metadata=metadata)
+        snapshot.save(file_path)
+        return snapshot.snapshot_id
+
+    def load_snapshot(self, file_path: str) -> None:
+        """Loads and restores graph state from a snapshot file."""
+        from graph.snapshot import GraphSnapshot
+        snapshot = GraphSnapshot.load(file_path)
+        self._nodes.clear()
+        self._edges.clear()
+        self._out_edges.clear()
+        self._in_edges.clear()
+
+        for nd in snapshot.nodes:
+            self.add_node(GraphNode.from_dict(nd))
+        for ed in snapshot.edges:
+            self.add_edge(GraphEdge.from_dict(ed))
+
+    def compare_with(self, other_manager: "StateGraphManager") -> Any:
+        """Compares current graph against another manager instance."""
+        from graph.snapshot import GraphSnapshot
+        from graph.diff import GraphDiff
+        snap_a = GraphSnapshot.from_graph_manager(self)
+        snap_b = GraphSnapshot.from_graph_manager(other_manager)
+        return GraphDiff.compare(snap_a, snap_b)
+
+    def query(self) -> Any:
+        """Returns GraphQueryEngine instance for active queries."""
+        from graph.query import GraphQueryEngine
+        return GraphQueryEngine(self)
+
+    def export_dot(self) -> str:
+        """Generates Graphviz DOT representation of the DAG."""
+        lines = ["digraph CanonicalStateGraph {", "    rankdir=LR;", "    node [shape=box, style=rounded, fontname=\"Helvetica\"];"]
+        for node in sorted(self._nodes.values(), key=lambda n: n.id):
+            clean_id = f'"{node.id}"'
+            label = f"{node.name}\\n[{node.node_type.value}]\\n{node.status.value}"
+            color = "#2ecc71" if node.status == Status.VERIFIED else ("#e74c3c" if node.status == Status.FAILED else "#95a5a6")
+            lines.append(f"    {clean_id} [label=\"{label}\", color=\"{color}\"];")
+
+        for edge in sorted(self._edges, key=lambda e: (e.source_id, e.target_id)):
+            src = f'"{edge.source_id}"'
+            tgt = f'"{edge.target_id}"'
+            lines.append(f"    {src} -> {tgt} [label=\"{edge.relation.value}\"];")
+
+        lines.append("}")
+        return "\n".join(lines)
