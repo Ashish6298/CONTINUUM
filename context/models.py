@@ -100,3 +100,9 @@ class TaskContext:
 
         lines.append(f"\n*(Project Context Optimized: {self.omitted_node_count} unrelated nodes omitted)*")
         return "\n".join(lines)
+
+    def prune(self, token_budget: int) -> Any:
+        """Prunes this task context to fit within a specific token budget."""
+        from context.pruner import ContextPruner
+        pruner = ContextPruner()
+        return pruner.prune_to_budget(self, token_budget=token_budget)

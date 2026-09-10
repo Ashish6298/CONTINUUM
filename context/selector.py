@@ -42,10 +42,18 @@ class TaskContextSelector(IContextSelector):
         token_budget: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        Extracts task-relevant context slice.
+        Extracts task-relevant context slice and applies token budget optimization if requested.
         Implements IContextSelector interface.
         """
         task_ctx = self.extract_task_context(task_description, canonical_state, token_budget)
+        if token_budget is not None:
+            from context.pruner import ContextPruner
+            pruner = ContextPruner()
+            pruned_res = pruner.prune_to_budget(task_ctx, token_budget=token_budget)
+            d = task_ctx.to_dict()
+            d["pruning"] = pruned_res.to_dict()
+            return d
+
         return task_ctx.to_dict()
 
     def extract_task_context(
