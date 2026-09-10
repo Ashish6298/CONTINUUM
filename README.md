@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 100% Passed](https://img.shields.io/badge/tests-82%2F82%20passed-brightgreen.svg)](tests/)
+[![Tests: 100% Passed](https://img.shields.io/badge/tests-105%2F105%20passed-brightgreen.svg)](tests/)
 
 Continuum is a portable, mathematically verifiable, and model-independent AI work continuity engine designed to preserve the physical truth of an ongoing software engineering project across different AI models, sessions, and platforms.
 
@@ -84,12 +84,12 @@ When evidence conflicts, Continuum arbitrates truth according to strict seniorit
 | | **Phase 11** | Graph Persistence, Querying & Visualization | ✅ **VERIFIED** |
 | **Milestone 5** | **Phase 12** | Task-Driven Context Selection | ✅ **VERIFIED** |
 | | **Phase 13** | Context Pruning & Token Budget Optimization | ✅ **VERIFIED** |
-| **Milestone 6** | **Phase 14** | Universal Handoff Package Generation | ⏳ *Next Phase* |
-| | **Phase 15** | Model-Specific Handoff Adapters (Claude, Codex, Gemini) | ⏳ *Pending* |
-| **Milestone 7** | **Phase 16** | Filesystem Observation & Incremental State Updates | ⏳ *Pending* |
-| | **Phase 17** | Git Hooks & Persistent State Management | ⏳ *Pending* |
-| | **Phase 18** | Continuum Daemon & CLI | ⏳ *Pending* |
-| **Milestone 8** | **Phase 19** | End-to-End Integration & Polyglot Validation | ⏳ *Pending* |
+| **Milestone 6** | **Phase 14** | Universal Handoff Package Generation | ✅ **VERIFIED** |
+| | **Phase 15** | Model-Specific Handoff Adapters (Claude, Codex, Gemini, Local) | ✅ **VERIFIED** |
+| **Milestone 7** | **Phase 16** | Filesystem Observation & Incremental State Updates | ✅ **VERIFIED** |
+| | **Phase 17** | Git Hooks & Persistent State Management | ✅ **VERIFIED** |
+| | **Phase 18** | Continuum Daemon & CLI | ✅ **VERIFIED** |
+| **Milestone 8** | **Phase 19** | End-to-End Integration & Polyglot Validation | ⏳ *Next Phase* |
 | | **Phase 20** | Adversarial Testing & Hallucination Resistance | ⏳ *Pending* |
 | | **Phase 21** | Performance, Reliability & Data Integrity | ⏳ *Pending* |
 | | **Phase 22** | Security, Privacy & Production Hardening | ⏳ *Pending* |
@@ -144,7 +144,29 @@ CONTINUUM/
 │   ├── models.py                # TaskContext payload & Markdown briefing generator
 │   ├── selector.py              # Phase 12: Task-driven context selector engine
 │   └── pruner.py                # Phase 13: Priority-tiered context pruner & budget optimizer
-├── tests/                       # Complete Test Suite (82 unit & integration tests)
+├── handoff/                     # AI Model Handoff System (Milestone 6 - Phases 14 & 15)
+│   ├── models.py                # HandoffPackage & atomic filesystem persistence
+│   ├── packager.py              # Phase 14: Universal Handoff Package generator
+│   └── adapters/                # Phase 15: Model-Specific Handoff Adapters
+│       ├── base.py              # Base adapter protocol implementation
+│       ├── claude_adapter.py    # Anthropic Claude XML-tagged adapter
+│       ├── codex_gpt_adapter.py # OpenAI Codex / GPT-4 markdown adapter
+│       ├── gemini_adapter.py    # Google Gemini hierarchical ontology adapter
+│       └── local_model_adapter.py # Compact token-frugal adapter for local models
+├── watcher/                     # Continuous Work Memory (Milestone 7 - Phase 16)
+│   ├── models.py                # ChangeType, FileChangeEvent, IncrementalUpdateResult
+│   ├── detector.py              # Phase 16: Filesystem change & delta detector
+│   └── updater.py               # Phase 16: Incremental state updater & invalidator
+├── storage/                     # Persistent State & Git Hooks (Milestone 7 - Phase 17)
+│   ├── models.py                # StorageMetadata, RecoveryResult
+│   ├── manager.py               # Phase 17: .continuum directory & snapshot storage
+│   ├── recovery.py              # Phase 17: Corruption detection & auto-recovery
+│   └── hooks.py                 # Phase 17: Non-blocking Git hook management
+├── daemon/                      # Background Observer Service (Milestone 7 - Phase 18)
+│   └── service.py               # Phase 18: Threaded daemon with run_once & background lifecycle
+├── cli/                         # Developer & Agent Command Line (Milestone 7 - Phase 18)
+│   └── main.py                  # Phase 18: init, status, scan, graph, handoff, daemon
+├── tests/                       # Complete Test Suite (105 unit & integration tests)
 │   ├── run_all_tests.py         # Test runner
 │   ├── test_enums_and_evidence.py
 │   ├── test_state_isolation.py
@@ -162,9 +184,42 @@ CONTINUUM/
 │   ├── test_dependency_propagation.py
 │   ├── test_graph_persistence_and_querying.py
 │   ├── test_context_selector.py
-│   └── test_context_pruning.py
+│   ├── test_context_pruning.py
+│   ├── test_handoff_packager.py
+│   ├── test_model_adapters.py
+│   ├── test_incremental_updater.py
+│   ├── test_persistent_storage_and_hooks.py
+│   └── test_cli_and_daemon.py
 ├── docs/reports/                # Phase Verification & Completion Reports
 └── pyproject.toml
+```
+
+---
+
+## 💻 Developer CLI (`continuum`)
+
+Initialize and manage verified state directly from the terminal:
+
+```bash
+# Initialize Continuum storage (.continuum/) and Git hooks
+continuum init
+
+# Scan workspace and build Canonical State Graph
+continuum scan
+
+# View verified status and next actions
+continuum status
+
+# Inspect Canonical State DAG and export Mermaid diagram
+continuum graph --mermaid
+
+# Generate an AI Handoff package for Claude, GPT, Gemini, or Local LLMs
+continuum handoff --model claude --output-dir ./claude_handoff
+
+# Manage background filesystem observer daemon
+continuum daemon start
+continuum daemon status
+continuum daemon stop
 ```
 
 ---
