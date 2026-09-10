@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 100% Passed](https://img.shields.io/badge/tests-38%2F38%20passed-brightgreen.svg)](tests/)
+[![Tests: 100% Passed](https://img.shields.io/badge/tests-50%2F50%20passed-brightgreen.svg)](tests/)
 
 Continuum is a portable, mathematically verifiable, and model-independent AI work continuity engine designed to preserve the physical truth of an ongoing software engineering project across different AI models, sessions, and platforms.
 
@@ -76,8 +76,8 @@ When evidence conflicts, Continuum arbitrates truth according to strict seniorit
 | | **Phase 3** | Git History & Workspace Delta Analysis | ✅ **VERIFIED** |
 | | **Phase 4** | Test, Build & Verification Evidence Collection | ✅ **VERIFIED** |
 | | **Phase 5** | Conversation & Agent State Ingestion | ✅ **VERIFIED** |
-| **Milestone 3** | **Phase 6** | Evidence Resolution Engine | ⏳ *Next Phase* |
-| | **Phase 7** | Contradiction Detection Engine | ⏳ *Pending* |
+| **Milestone 3** | **Phase 6** | Evidence Resolution Engine | ✅ **VERIFIED** |
+| | **Phase 7** | Contradiction Detection Engine | ⏳ *Next Phase* |
 | | **Phase 8** | Confidence Calculation & Verified Status Evaluation | ⏳ *Pending* |
 | **Milestone 4** | **Phase 9** | State Graph (DAG) Construction | ⏳ *Pending* |
 | | **Phase 10** | Dependency Invalidation & Status Propagation | ⏳ *Pending* |
@@ -113,15 +113,21 @@ CONTINUUM/
 │   ├── workspace_extractor.py   # Phase 1: Workspace & language analysis
 │   ├── config_extractor.py      # Phase 2: Manifests, lockfiles & container configs
 │   ├── git_extractor.py         # Phase 3: Git status, branch, HEAD, churn & commit logs
+│   ├── verification_extractor.py # Phase 4: Safe test & build execution (Level 1)
+│   ├── conversation_extractor.py # Phase 5: Transcripts & claims ingestion (Level 5)
 │   ├── config/
 │   │   ├── parsers.py           # Multi-ecosystem manifest parsers
 │   │   └── secret_sanitizer.py  # Zero-credential-leakage redaction engine
-│   └── parsers/
-│       ├── base.py              # Parser protocol & result types
-│       ├── python_parser.py     # Python AST class, method, function & export parser
-│       ├── js_ts_parser.py      # JavaScript/TypeScript class, interface & type parser
-│       └── comment_parser.py    # Universal TODO/FIXME/BUG marker extractor
-├── tests/                       # Complete Test Suite (38 unit & integration tests)
+│   ├── parsers/
+│   │   ├── base.py              # Parser protocol & result types
+│   │   ├── python_parser.py     # Python AST class, method, function & export parser
+│   │   ├── js_ts_parser.py      # JavaScript/TypeScript class, interface & type parser
+│   │   └── comment_parser.py    # Universal TODO/FIXME/BUG marker extractor
+│   └── verification/
+│       └── runners.py           # Test runners & structured output parsers
+├── resolution/                  # Truth Resolution & State Synthesis (Milestone 3)
+│   └── resolver.py              # Phase 6: Seniority arbitration & conflict preservation
+├── tests/                       # Complete Test Suite (50 unit & integration tests)
 │   ├── run_all_tests.py         # Test runner
 │   ├── test_enums_and_evidence.py
 │   ├── test_state_isolation.py
@@ -129,7 +135,10 @@ CONTINUUM/
 │   ├── test_interfaces.py
 │   ├── test_workspace_extractor.py
 │   ├── test_config_extractor.py
-│   └── test_git_extractor.py
+│   ├── test_git_extractor.py
+│   ├── test_verification_extractor.py
+│   ├── test_conversation_extractor.py
+│   └── test_evidence_resolver.py
 ├── docs/reports/                # Phase Verification & Completion Reports
 └── pyproject.toml
 ```
