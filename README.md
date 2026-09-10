@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 100% Passed](https://img.shields.io/badge/tests-77%2F77%20passed-brightgreen.svg)](tests/)
+[![Tests: 100% Passed](https://img.shields.io/badge/tests-78%2F78%20passed-brightgreen.svg)](tests/)
 
 Continuum is a portable, mathematically verifiable, and model-independent AI work continuity engine designed to preserve the physical truth of an ongoing software engineering project across different AI models, sessions, and platforms.
 
@@ -82,8 +82,8 @@ When evidence conflicts, Continuum arbitrates truth according to strict seniorit
 | **Milestone 4** | **Phase 9** | State Graph (DAG) Construction | ✅ **VERIFIED** |
 | | **Phase 10** | Dependency Invalidation & Status Propagation | ✅ **VERIFIED** |
 | | **Phase 11** | Graph Persistence, Querying & Visualization | ✅ **VERIFIED** |
-| **Milestone 5** | **Phase 12** | Task-Driven Context Selection | ⏳ *Next Phase* |
-| | **Phase 13** | Context Pruning & Token Budget Optimization | ⏳ *Pending* |
+| **Milestone 5** | **Phase 12** | Task-Driven Context Selection | ✅ **VERIFIED** |
+| | **Phase 13** | Context Pruning & Token Budget Optimization | ⏳ *Next Phase* |
 | **Milestone 6** | **Phase 14** | Universal Handoff Package Generation | ⏳ *Pending* |
 | | **Phase 15** | Model-Specific Handoff Adapters (Claude, Codex, Gemini) | ⏳ *Pending* |
 | **Milestone 7** | **Phase 16** | Filesystem Observation & Incremental State Updates | ⏳ *Pending* |
@@ -140,7 +140,10 @@ CONTINUUM/
 │   ├── snapshot.py              # Phase 11: Atomic versioned graph persistence & load
 │   ├── diff.py                  # Phase 11: Semantic graph comparison & delta engine
 │   └── query.py                 # Phase 11: Topologically indexed graph query engine
-├── tests/                       # Complete Test Suite (77 unit & integration tests)
+├── context/                     # Intelligent Context Selection (Milestone 5 - Phase 12)
+│   ├── models.py                # TaskContext payload & Markdown briefing generator
+│   └── selector.py              # Phase 12: Task-driven context selector engine
+├── tests/                       # Complete Test Suite (78 unit & integration tests)
 │   ├── run_all_tests.py         # Test runner
 │   ├── test_enums_and_evidence.py
 │   ├── test_state_isolation.py
@@ -156,7 +159,8 @@ CONTINUUM/
 │   ├── test_confidence_calculator.py
 │   ├── test_state_graph.py
 │   ├── test_dependency_propagation.py
-│   └── test_graph_persistence_and_querying.py
+│   ├── test_graph_persistence_and_querying.py
+│   └── test_context_selector.py
 ├── docs/reports/                # Phase Verification & Completion Reports
 └── pyproject.toml
 ```
