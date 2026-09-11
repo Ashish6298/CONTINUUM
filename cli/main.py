@@ -328,17 +328,45 @@ def handle_daemon(args: argparse.Namespace) -> int:
 
 
 def print_welcome_hub() -> None:
-    """Prints a solid, unbroken block-font terminal welcome hub."""
+    """Prints a solid, unbroken block-font terminal welcome hub with Natural Blood Moon palette."""
     version = "v1.0.0"
     py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    
-    # Clean, unbroken block typography for "CONTINUUM" (Centered)
+
+    if os.name == "nt":
+        os.system("")
+
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    GRAY = "\033[90m"
+
+    def rgb(r: int, g: int, b: int) -> str:
+        return f"\033[38;2;{r};{g};{b}m"
+
+    top_letters = ["█▀▀", "█▀█", "█▄ █", "▀█▀", "█", "█▄ █", "█ █", "█ █", "█▀▄▀█"]
+    bot_letters = ["█▄▄", "█▄█", "█ ▀█", " █ ", "█", "█ ▀█", "█▄█", "█▄█", "█ ▀ █"]
+
+    # Natural Blood Moon Palette (Deep earthy red -> warm rust -> muted blood orange -> deep earthy red)
+    natural_blood_moon = [
+        rgb(75, 30, 25),
+        rgb(105, 40, 30),
+        rgb(140, 50, 35),
+        rgb(175, 60, 40),
+        rgb(200, 75, 45),
+        rgb(175, 60, 40),
+        rgb(140, 50, 35),
+        rgb(105, 40, 30),
+        rgb(75, 30, 25),
+    ]
+
+    top_row = "                 " + " ".join(c + l + RESET for c, l in zip(natural_blood_moon, top_letters))
+    bot_row = "                 " + " ".join(c + l + RESET for c, l in zip(natural_blood_moon, bot_letters))
+
     banner_text = f"""
-                 █▀▀ █▀█ █▄ █ ▀█▀ █ █▄ █ █ █ █ █ █▀▄▀█
-                 █▄▄ █▄█ █ ▀█  █  █ █ ▀█ █▄█ █▄█ █ ▀ █
+{top_row}
+{bot_row}
 
              AI Work Continuity & Cross-Model Agent Handoff System
-  ─────────────────────────────────────────────────────────────────────────────
+  {GRAY}─────────────────────────────────────────────────────────────────────────────{RESET}
 
     The one-Command Workflow: $ continuum handoff
 
@@ -346,8 +374,8 @@ def print_welcome_hub() -> None:
     and generates a ready-to-use 'ai_handoff/' package for your next
     AI Agent (Claude, GPT, Gemini, Cursor, Antigravity, etc.)
 
-  ─────────────────────────────────────────────────────────────────────────────
-  {version}   python {py_version}   mit license   
+  {GRAY}─────────────────────────────────────────────────────────────────────────────{RESET}
+  {GRAY}{version}   python {py_version}   mit license{RESET}   
 
 """
     try:
