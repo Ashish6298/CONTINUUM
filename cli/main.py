@@ -19,6 +19,11 @@ from pathlib import Path
 import sys
 from typing import List, Optional
 
+# Ensure project root is on sys.path when executed directly as a script
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from core.enums import EvidenceType, Status, TargetModel
 from core.state_models import CanonicalProjectState, ProjectState
 from daemon.service import ContinuumDaemon
