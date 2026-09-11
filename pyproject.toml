@@ -1,14 +1,35 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "continuum-ai"
-version = "0.1.0"
-description = "AI Work Continuity & Agent Handoff System"
+name = "project-continuum"
+version = "1.0.0"
+description = "AI Work Continuity & Cross-Model Agent Handoff System"
 readme = "README.md"
+license = { text = "MIT" }
 authors = [{ name = "Project Continuum Team" }]
 requires-python = ">=3.10"
+keywords = [
+    "ai",
+    "agent-handoff",
+    "work-continuity",
+    "llm-context",
+    "dag",
+    "state-graph",
+    "developer-tools"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
 dependencies = []
 
 [project.optional-dependencies]
@@ -16,6 +37,16 @@ dev = [
     "pytest>=7.0.0",
 ]
 
+[project.scripts]
+continuum = "cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/Ashish6298/CONTINUUM"
+Documentation = "https://github.com/Ashish6298/CONTINUUM#readme"
+Repository = "https://github.com/Ashish6298/CONTINUUM.git"
+
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*"]
+include = ["*"]
+exclude = ["tests*", "docs*"]
+
