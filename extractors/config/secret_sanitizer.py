@@ -37,13 +37,13 @@ class SecretSanitizer:
 
     # Regex patterns for common secret formats
     SECRET_VALUE_PATTERNS = [
-        re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----", re.DOTALL),
+        re.compile(r"-----BEGIN (?:[A-Z0-9\s]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z0-9\s]+ )?PRIVATE KEY-----", re.DOTALL),
         re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS Access Key ID
         re.compile(r"ghp_[a-zA-Z0-9]{36}"),  # GitHub Personal Access Token
         re.compile(r"gho_[a-zA-Z0-9]{36}"),  # GitHub OAuth Access Token
         re.compile(r"glpat-[a-zA-Z0-9\-_]{20,32}"),  # GitLab Personal Access Token
-        re.compile(r"sk-[a-zA-Z0-9]{32,64}"),  # OpenAI Secret Key
-        re.compile(r"AIza[0-9A-Za-z\-_]{35}"),  # Google API Key
+        re.compile(r"sk-[a-zA-Z0-9]{20,64}"),  # OpenAI Secret Key
+        re.compile(r"AIza[0-9A-Za-z\-_]{25,45}"),  # Google API Key
         re.compile(r"ey[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*"),  # JWT Token
         re.compile(r"[a-f0-9]{32,64}"),  # Raw Hex Key / Token
     ]
