@@ -90,6 +90,14 @@ class ContradictionDetector(IContradictionDetector):
         )
         contradictions.extend(git_contradictions)
 
+        # 5. Detect misleading commit messages claiming non-existent implementations
+        commit_contradictions = self._detect_misleading_commits(
+            project_state.git_state,
+            project_state.symbols,
+            project_state.files
+        )
+        contradictions.extend(commit_contradictions)
+
         return contradictions
 
     def _detect_claims_vs_missing_implementation(
@@ -332,6 +340,60 @@ class ContradictionDetector(IContradictionDetector):
 
         return records
 
+    def _detect_misleading_commits(
+        self,
+        git_state: GitState,
+        symbols: List[AstSymbol],
+        files: List[str]
+    ) -> List[ContradictionRecord]:
+        """
+        Detects commits with messages claiming to have added/implemented components
+        that do not actually exist in the physical AST or file system.
+        """
+        records: List[ContradictionRecord] = []
+        if not git_state.is_repo or not git_state.recent_commits:
+            return records
+
+        symbol_names = {s.name.lower() for s in symbols}
+        file_names = {f.replace("\\", "/").lower() for f in files}
+
+        for commit in git_state.recent_commits:
+            msg = commit.get("message", "") or commit.get("summary", "")
+            if not msg:
+                continue
+
+            candidates = self._extract_identifier_candidates("", msg)
+            if not candidates:
+                continue
+
+            # Check if this commit claims creation/implementation of a specific component
+            if any(p.search(msg) for p in self.COMPLETION_PATTERNS) or msg.lower().startswith(("feat:", "add ", "implement ")):
+                for cand in candidates:
+                    cand_lower = cand.lower()
+                    if len(cand) < 4 or cand_lower in {"test", "tests", "code", "file", "feat", "docs", "fix"}:
+                        continue
+                    has_match = (
+                        cand_lower in symbol_names
+                        or any(cand_lower in s for s in symbol_names)
+                        or any(cand_lower in f for f in file_names)
+                    )
+                    if not has_match:
+                        records.append(ContradictionRecord(
+                            id=f"contra_{uuid.uuid4().hex[:8]}",
+                            severity=ContradictionSeverity.MEDIUM.value,
+                            claim_id=None,
+                            claim_text=f"Git commit '{commit.get('hash', 'head')[:7]}': {msg}",
+                            physical_evidence_id=git_state.evidence_ids[0] if git_state.evidence_ids else None,
+                            explanation=(
+                                f"Git commit message '{msg}' implies implementation of '{cand}', "
+                                f"but no matching AST symbol or source file exists in the repository."
+                            ),
+                            detected_at=datetime.now(timezone.utc).isoformat(),
+                            resolved=False
+                        ))
+
+        return records
+
     def _extract_identifier_candidates(self, target: str, text: str) -> List[str]:
         """Extracts potential class, function, or module names from claim text."""
         candidates = []
@@ -342,8 +404,16 @@ class ContradictionDetector(IContradictionDetector):
         quoted = re.findall(r"['\"`]([A-Za-z0-9_\-\.]+)['\"`]", text)
         candidates.extend(quoted)
 
+        # Look for explicit CamelCase identifiers (e.g. KafkaEventStreamingProducer)
+        camel_cases = re.findall(r"\b([A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+)\b", text)
+        candidates.extend(camel_cases)
+
+        # Look for targets following feat:, add, implement, create
+        verb_match = re.findall(r"\b(?:implement|add|create|feat:)\s+([A-Za-z0-9_]+)\b", text, re.IGNORECASE)
+        candidates.extend(verb_match)
+
         # Look for tokens before keywords like "service", "handler", "manager", "parser", "client", "controller"
-        comp_match = re.findall(r"\b([A-Za-z0-9_]+(?:\s+[A-Za-z0-9_]+)?\s+(?:service|handler|manager|parser|client|controller|engine|module|endpoint|function))\b", text, re.IGNORECASE)
+        comp_match = re.findall(r"\b([A-Za-z0-9_]+(?:\s+[A-Za-z0-9_]+)?\s+(?:service|handler|manager|parser|client|controller|engine|module|endpoint|function|producer|consumer))\b", text, re.IGNORECASE)
         for m in comp_match:
             cleaned = m.replace(" ", "_").lower()
             candidates.append(cleaned)

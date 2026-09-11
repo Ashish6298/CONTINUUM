@@ -118,6 +118,22 @@ class WorkspaceEvidenceExtractor(BaseEvidenceExtractor):
                         source_uri=rel_path,
                         locator=f"file:{rel_path}"
                     ))
+            # Record Documentation Evidence
+            elif ext in DOC_EXTENSIONS:
+                try:
+                    content = file_path.read_text(encoding="utf-8", errors="replace")
+                    evidence_list.append(self.create_evidence(
+                        evidence_type=EvidenceType.DOCUMENTATION,
+                        summary=f"Documentation file {rel_path} ({len(content.splitlines())} lines)",
+                        raw_payload={
+                            "file_path": rel_path,
+                            "content": content
+                        },
+                        source_uri=rel_path,
+                        locator=f"doc:{rel_path}"
+                    ))
+                except Exception:
+                    pass
 
         return evidence_list
 
