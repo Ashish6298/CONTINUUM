@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 100% Passed](https://img.shields.io/badge/tests-114%2F114%20passed-brightgreen.svg)](tests/)
+[![Tests: 100% Passed](https://img.shields.io/badge/tests-120%2F120%20passed-brightgreen.svg)](tests/)
 
 Continuum is a portable, mathematically verifiable, and model-independent AI work continuity engine designed to preserve the physical truth of an ongoing software engineering project across different AI models, sessions, and platforms.
 
@@ -158,7 +158,7 @@ CONTINUUM/
 │   └── main.py                  # Phase 18: init, status, scan, graph, handoff, daemon
 ├── pipeline/                    # End-to-End Orchestration (Milestone 8 - Phase 19)
 │   └── orchestrator.py          # Phase 19: Full lifecycle orchestrator & summary
-├── tests/                       # Complete Test Suite (114 unit, integration & adversarial tests)
+├── tests/                       # Complete Test Suite (120 unit, integration, stress & benchmark tests)
 │   ├── run_all_tests.py         # Test runner
 │   ├── test_enums_and_evidence.py
 │   ├── test_state_isolation.py
@@ -183,7 +183,8 @@ CONTINUUM/
 │   ├── test_persistent_storage_and_hooks.py
 │   ├── test_cli_and_daemon.py
 │   ├── test_end_to_end_pipeline.py
-│   └── test_adversarial_testing.py
+│   ├── test_adversarial_testing.py
+│   └── test_performance_and_reliability.py
 ├── docs/reports/                # Phase Verification & Completion Reports
 └── pyproject.toml
 ```
