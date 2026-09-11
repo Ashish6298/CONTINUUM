@@ -229,3 +229,19 @@ python tests/run_all_tests.py
 # Or using the Windows Python launcher:
 py tests/run_all_tests.py
 ```
+
+---
+
+## 📚 Documentation & Guides
+
+- [Quickstart & Installation Guide](docs/QUICKSTART.md)
+- [CLI Reference Manual](docs/CLI_REFERENCE.md)
+- [Architecture & Evidence Hierarchy](docs/ARCHITECTURE.md)
+- [v1.0.0 Release Notes](docs/RELEASE_NOTES.md)
+- [Phase Completion Reports](docs/reports/)
+
+---
+
+## 📜 License
+MIT License. Open source and vendor-neutral.
+
