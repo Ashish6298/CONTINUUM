@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 100% Passed](https://img.shields.io/badge/tests-105%2F105%20passed-brightgreen.svg)](tests/)
+[![Tests: 100% Passed](https://img.shields.io/badge/tests-108%2F108%20passed-brightgreen.svg)](tests/)
 
 Continuum is a portable, mathematically verifiable, and model-independent AI work continuity engine designed to preserve the physical truth of an ongoing software engineering project across different AI models, sessions, and platforms.
 
@@ -89,8 +89,8 @@ When evidence conflicts, Continuum arbitrates truth according to strict seniorit
 | **Milestone 7** | **Phase 16** | Filesystem Observation & Incremental State Updates | ✅ **VERIFIED** |
 | | **Phase 17** | Git Hooks & Persistent State Management | ✅ **VERIFIED** |
 | | **Phase 18** | Continuum Daemon & CLI | ✅ **VERIFIED** |
-| **Milestone 8** | **Phase 19** | End-to-End Integration & Polyglot Validation | ⏳ *Next Phase* |
-| | **Phase 20** | Adversarial Testing & Hallucination Resistance | ⏳ *Pending* |
+| **Milestone 8** | **Phase 19** | End-to-End Integration & Polyglot Validation | ✅ **VERIFIED** |
+| | **Phase 20** | Adversarial Testing & Hallucination Resistance | ⏳ *Next Phase* |
 | | **Phase 21** | Performance, Reliability & Data Integrity | ⏳ *Pending* |
 | | **Phase 22** | Security, Privacy & Production Hardening | ⏳ *Pending* |
 | | **Phase 23** | Documentation, Packaging & v1.0.0 Release | ⏳ *Pending* |
@@ -108,44 +108,34 @@ CONTINUUM/
 │   ├── interfaces.py            # Contracts for Extractors, Resolvers, Graph & Adapters
 │   ├── schema.py                # JSON Schema generator & validation
 │   └── serializer.py            # Deterministic, atomic JSON persistence
-├── extractors/                  # Multi-Source Evidence Harvesters (Milestone 2)
-│   ├── base.py                  # Base extractor & standard ignore filters
-│   ├── workspace_extractor.py   # Phase 1: Workspace & language analysis
-│   ├── config_extractor.py      # Phase 2: Manifests, lockfiles & container configs
-│   ├── git_extractor.py         # Phase 3: Git status, branch, HEAD, churn & commit logs
-│   ├── verification_extractor.py # Phase 4: Safe test & build execution (Level 1)
-│   ├── conversation_extractor.py # Phase 5: Transcripts & claims ingestion (Level 5)
-│   ├── config/
-│   │   ├── parsers.py           # Multi-ecosystem manifest parsers
-│   │   └── secret_sanitizer.py  # Zero-credential-leakage redaction engine
-│   ├── parsers/
-│   │   ├── base.py              # Parser protocol & result types
-│   │   ├── python_parser.py     # Python AST class, method, function & export parser
-│   │   ├── js_ts_parser.py      # JavaScript/TypeScript class, interface & type parser
-│   │   └── comment_parser.py    # Universal TODO/FIXME/BUG marker extractor
-│   └── verification/
-│       └── runners.py           # Test runners & structured output parsers
-├── resolution/                  # Truth Resolution & State Synthesis (Milestone 3 - Phase 6)
-│   └── resolver.py              # Phase 6: Seniority arbitration & conflict preservation
-├── contradictions/              # Discrepancy & Hallucination Defense (Milestone 3 - Phase 7)
-│   ├── models.py                # ContradictionType, severity, and DiscrepancyLedger
-│   └── detector.py              # Phase 7: Cross-boundary contradiction detector
-├── confidence/                  # Confidence & Status Evaluation (Milestone 3 - Phase 8)
-│   ├── models.py                # ConfidenceBreakdown & scoring schema
-│   └── calculator.py            # Phase 8: Multi-dimensional confidence engine
-├── graph/                       # Canonical Project State Graph (Milestone 4 - Phases 9, 10 & 11)
-│   ├── models.py                # GraphValidationResult, GraphStats, PropagationResult
-│   ├── manager.py               # Phase 9: State Graph (DAG) manager & visualizer
-│   ├── propagator.py            # Phase 10: Invalidation propagation & actionable work engine
-│   ├── snapshot.py              # Phase 11: Atomic versioned graph persistence & load
-│   ├── diff.py                  # Phase 11: Semantic graph comparison & delta engine
-│   └── query.py                 # Phase 11: Topologically indexed graph query engine
-├── context/                     # Intelligent Context Selection (Milestone 5 - Phases 12 & 13)
-│   ├── models.py                # TaskContext payload & Markdown briefing generator
-│   ├── selector.py              # Phase 12: Task-driven context selector engine
-│   └── pruner.py                # Phase 13: Priority-tiered context pruner & budget optimizer
-├── handoff/                     # AI Model Handoff System (Milestone 6 - Phases 14 & 15)
-│   ├── models.py                # HandoffPackage & atomic filesystem persistence
+├── extractors/                  # Multi-Source Evidence Extractors (Milestone 2)
+│   ├── base.py                  # Base extractor protocol & folder filters
+│   ├── workspace_extractor.py   # Phase 1: Physical file & AST scanner
+│   ├── config_extractor.py      # Phase 2: Manifests & environment parser
+│   ├── git_extractor.py         # Phase 3: Git tree & churn calculator
+│   ├── verification_extractor.py# Phase 4: Build & test outcome harvester
+│   └── conversation_extractor.py# Phase 5: Transcript & claim extractor
+├── resolution/                  # Truth Resolution Engine (Milestone 3 - Phase 6)
+│   └── resolver.py              # Evidence Hierarchy Matrix senior arbitration
+├── contradictions/              # Contradiction Detection Engine (Milestone 3 - Phase 7)
+│   ├── models.py                # ContradictionRecord, DiscrepancyLedger
+│   └── detector.py              # Cross-state mismatch & hallucination detector
+├── confidence/                  # Grounded Confidence Engine (Milestone 3 - Phase 8)
+│   ├── models.py                # ConfidenceBreakdown & score caps
+│   └── calculator.py            # Explainable scoring grounded in proof
+├── graph/                       # Canonical State Graph DAG (Milestone 4 - Phases 9-11)
+│   ├── models.py                # StateGraphData, TopologicalMetrics
+│   ├── manager.py               # Phase 9: Node/edge DAG management & cycle detection
+│   ├── propagator.py            # Phase 10: Invalidation & STALE status propagation
+│   ├── snapshot.py              # Phase 11: Graph persistence & snapshot serialization
+│   ├── diff.py                  # Phase 11: Graph topological comparison
+│   └── query.py                 # Phase 11: Subgraph & dependency query engine
+├── context/                     # Intelligent Context Selection (Milestone 5)
+│   ├── models.py                # TaskContext data container
+│   ├── selector.py              # Phase 12: Subgraph relevance & dependency traversal
+│   └── pruner.py                # Phase 13: Greedy priority token budget optimization
+├── handoff/                     # AI Model Handoff System (Milestone 6)
+│   ├── models.py                # HandoffPackage & Manifest records
 │   ├── packager.py              # Phase 14: Universal Handoff Package generator
 │   └── adapters/                # Phase 15: Model-Specific Handoff Adapters
 │       ├── base.py              # Base adapter protocol implementation
@@ -166,7 +156,9 @@ CONTINUUM/
 │   └── service.py               # Phase 18: Threaded daemon with run_once & background lifecycle
 ├── cli/                         # Developer & Agent Command Line (Milestone 7 - Phase 18)
 │   └── main.py                  # Phase 18: init, status, scan, graph, handoff, daemon
-├── tests/                       # Complete Test Suite (105 unit & integration tests)
+├── pipeline/                    # End-to-End Orchestration (Milestone 8 - Phase 19)
+│   └── orchestrator.py          # Phase 19: Full lifecycle orchestrator & summary
+├── tests/                       # Complete Test Suite (108 unit & integration tests)
 │   ├── run_all_tests.py         # Test runner
 │   ├── test_enums_and_evidence.py
 │   ├── test_state_isolation.py
@@ -189,7 +181,8 @@ CONTINUUM/
 │   ├── test_model_adapters.py
 │   ├── test_incremental_updater.py
 │   ├── test_persistent_storage_and_hooks.py
-│   └── test_cli_and_daemon.py
+│   ├── test_cli_and_daemon.py
+│   └── test_end_to_end_pipeline.py
 ├── docs/reports/                # Phase Verification & Completion Reports
 └── pyproject.toml
 ```

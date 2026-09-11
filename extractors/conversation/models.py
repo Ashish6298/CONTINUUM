@@ -40,6 +40,9 @@ class ConversationTurn:
     def from_dict(cls, data: Dict[str, Any]) -> "ConversationTurn":
         d = dict(data)
         d["role"] = TurnRole(d.get("role", "user"))
+        if "turn_index" not in d:
+            d["turn_index"] = int(d.pop("turn_id", "1").replace("t", "")) if isinstance(d.get("turn_id"), str) and d.get("turn_id", "").replace("t", "").isdigit() else 1
+        d.pop("turn_id", None)
         return cls(**d)
 
 

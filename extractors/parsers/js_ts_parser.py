@@ -41,7 +41,7 @@ class JavaScriptTypeScriptParser(ILanguageParser):
     )
 
     EXPORT_ARROW_PATTERN = re.compile(
-        r"""(?:export\s+)?(?:const|let|var)\s+([\w$]+)\s*=\s*(?:async\s*)?\(([^)]*)\)(?:\s*:\s*([\w<>\[\],\s]+))?\s*=>"""
+        r"""(?:export\s+)?(?:const|let|var)\s+([\w$]+)(?:\s*:\s*[\w\.<>\[\],\s]+)?\s*=\s*(?:async\s*)?\(([^)]*)\)(?:\s*:\s*([\w\.<>\[\],\s]+))?\s*=>"""
     )
 
     CLASS_PATTERN = re.compile(
