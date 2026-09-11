@@ -86,7 +86,16 @@ class CodexGptAdapter(BaseModelAdapter):
         c_state = state.conversational_state
 
         lines = [
-            "# Project Continuum — Codex/GPT Continuity Task Plan",
+            "# Project Continuum — OpenAI Codex / GPT Continuity Task Plan",
+            "",
+            "<!-- CONTINUUM_HANDOFF_METADATA",
+            "Target-Model: OPENAI_CODEX_GPT",
+            "Format: MARKDOWN_CHECKLISTS_AND_CODEBLOCKS",
+            "-->",
+            "",
+            "> 🧠 **CONTINUUM AI HANDOFF NOTICE:**",
+            "> You are taking over an ongoing software engineering project.",
+            "> Ground truth is defined by physical AST code and test results, NOT past conversational assertions.",
             "",
             "### 🚨 System Protocol",
             "1. You are picking up an ongoing engineering task.",

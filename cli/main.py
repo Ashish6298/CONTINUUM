@@ -44,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="continuum",
         description="Project Continuum — AI Work Continuity & Agent Handoff System"
     )
+    parser.add_argument("--version", action="version", version="continuum v1.0.0 (Python 3.10+ | Schema 1.0.0)")
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
     # 1. init
@@ -68,8 +69,8 @@ def build_parser() -> argparse.ArgumentParser:
     # 5. handoff
     handoff_parser = subparsers.add_parser("handoff", help="Generate AI handoff package")
     handoff_parser.add_argument("--path", default=".", help="Workspace path")
-    handoff_parser.add_argument("--model", choices=["claude", "codex", "gemini", "local", "universal"], default="universal", help="Target AI model format")
-    handoff_parser.add_argument("--output-dir", default=None, help="Directory to save the handoff package")
+    handoff_parser.add_argument("--model", choices=["auto", "universal", "claude", "codex", "gpt", "gemini", "local"], default="auto", help="Target AI model format (default: auto omni-model)")
+    handoff_parser.add_argument("--output-dir", default=None, help="Directory to save the handoff package (default: ./ai_handoff)")
 
     # 6. daemon
     daemon_parser = subparsers.add_parser("daemon", help="Manage background workspace observer daemon")
@@ -199,26 +200,76 @@ def handle_graph(args: argparse.Namespace) -> int:
 def handle_handoff(args: argparse.Namespace) -> int:
     ws = Path(args.path).resolve()
     storage = ContinuumStorageManager(str(ws))
+    
+    # Auto-initialize and scan if not previously initialized (1-command magic)
     if not storage.state_exists():
-        print(f"[WARN] No active state. Run 'continuum scan' first.")
-        return 1
+        print(f"[AUTO] Initializing and scanning workspace at {ws}...")
+        storage.initialize_storage()
+        ws_extractor = WorkspaceEvidenceExtractor()
+        config_extractor = ConfigEvidenceExtractor()
+        git_extractor = GitEvidenceExtractor()
+        
+        state = CanonicalProjectState(schema_version="1.0.0", project_id=f"proj_{ws.name}")
+        ws_extractor.populate_project_state(str(ws), state)
+        config_extractor.populate_project_state(str(ws), state)
+        git_extractor.populate_project_state(str(ws), state)
+        storage.save_state(state)
+        print(f"[OK] Workspace parsed: {len(state.project_state.files)} files, {len(state.project_state.symbols)} symbols.")
+    else:
+        state = storage.load_state(validate=True)
+        
+    model_choice = getattr(args, "model", "auto").lower()
 
-    state = storage.load_state(validate=True)
-    model_choice = args.model.lower()
+    out_dir = args.output_dir or str(ws / "ai_handoff")
+    out_path = Path(out_dir).resolve()
+    out_path.mkdir(parents=True, exist_ok=True)
 
-    if model_choice == "universal":
+    if model_choice in ("auto", "all", "universal"):
+        # Auto mode: Generate Universal package + all model-specific profiles
         packager = UniversalHandoffPackager()
         pkg = packager.generate_package(state)
-        out_dir = args.output_dir or str(ws / "handoff_package")
-        paths = pkg.save_to_directory(out_dir)
-        print(f"[OK] Generated Universal Handoff Package at: {out_dir}")
-        for k, p in paths.items():
-            print(f"   * {k} -> {p}")
+        paths = pkg.save_to_directory(str(out_path))
+
+        # Also generate dedicated model views (claude_handoff.md, gpt_handoff.md, gemini_handoff.md)
+        claude_adapter = get_adapter_for_model(TargetModel.CLAUDE)
+        gpt_adapter = get_adapter_for_model(TargetModel.CODEX_GPT)
+        gemini_adapter = get_adapter_for_model(TargetModel.GEMINI)
+
+        (out_path / "claude_handoff.md").write_text(claude_adapter.generate_handoff(state)["handoff.md"], encoding="utf-8")
+        (out_path / "gpt_handoff.md").write_text(gpt_adapter.generate_handoff(state)["handoff.md"], encoding="utf-8")
+        (out_path / "gemini_handoff.md").write_text(gemini_adapter.generate_handoff(state)["handoff.md"], encoding="utf-8")
+
+        output_text = f"""
+◈ [HANDOFF READY] Generated Omni-Model Continuity Package:
+
+  Location: {out_path}
+
+   ✦ Universal Handoff  →  {out_path / 'handoff.md'} (Works for ANY model)
+
+   ✦ Claude Optimized   →  {out_path / 'claude_handoff.md'}
+
+   ✦ GPT / Codex Plan   →  {out_path / 'gpt_handoff.md'}
+
+   ✦ Gemini Hierarchy   →  {out_path / 'gemini_handoff.md'}
+
+   ✦ Machine State      →  {out_path / 'project-state.json'}
+
+➤ [NEXT ACTION] Paste this prompt into your next AI Agent chat:
+
+   "Read {out_path.name}/handoff.md and continue the project."
+
+"""
+        try:
+            sys.stdout.buffer.write(output_text.encode("utf-8"))
+            sys.stdout.buffer.flush()
+        except Exception:
+            print(output_text)
         return 0
 
     model_map = {
         "claude": TargetModel.CLAUDE,
         "codex": TargetModel.CODEX_GPT,
+        "gpt": TargetModel.CODEX_GPT,
         "gemini": TargetModel.GEMINI,
         "local": TargetModel.LOCAL_LLM,
     }
@@ -226,15 +277,24 @@ def handle_handoff(args: argparse.Namespace) -> int:
     adapter = get_adapter_for_model(target_enum)
     handoff_dict = adapter.generate_handoff(state)
 
-    if args.output_dir:
-        out_path = Path(args.output_dir)
-        out_path.mkdir(parents=True, exist_ok=True)
-        for fname, content in handoff_dict.items():
-            (out_path / fname).write_text(content, encoding="utf-8")
-        print(f"[OK] Generated {target_enum.value} handoff files in: {args.output_dir}")
-    else:
-        print(f"--- HANDOFF BRIEFING FOR {target_enum.value} ---")
-        print(handoff_dict.get("handoff.md", ""))
+    for fname, content in handoff_dict.items():
+        (out_path / fname).write_text(content, encoding="utf-8")
+
+    output_text = f"""
+◈ [HANDOFF READY] Generated {target_enum.value} Continuity Package:
+
+  Location: {out_path}
+
+➤ [NEXT ACTION] Paste this prompt into your next AI Agent chat:
+
+   "Read {out_path.name}/handoff.md and continue the project."
+
+"""
+    try:
+        sys.stdout.buffer.write(output_text.encode("utf-8"))
+        sys.stdout.buffer.flush()
+    except Exception:
+        print(output_text)
 
     return 0
 
@@ -267,13 +327,43 @@ def handle_daemon(args: argparse.Namespace) -> int:
     return 1
 
 
+def print_welcome_hub() -> None:
+    """Prints a solid, unbroken block-font terminal welcome hub."""
+    version = "v1.0.0"
+    py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    
+    # Clean, unbroken block typography for "CONTINUUM" (Centered)
+    banner_text = f"""
+                 █▀▀ █▀█ █▄ █ ▀█▀ █ █▄ █ █ █ █ █ █▀▄▀█
+                 █▄▄ █▄█ █ ▀█  █  █ █ ▀█ █▄█ █▄█ █ ▀ █
+
+             AI Work Continuity & Cross-Model Agent Handoff System
+  ─────────────────────────────────────────────────────────────────────────────
+
+    The one-Command Workflow: $ continuum handoff
+
+    Automatically captures your project state, extracts AST symbols,
+    and generates a ready-to-use 'ai_handoff/' package for your next
+    AI Agent (Claude, GPT, Gemini, Cursor, Antigravity, etc.)
+
+  ─────────────────────────────────────────────────────────────────────────────
+  {version}   python {py_version}   mit license   
+
+"""
+    try:
+        sys.stdout.buffer.write(banner_text.encode("utf-8"))
+        sys.stdout.buffer.flush()
+    except Exception:
+        print(banner_text)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint."""
     parser = build_parser()
     args = parser.parse_args(argv)
 
     if not args.command:
-        parser.print_help()
+        print_welcome_hub()
         return 0
 
     handlers = {
@@ -289,7 +379,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if handler:
         return handler(args)
 
-    parser.print_help()
+    print_welcome_hub()
     return 1
 
 
