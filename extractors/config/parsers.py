@@ -15,7 +15,10 @@ from extractors.config.secret_sanitizer import SecretSanitizer
 try:
     import tomllib  # Python 3.11+ standard library
 except ImportError:
-    tomllib = None  # Fallback handled via regex/json if needed
+    try:
+        import tomli as tomllib  # Python 3.10 with tomli
+    except ImportError:
+        tomllib = None  # Fallback handled via regex
 
 
 class ManifestParser:
@@ -90,6 +93,21 @@ class ManifestParser:
 
             except Exception:
                 pass
+        else:
+            # Pure Python fallback parser for Python 3.10 without tomli
+            name_match = re.search(r'name\s*=\s*["\']([^"\']+)["\']', content)
+            if name_match:
+                project_name = name_match.group(1)
+            ver_match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
+            if ver_match:
+                version = ver_match.group(1)
+            deps_match = re.search(r'dependencies\s*=\s*\[(.*?)\]', content, re.DOTALL)
+            if deps_match:
+                for dep in re.findall(r'["\']([^"\']+)["\']', deps_match.group(1)):
+                    parts = re.split(r"[><=~^! ]+", dep, maxsplit=1)
+                    name = parts[0].strip()
+                    ver = dep[len(name):].strip() if len(parts) > 1 else "*"
+                    dependencies[name] = ver or "*"
 
         return ManifestInfo(
             manifest_type="pyproject.toml",
@@ -122,6 +140,25 @@ class ManifestParser:
                     dev_dependencies[k] = str(v.get("version", "*")) if isinstance(v, dict) else str(v)
             except Exception:
                 pass
+        else:
+            # Pure Python fallback parser for Python 3.10 without tomli
+            name_match = re.search(r'name\s*=\s*["\']([^"\']+)["\']', content)
+            if name_match:
+                project_name = name_match.group(1)
+            ver_match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
+            if ver_match:
+                version = ver_match.group(1)
+            in_deps = False
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("["):
+                    in_deps = (stripped == "[dependencies]")
+                    continue
+                if in_deps and "=" in stripped:
+                    k, v = stripped.split("=", 1)
+                    k = k.strip()
+                    v_match = re.search(r'["\']([^"\']+)["\']', v)
+                    dependencies[k] = v_match.group(1) if v_match else "*"
 
         return ManifestInfo(
             manifest_type="Cargo.toml",

@@ -11,9 +11,10 @@ Validates:
 7. Generating Level 1 canonical evidence and populating ProjectState.test_results.
 """
 
-from pathlib import Path
+import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 from core.enums import EvidenceType, EvidenceLevel, Status
 from core.state_models import CanonicalProjectState
@@ -82,7 +83,8 @@ class TestVerificationExtractor(unittest.TestCase):
             extractor = VerificationEvidenceExtractor()
 
             # 1. Passing command (Python exit 0)
-            cmd_pass = "py -c \"import sys; sys.exit(0)\""
+            py_exe = sys.executable
+            cmd_pass = f'"{py_exe}" -c "import sys; sys.exit(0)"'
             _, _, ev_pass = extractor.run_verification(root, cmd_pass, suite_name="pass_suite")
 
             self.assertEqual(ev_pass.level, EvidenceLevel.LEVEL_1_RUNTIME_TEST)
@@ -91,7 +93,7 @@ class TestVerificationExtractor(unittest.TestCase):
             self.assertTrue(ev_pass.verify_integrity())
 
             # 2. Failing command (Python exit 1 with stderr)
-            cmd_fail = "py -c \"import sys; sys.stderr.write('AssertionError: token expired\\n'); sys.exit(1)\""
+            cmd_fail = f'"{py_exe}" -c "import sys; sys.stderr.write(\'AssertionError: token expired\\n\'); sys.exit(1)"'
             _, _, ev_fail = extractor.run_verification(root, cmd_fail, suite_name="fail_suite")
 
             self.assertEqual(ev_fail.level, EvidenceLevel.LEVEL_1_RUNTIME_TEST)
@@ -101,7 +103,7 @@ class TestVerificationExtractor(unittest.TestCase):
             self.assertTrue(ev_fail.verify_integrity())
 
             # 3. Build command failure
-            cmd_build = "py -c \"import sys; sys.stderr.write('SyntaxError: unexpected EOF\\n'); sys.exit(2)\""
+            cmd_build = f'"{py_exe}" -c "import sys; sys.stderr.write(\'SyntaxError: unexpected EOF\\n\'); sys.exit(2)"'
             _, _, ev_build = extractor.run_verification(root, cmd_build, suite_name="build_target", is_build=True)
             self.assertEqual(ev_build.type, EvidenceType.BUILD_LOG)
             self.assertEqual(ev_build.raw_payload["status"], Status.FAILED.value)
