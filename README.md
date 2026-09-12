@@ -20,7 +20,7 @@
 <table>
   <tr>
     <td align="center"><a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=plastic&logo=python&logoColor=white" alt="Python 3.10+"/></a></td>
-    <td align="center"><a href="https://pypi.org/project/continuum/"><img src="https://img.shields.io/badge/Downloads-PyPI-007EC6?style=plastic&logo=pypi&logoColor=white" alt="Downloads"/></a></td>
+    <td align="center"><a href="https://pypi.org/project/project-continuum/"><img src="https://img.shields.io/badge/PyPI-v1.0.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
     <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-126%2F126_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
     <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Engine-7F77DD?style=plastic&logo=diagramsdotnet&logoColor=white" alt="3-State Architecture"/></a></td>
   </tr>
