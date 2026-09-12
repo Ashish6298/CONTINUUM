@@ -21,12 +21,12 @@
   <tr>
     <td align="center"><a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=plastic&logo=python&logoColor=white" alt="Python 3.10+"/></a></td>
     <td align="center"><a href="https://pypi.org/project/continuum-toolkit/"><img src="https://img.shields.io/badge/PyPI-v1.0.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
+    <td align="center"><a href="https://pepy.tech/project/continuum-toolkit"><img src="https://img.shields.io/pypi/dm/continuum-toolkit?style=plastic&logo=pypi&logoColor=white&label=Downloads&color=007EC6" alt="PyPI Downloads"/></a></td>
     <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-126%2F126_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
-    <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Engine-7F77DD?style=plastic&logo=diagramsdotnet&logoColor=white" alt="3-State Architecture"/></a></td>
   </tr>
   <tr>
+    <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Engine-7F77DD?style=plastic&logo=diagramsdotnet&logoColor=white" alt="3-State Architecture"/></a></td>
     <td align="center"><a href="https://json-schema.org/"><img src="https://img.shields.io/badge/Schema-Draft_7-2962FF?style=plastic&logo=json&logoColor=white" alt="JSON Schema"/></a></td>
-    <td align="center"><a href="docs/CLI_REFERENCE.md"><img src="https://img.shields.io/badge/CLI-Smart_1--Command-FF6B6B?style=plastic&logo=gnometerminal&logoColor=white" alt="Smart 1-Command CLI"/></a></td>
     <td align="center"><a href="#testing--verification"><img src="https://img.shields.io/badge/Privacy-Zero_Telemetry-17A2B8?style=plastic&logo=openaccess&logoColor=white" alt="Zero Telemetry"/></a></td>
     <td align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-F5A623?style=plastic&logo=open-source-initiative&logoColor=white" alt="MIT License"/></a></td>
   </tr>
