@@ -1,3 +1,19 @@
+# ==============================================================================
+# PROJECT CONTINUUM - GITIGNORE
+# Comprehensive repository exclusion rules for security, privacy, and hygiene.
+# ==============================================================================
+
+# ── 1. PROJECT SPECIFICATIONS & INTERNAL ROADMAP DOCUMENTS ───────────────────
+project.txt
+project*.txt
+phase.txt — Project Continuum Roadmap to v1.0.0.md
+phase*.txt
+*.prompt.md
+scratch/
+temp/
+tmp/
+
+# ── 2. PYTHON BYTECODE, BUILDS & PACKAGING ──────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -18,16 +34,78 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-.env
+# ── 3. VIRTUAL ENVIRONMENTS ──────────────────────────────────────────────────
 .venv
-env/
+.venv/
 venv/
+env/
 ENV/
 env.bak/
 venv.bak/
+bin/
+include/
 
+# ── 4. CONTINUUM RUNTIME, STORAGE & DAEMON CACHE ────────────────────────────
+.continuum/
+.continuum.lock
+*.pid
+daemon.log
+daemon.pid
+
+# ── 5. TESTING, COVERAGE & PROFILING ─────────────────────────────────────────
 .pytest_cache/
 .coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
 htmlcov/
-.continuum/
+.tox/
+.nox/
+.hypothesis/
+
+# ── 6. SECRETS, CREDENTIALS & SENSITIVE KEYS ─────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.keystore
+secrets.json
+credentials.json
+auth.json
+token.json
+
+# ── 7. IDE, EDITORS & OS ARTIFACTS ───────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+*.bak
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ── 8. AGENT & ASSISTANT WORKSPACE CACHES ────────────────────────────────────
+.gemini/
+.agents/
+.cursor/
+.claude/

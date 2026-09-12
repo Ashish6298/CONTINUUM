@@ -87,7 +87,15 @@ class GeminiAdapter(BaseModelAdapter):
         c_state = state.conversational_state
 
         lines = [
-            "# Project Continuum — Gemini Agent Handoff & Continuity Instruction",
+            "# Project Continuum — Google Gemini Agent Handoff & Continuity Instruction",
+            "",
+            "<!-- CONTINUUM_HANDOFF_METADATA",
+            "Target-Model: GOOGLE_GEMINI",
+            "Format: HIERARCHICAL_ONTOLOGY_TREE",
+            "-->",
+            "",
+            "> 🧠 **CONTINUUM AI HANDOFF NOTICE:**",
+            "> You are continuing an ongoing software engineering project with verified physical context.",
             "",
             "> 📌 **Epistemic Principle:**",
             "> Strict demarcation between empirical facts (code, tests) and linguistic assertions (chat claims).",
