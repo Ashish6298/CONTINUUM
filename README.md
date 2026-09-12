@@ -1,27 +1,33 @@
 <div align="center">
 
-# ⬢ C O N T I N U U M &nbsp;•&nbsp; AI Work Continuity & Cross-Model Agent Handoff System
+```text
+  █▀▀ █▀█ █▄ █ ▀█▀ █ █▄ █ █ █ █ █ █▀▄▀█
+  █▄▄ █▄█ █ ▀█  █  █ █ ▀█ █▄█ █▄█ █ ▀ █
+```
+### *AI Work Continuity & Cross-Model Agent Handoff System*
 
 <p align="center">
-  <b>A deterministic, ground-truth engineering engine that separates physical project reality from conversational claims — enabling seamless, zero-hallucination agent handoffs across Claude, GPT-4o, Gemini, Cursor, and Local LLMs.</b>
+  <b>An open-source engineering engine that captures, verifies, and packages your project state for seamless continuity across AI coding assistants and models such as Claude, GPT, Gemini, Cursor, Antigravity, Local LLMs, etc.</b>
 </p>
 
-```
-  🔍 Multi-Source Extractor   ──►   ⚖️ 5-Tier Truth Resolver   ──►   🕸️ Canonical DAG   ──►   📦 Smart Omni-Model Handoff
+```text
+  [01] Extract Physical State  ──►  [02] Arbitrate Ground Truth  ──►  [03] Build State DAG  ──►  [04] Package Handoff
 ```
 
 <br/>
 
 <table>
   <tr>
-    <td align="center"><a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"/></a></td>
-    <td align="center"><a href="https://json-schema.org/"><img src="https://img.shields.io/badge/Schema-JSON_Draft_7-2962FF?style=for-the-badge&logo=json&logoColor=white" alt="JSON Schema 1.0.0"/></a></td>
-    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Test_Suite-126%2F126_Passed-00C853?style=for-the-badge&logo=checkmarx&logoColor=white" alt="126/126 Tests Passed"/></a></td>
+    <td align="center"><a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=plastic&logo=python&logoColor=white" alt="Python 3.10+"/></a></td>
+    <td align="center"><a href="https://pypi.org/project/continuum/"><img src="https://img.shields.io/badge/Downloads-PyPI-007EC6?style=plastic&logo=pypi&logoColor=white" alt="Downloads"/></a></td>
+    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-126%2F126_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
+    <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Engine-7F77DD?style=plastic&logo=diagramsdotnet&logoColor=white" alt="3-State Architecture"/></a></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Separation-7F77DD?style=for-the-badge&logo=diagramsdotnet&logoColor=white" alt="3-State Separation"/></a></td>
-    <td align="center"><a href="docs/CLI_REFERENCE.md"><img src="https://img.shields.io/badge/CLI-Smart_1--Command-FF6B6B?style=for-the-badge&logo=gnometerminal&logoColor=white" alt="Smart 1-Command CLI"/></a></td>
-    <td align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-F5A623?style=for-the-badge&logo=open-source-initiative&logoColor=white" alt="MIT License"/></a></td>
+    <td align="center"><a href="https://json-schema.org/"><img src="https://img.shields.io/badge/Schema-Draft_7-2962FF?style=plastic&logo=json&logoColor=white" alt="JSON Schema"/></a></td>
+    <td align="center"><a href="docs/CLI_REFERENCE.md"><img src="https://img.shields.io/badge/CLI-Smart_1--Command-FF6B6B?style=plastic&logo=gnometerminal&logoColor=white" alt="Smart 1-Command CLI"/></a></td>
+    <td align="center"><a href="#testing--verification"><img src="https://img.shields.io/badge/Privacy-Zero_Telemetry-17A2B8?style=plastic&logo=openaccess&logoColor=white" alt="Zero Telemetry"/></a></td>
+    <td align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-F5A623?style=plastic&logo=open-source-initiative&logoColor=white" alt="MIT License"/></a></td>
   </tr>
 </table>
 
@@ -29,25 +35,25 @@
 
 </div>
 
-## 🧭 Navigation Matrix
+## 🧭 Navigation
 
 <pre>
-# Direct Jump Matrix (Click any section below to navigate)
-├── 01. CORE FOUNDATION & BENCHMARK
-│   ├── ❯ continuum --why-continuum   ──► <a href="#what-is-continuum"><b>[What is Continuum?]</b></a>
-│   ├── ❯ continuum --vs-chat-summary ──► <a href="#why-continuum-over-chat-summaries"><b>[Why Continuum over Chat Summaries?]</b></a>
-│   └── ❯ continuum --quickstart      ──► <a href="#quick-start-guide"><b>[Quick Start Guide (1-Command)]</b></a>
-│
-├── 02. ARCHITECTURE & GROUND TRUTH
-│   ├── ❯ continuum --three-states    ──► <a href="#three-state-separation-architecture"><b>[3-State Separation Architecture]</b></a>
-│   ├── ❯ continuum --hierarchy       ──► <a href="#5-tier-evidence-hierarchy-matrix"><b>[5-Tier Evidence Hierarchy Matrix]</b></a>
-│   └── ❯ continuum --dag-graph       ──► <a href="#canonical-state-graph-dag"><b>[Canonical State Graph (DAG)]</b></a>
-│
-└── 03. TOOLING, RELEASES & REFERENCE
-    ├── ❯ continuum --omni-handoff    ──► <a href="#smart-omni-model-handoff-adapters"><b>[Smart Omni-Model Handoff Adapters]</b></a>
-    ├── ❯ continuum --cli-reference   ──► <a href="#complete-cli-reference"><b>[Complete CLI Command Reference]</b></a>
-    ├── ❯ continuum --roadmap-matrix  ──► <a href="#verified-roadmap-all-24-phases"><b>[Verified Roadmap (All 24 Phases)]</b></a>
-    └── ❯ continuum --testing-safety  ──► <a href="#testing--verification"><b>[Testing, Verification & Security]</b></a>
+# SYSTEM NAVIGATION MAP
+ ├── <b>[01] FOUNDATION & BENCHMARK</b>
+ │    ├── ❯ <a href="#what-is-continuum"><b>Overview & Core Problem</b></a>
+ │    ├── ❯ <a href="#why-continuum-over-chat-summaries"><b>Benchmark: Continuum vs Chat Summaries</b></a>
+ │    └── ❯ <a href="#quick-start-guide"><b>1-Command Quickstart Guide</b></a>
+ │
+ ├── <b>[02] ARCHITECTURE & GROUND TRUTH</b>
+ │    ├── ❯ <a href="#three-state-separation-architecture"><b>3-State Separation Engine</b></a>
+ │    ├── ❯ <a href="#5-tier-evidence-hierarchy-matrix"><b>5-Tier Evidence Arbitration Matrix</b></a>
+ │    └── ❯ <a href="#canonical-state-graph-dag"><b>Canonical Dependency Graph (DAG)</b></a>
+ │
+ └── <b>[03] TOOLING & GOVERNANCE</b>
+      ├── ❯ <a href="#smart-omni-model-handoff-adapters"><b>Omni-Model Handoff Adapters</b></a>
+      ├── ❯ <a href="#complete-cli-reference"><b>Complete CLI Command Reference</b></a>
+      ├── ❯ <a href="#verified-roadmap-all-24-phases"><b>Roadmap to v1.0.0 (All 24 Phases)</b></a>
+      └── ❯ <a href="#testing--verification"><b>Testing, Security & Privacy</b></a>
 </pre>
 
 <br>
