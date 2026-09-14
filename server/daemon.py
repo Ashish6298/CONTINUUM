@@ -79,13 +79,14 @@ class DefaultHealthHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": "Not Found"}).encode("utf-8"))
 
 
+from server.auth import SessionAuthManager
 from server.routes import ContinuumApiHandler
 
 
 class ContinuumHttpDaemon:
     """
     Local HTTP server daemon managing port negotiation, PID lockfiles,
-    and background/foreground server lifecycle for Continuum.
+    session auth tokens, and background/foreground server lifecycle for Continuum.
     """
 
     ALLOWED_LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
@@ -96,17 +97,23 @@ class ContinuumHttpDaemon:
         host: str = "127.0.0.1",
         default_port: int = 8765,
         max_port_attempts: int = 10,
-        handler_class: Optional[Callable[..., BaseHTTPRequestHandler]] = None
+        handler_class: Optional[Callable[..., BaseHTTPRequestHandler]] = None,
+        require_auth: bool = True
     ):
         self.workspace_root = Path(workspace_root).resolve()
         self.host = host
         self.default_port = default_port
         self.max_port_attempts = max_port_attempts
+        self.require_auth = require_auth
 
-        # Use ContinuumApiHandler as primary handler if none specified
+        # Initialize SessionAuthManager
+        self.auth_manager = SessionAuthManager(self.workspace_root)
+
+        # Configure handler
         if handler_class is None:
-            # Configure handler with target workspace root
             ContinuumApiHandler.workspace_root = self.workspace_root
+            ContinuumApiHandler.auth_manager = self.auth_manager
+            ContinuumApiHandler.require_auth = self.require_auth
             self.handler_class = ContinuumApiHandler
         else:
             self.handler_class = handler_class
@@ -180,6 +187,10 @@ class ContinuumHttpDaemon:
         self._continuum_dir.mkdir(parents=True, exist_ok=True)
         self._bound_port = self.find_available_port()
 
+        # Generate ephemeral session token for this daemon lifetime
+        if self.require_auth:
+            self.auth_manager.generate_token()
+
         # Instantiate HTTP Server
         self._server = ThreadingHTTPServer((self.host, self._bound_port), self.handler_class)
         self._is_running = True
@@ -225,6 +236,9 @@ class ContinuumHttpDaemon:
         if self._server_thread and self._server_thread.is_alive():
             self._server_thread.join(timeout=2.0)
             self._server_thread = None
+
+        # Revoke session auth token
+        self.auth_manager.revoke_token()
 
         # Clean up lockfiles
         if self._pid_file.exists():

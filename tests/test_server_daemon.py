@@ -47,7 +47,10 @@ class TestHttpServerDaemon(unittest.TestCase):
             self.assertTrue(status.server_url.startswith("http://127.0.0.1:"))
 
             # Send HTTP GET request
-            req = urllib.request.Request(f"{status.server_url}/api/status")
+            req = urllib.request.Request(
+                f"{status.server_url}/api/status",
+                headers={"X-Continuum-Token": daemon.auth_manager.get_token()}
+            )
             with urllib.request.urlopen(req, timeout=2.0) as resp:
                 self.assertEqual(resp.status, 200)
                 body = json.loads(resp.read().decode("utf-8"))

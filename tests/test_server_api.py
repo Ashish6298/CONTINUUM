@@ -54,17 +54,22 @@ class TestRestApiEndpoints(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _get_json(self, endpoint: str) -> Dict:
-        req = urllib.request.Request(f"{self.base_url}{endpoint}")
+        headers = {"X-Continuum-Token": self.daemon.auth_manager.get_token() or ""}
+        req = urllib.request.Request(f"{self.base_url}{endpoint}", headers=headers)
         with urllib.request.urlopen(req, timeout=5.0) as resp:
             self.assertEqual(resp.status, 200)
             return json.loads(resp.read().decode("utf-8"))
 
     def _post_json(self, endpoint: str, data: Dict) -> Dict:
         encoded = json.dumps(data).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "X-Continuum-Token": self.daemon.auth_manager.get_token() or ""
+        }
         req = urllib.request.Request(
             f"{self.base_url}{endpoint}",
             data=encoded,
-            headers={"Content-Type": "application/json"}
+            headers=headers
         )
         with urllib.request.urlopen(req, timeout=5.0) as resp:
             self.assertEqual(resp.status, 200)
@@ -133,8 +138,12 @@ class TestRestApiEndpoints(unittest.TestCase):
 
     def test_error_handling_404_and_400(self) -> None:
         """Test 404 for unknown endpoints and 400 for bad payloads."""
+        token = self.daemon.auth_manager.get_token() or ""
         # Test 404
-        req_404 = urllib.request.Request(f"{self.base_url}/api/non_existent_route")
+        req_404 = urllib.request.Request(
+            f"{self.base_url}/api/non_existent_route",
+            headers={"X-Continuum-Token": token}
+        )
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             urllib.request.urlopen(req_404)
         self.assertEqual(ctx.exception.code, 404)
@@ -143,7 +152,10 @@ class TestRestApiEndpoints(unittest.TestCase):
         req_400 = urllib.request.Request(
             f"{self.base_url}/api/prompt",
             data=b"INVALID_JSON{",
-            headers={"Content-Type": "application/json"}
+            headers={
+                "Content-Type": "application/json",
+                "X-Continuum-Token": token
+            }
         )
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             urllib.request.urlopen(req_400)

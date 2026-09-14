@@ -25,6 +25,9 @@ from pipeline.orchestrator import ContinuumPipeline
 from storage.manager import ContinuumStorageManager
 
 
+from server.auth import CorsOriginGuard, SessionAuthManager
+
+
 class ContinuumApiHandler(BaseHTTPRequestHandler):
     """
     HTTP Request Handler exposing Continuum REST API endpoints:
@@ -35,8 +38,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
     - POST /api/prompt
     """
 
-    # Static reference to workspace root directory (configured by daemon)
+    # Static configuration shared across handler threads
     workspace_root: Path = Path(".").resolve()
+    auth_manager: Optional[SessionAuthManager] = None
+    require_auth: bool = True
     server_started_at: str = datetime.now(timezone.utc).isoformat()
     version: str = "1.2.0-dev"
 
@@ -44,19 +49,78 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         """Suppress standard noisy console logging for clean CLI output."""
         pass
 
+    def _get_origin(self) -> Optional[str]:
+        """Extracts the Origin or Referer header from the incoming request."""
+        origin = self.headers.get("Origin")
+        if not origin:
+            referer = self.headers.get("Referer")
+            if referer:
+                parsed_ref = urllib.parse.urlparse(referer)
+                if parsed_ref.scheme and parsed_ref.netloc:
+                    origin = f"{parsed_ref.scheme}://{parsed_ref.netloc}"
+        return origin
+
     def _set_headers(self, status_code: int = 200, content_type: str = "application/json") -> None:
-        """Sets standard HTTP response headers with universal loopback CORS support."""
+        """Sets standard HTTP response headers with strict CORS validation."""
         self.send_response(status_code)
         self.send_header("Content-Type", f"{content_type}; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Continuum-Token")
+
+        # Apply strict CORS headers based on validated origin
+        origin = self._get_origin()
+        cors_headers = CorsOriginGuard.get_cors_headers(origin)
+        for header_name, header_value in cors_headers.items():
+            self.send_header(header_name, header_value)
+
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.end_headers()
 
     def do_OPTIONS(self) -> None:
-        """Handles CORS preflight requests."""
+        """Handles CORS preflight requests with origin verification."""
+        origin = self._get_origin()
+        if origin and not CorsOriginGuard.is_origin_allowed(origin):
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": f"CORS Origin '{origin}' is not permitted."}).encode("utf-8"))
+            return
+
         self._set_headers(204)
+
+    def _validate_request_security(self, query: Dict[str, List[str]]) -> bool:
+        """
+        Validates incoming request origin and authentication token.
+        Returns True if authorized, False otherwise (and sends error response).
+        """
+        # 1. CORS Origin Guard Validation
+        origin = self._get_origin()
+        if origin and not CorsOriginGuard.is_origin_allowed(origin):
+            self._send_error_response(
+                f"Forbidden: Origin '{origin}' is not permitted to access local Continuum daemon.",
+                status_code=403
+            )
+            return False
+
+        # 2. Ephemeral Session Token Verification
+        if self.require_auth and self.auth_manager:
+            # Check Header first: X-Continuum-Token or Authorization: Bearer <token>
+            token = self.headers.get("X-Continuum-Token")
+            if not token:
+                auth_header = self.headers.get("Authorization", "")
+                if auth_header.startswith("Bearer "):
+                    token = auth_header[7:].strip()
+
+            # Check Query Param fallback: ?token=...
+            if not token:
+                token = query.get("token", [None])[0]
+
+            if not token or not self.auth_manager.verify_token(token):
+                self._send_error_response(
+                    "Unauthorized: Missing or invalid X-Continuum-Token handshake secret.",
+                    status_code=401
+                )
+                return False
+
+        return True
 
     def _send_json_response(self, data: Any, status_code: int = 200) -> None:
         """Serializes and sends a JSON response payload."""
@@ -84,8 +148,17 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         if not path:
             path = "/"
 
+        # Allow unauthenticated health check on root/status if require_auth is False,
+        # but sensitive endpoints always enforce _validate_request_security
+        if path in ("/", "/health"):
+            self.handle_get_health()
+            return
+
+        if not self._validate_request_security(query):
+            return
+
         try:
-            if path in ("/", "/api/status", "/health"):
+            if path in ("/api/status", "/status"):
                 self.handle_get_status()
             elif path == "/api/context":
                 self.handle_get_context(query)
@@ -102,6 +175,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         """Dispatches POST requests to appropriate endpoint handlers."""
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/")
+        query = urllib.parse.parse_qs(parsed.query)
+
+        if not self._validate_request_security(query):
+            return
 
         try:
             if path == "/api/prompt":
@@ -110,6 +187,20 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
             self._send_error_response(f"Internal server error: {str(e)}", status_code=500, details=traceback.format_exc())
+
+    # --------------------------------------------------------------------------
+    # 0. GET /health
+    # --------------------------------------------------------------------------
+    def handle_get_health(self) -> None:
+        """Public minimal health check."""
+        payload = {
+            "status": "online",
+            "system": "Continuum HTTP Daemon",
+            "version": self.version,
+            "requires_auth": self.require_auth,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        self._send_json_response(payload)
 
     # --------------------------------------------------------------------------
     # 1. GET /api/status
