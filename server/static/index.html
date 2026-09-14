@@ -129,15 +129,25 @@
           <div class="model-selector-group">
             <span class="label">Target Platform:</span>
             <button class="model-btn active" data-model="universal">🌐 Universal</button>
+            <button class="model-btn" data-model="chatgpt">🟢 ChatGPT</button>
             <button class="model-btn" data-model="claude">🟣 Claude 3.5</button>
-            <button class="model-btn" data-model="gpt">🟢 GPT-4o / Codex</button>
-            <button class="model-btn" data-model="gemini">🔵 Gemini Pro</button>
+            <button class="model-btn" data-model="gemini">🔵 Gemini / AI Studio</button>
+            <button class="model-btn" data-model="deepseek">🐳 DeepSeek / Local</button>
           </div>
           <div class="composer-actions">
-            <button class="btn btn-secondary btn-sm" id="btnCopyPrompt">
+            <!-- 1-Click Platform Copy Action -->
+            <button class="btn btn-primary btn-sm" id="btnCopyPrompt" title="Copy formatted context for selected model">
               <span class="btn-icon">📋</span> Copy Prompt
             </button>
+            <!-- Dropdown / Options for Download -->
+            <button class="btn btn-secondary btn-sm" id="btnExport" title="Download Markdown Prompt (.md)">
+              <span class="btn-icon">💾</span> Download .md
+            </button>
+            <button class="btn btn-outline btn-sm" id="btnExportTxt" title="Download Plain Text Prompt (.txt)">
+              <span class="btn-icon">📄</span> .txt
+            </button>
           </div>
+
         </div>
 
         <div class="task-input-section">

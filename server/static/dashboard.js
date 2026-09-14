@@ -107,8 +107,20 @@ class ContinuumDashboardApp {
         this.el.modelButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.state.targetModel = btn.dataset.model;
+        
+        // Format label update
         if (this.el.previewFormatLabel) {
-          this.el.previewFormatLabel.textContent = this.state.targetModel === 'claude' ? 'XML Encapsulated' : 'Markdown';
+          if (this.state.targetModel === 'claude') {
+            this.el.previewFormatLabel.textContent = 'Structured XML';
+          } else if (this.state.targetModel === 'chatgpt' || this.state.targetModel === 'gpt') {
+            this.el.previewFormatLabel.textContent = 'Markdown Checklist';
+          } else if (this.state.targetModel === 'gemini' || this.state.targetModel === 'aistudio') {
+            this.el.previewFormatLabel.textContent = 'Hierarchical Ontology';
+          } else if (this.state.targetModel === 'deepseek' || this.state.targetModel === 'local') {
+            this.el.previewFormatLabel.textContent = 'High-Density Compact';
+          } else {
+            this.el.previewFormatLabel.textContent = 'Universal Markdown';
+          }
         }
         this.refreshPromptPreview();
       });
@@ -141,9 +153,11 @@ class ContinuumDashboardApp {
       this.filterFileList(e.target.value);
     });
 
-    // Clipboard & Export
+    // 1-Click Clipboard & File Downloads
     this.el.btnCopyPrompt?.addEventListener('click', () => this.copyPromptToClipboard());
-    this.el.btnExport?.addEventListener('click', () => this.exportHandoffFile());
+    this.el.btnExport?.addEventListener('click', () => this.exportHandoffFile('md'));
+    this.el.btnExportTxt = document.getElementById('btnExportTxt');
+    this.el.btnExportTxt?.addEventListener('click', () => this.exportHandoffFile('txt'));
   }
 
   debounce(func, wait) {
@@ -382,34 +396,59 @@ class ContinuumDashboardApp {
 
   async copyPromptToClipboard() {
     const text = this.el.promptPreviewText?.textContent || '';
-    if (!text) return;
+    if (!text) {
+      this.showToast('⚠️ No prompt payload available to copy');
+      return;
+    }
+    const modelName = this.state.targetModel.toUpperCase();
     try {
-      await navigator.clipboard.writeText(text);
-      this.showToast('✨ Handoff prompt copied to clipboard!');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        this.showToast(`✨ Copied ${modelName} prompt to clipboard!`);
+      } else {
+        throw new Error('Clipboard API unavailable');
+      }
     } catch (err) {
-      // Fallback
+      // Robust Fallback for legacy contexts or unsupported iframe origins
       const ta = document.createElement('textarea');
       ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
       document.body.appendChild(ta);
+      ta.focus();
       ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      this.showToast('✨ Handoff prompt copied!');
+      try {
+        const successful = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (successful) {
+          this.showToast(`✨ Copied ${modelName} prompt to clipboard!`);
+        } else {
+          this.showToast('❌ Clipboard copy failed');
+        }
+      } catch (fallbackErr) {
+        document.body.removeChild(ta);
+        this.showToast('❌ Clipboard permission denied');
+      }
     }
   }
 
-  exportHandoffFile() {
+  exportHandoffFile(format = 'md') {
     const text = this.el.promptPreviewText?.textContent || '';
-    if (!text) return;
-    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+    if (!text) {
+      this.showToast('⚠️ No prompt payload to download');
+      return;
+    }
+    const mime = format === 'txt' ? 'text/plain;charset=utf-8' : 'text/markdown;charset=utf-8';
+    const blob = new Blob([text], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `continuum_handoff_${this.state.targetModel}.md`;
+    a.download = `continuum_handoff_${this.state.targetModel}.${format}`;
     a.click();
     URL.revokeObjectURL(url);
-    this.showToast('📥 Downloaded handoff markdown file');
+    this.showToast(`📥 Downloaded ${format.toUpperCase()} handoff file`);
   }
+
 
   showToast(message) {
     if (!this.el.toastContainer) return;

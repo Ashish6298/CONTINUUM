@@ -438,9 +438,13 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         model_map = {
             "claude": TargetModel.CLAUDE,
             "gpt": TargetModel.CODEX_GPT,
+            "chatgpt": TargetModel.CODEX_GPT,
             "codex": TargetModel.CODEX_GPT,
             "gemini": TargetModel.GEMINI,
+            "aistudio": TargetModel.GEMINI,
             "local": TargetModel.LOCAL_LLM,
+            "deepseek": TargetModel.LOCAL_LLM,
+            "openllm": TargetModel.LOCAL_LLM,
             "universal": TargetModel.UNIVERSAL
         }
         target_model = model_map.get(target_model_str, TargetModel.UNIVERSAL)
@@ -521,6 +525,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         estimated_tokens = int(len(handoff_doc) / 3.8)
 
         payload = {
+            "status": "success",
             "target_model": target_model_str,
             "task_description": task_description,
             "estimated_tokens": estimated_tokens,

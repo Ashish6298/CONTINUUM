@@ -37,6 +37,8 @@ class StaticAssetManager:
         ".woff2": "font/woff2",
         ".ttf": "font/ttf",
         ".map": "application/json; charset=utf-8",
+        ".md": "text/markdown; charset=utf-8",
+        ".txt": "text/plain; charset=utf-8",
     }
 
     def __init__(self, static_dir_override: Optional[Path] = None):
