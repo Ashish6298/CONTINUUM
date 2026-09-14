@@ -27,11 +27,13 @@ from storage.manager import ContinuumStorageManager
 
 from server.auth import CorsOriginGuard, SessionAuthManager
 from server.sanitizer import DaemonSanitizer
+from server.static_manager import StaticAssetManager
 
 
 class ContinuumApiHandler(BaseHTTPRequestHandler):
     """
-    HTTP Request Handler exposing Continuum REST API endpoints:
+    HTTP Request Handler exposing Continuum REST API endpoints and embedded Web Dashboard:
+    - GET  / (and static assets /dashboard.css, /dashboard.js, etc.)
     - GET  /api/status
     - GET  /api/context
     - GET  /api/symbols
@@ -42,6 +44,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
     # Static configuration shared across handler threads
     workspace_root: Path = Path(".").resolve()
     auth_manager: Optional[SessionAuthManager] = None
+    static_manager: StaticAssetManager = StaticAssetManager()
     require_auth: bool = True
     server_started_at: str = datetime.now(timezone.utc).isoformat()
     version: str = "1.2.0-dev"
@@ -64,7 +67,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
     def _set_headers(self, status_code: int = 200, content_type: str = "application/json") -> None:
         """Sets standard HTTP response headers with strict CORS validation."""
         self.send_response(status_code)
-        self.send_header("Content-Type", f"{content_type}; charset=utf-8")
+        self.send_header("Content-Type", f"{content_type}; charset=utf-8" if "charset" not in content_type and "text" in content_type else content_type)
 
         # Apply strict CORS headers based on validated origin
         origin = self._get_origin()
@@ -143,36 +146,50 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         self._send_json_response(error_payload, status_code=status_code)
 
     def do_GET(self) -> None:
-        """Dispatches GET requests to appropriate endpoint handlers."""
+        """Dispatches GET requests to API routes or static SPA assets."""
         parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path.rstrip("/")
+        raw_path = parsed.path
+        path = raw_path.rstrip("/")
         query = urllib.parse.parse_qs(parsed.query)
 
         if not path:
             path = "/"
 
-        # Allow unauthenticated health check on root/status if require_auth is False,
-        # but sensitive endpoints always enforce _validate_request_security
-        if path in ("/", "/health"):
+        # 1. Check API endpoints first
+        if path.startswith("/api/"):
+            if not self._validate_request_security(query):
+                return
+            try:
+                if path in ("/api/status", "/status"):
+                    self.handle_get_status()
+                elif path == "/api/context":
+                    self.handle_get_context(query)
+                elif path == "/api/symbols":
+                    self.handle_get_symbols(query)
+                elif path == "/api/diff":
+                    self.handle_get_diff()
+                else:
+                    self._send_error_response(f"Endpoint not found: {path}", status_code=404)
+            except Exception as e:
+                self._send_error_response(f"Internal server error: {str(e)}", status_code=500, details=traceback.format_exc())
+            return
+
+        # 2. Public health check
+        if path == "/health":
             self.handle_get_health()
             return
 
-        if not self._validate_request_security(query):
+        # 3. Static assets serving for Web Dashboard SPA (index.html, dashboard.css, dashboard.js, etc.)
+        asset_result = self.static_manager.resolve_asset(raw_path)
+        if asset_result is not None:
+            content, mime_type = asset_result
+            self._set_headers(200, mime_type)
+            self.wfile.write(content)
             return
 
-        try:
-            if path in ("/api/status", "/status"):
-                self.handle_get_status()
-            elif path == "/api/context":
-                self.handle_get_context(query)
-            elif path == "/api/symbols":
-                self.handle_get_symbols(query)
-            elif path == "/api/diff":
-                self.handle_get_diff()
-            else:
-                self._send_error_response(f"Endpoint not found: {path}", status_code=404)
-        except Exception as e:
-            self._send_error_response(f"Internal server error: {str(e)}", status_code=500, details=traceback.format_exc())
+        # 4. Fallback 404
+        self._send_error_response(f"Not found: {path}", status_code=404)
+
 
     def do_POST(self) -> None:
         """Dispatches POST requests to appropriate endpoint handlers."""

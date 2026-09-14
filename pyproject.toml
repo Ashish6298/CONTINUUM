@@ -50,3 +50,7 @@ where = ["."]
 include = ["*"]
 exclude = ["tests*", "docs*"]
 
+[tool.setuptools.package-data]
+"server.static" = ["*"]
+"*" = ["*.html", "*.css", "*.js", "*.svg", "*.png", "*.json"]
+
