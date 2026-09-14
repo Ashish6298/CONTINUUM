@@ -179,7 +179,24 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             self.handle_get_health()
             return
 
-        # 3. Static assets serving for Web Dashboard SPA (index.html, dashboard.css, dashboard.js, etc.)
+        # 3. Public browser companion userscript distribution (/continuum.user.js)
+        if path == "/continuum.user.js":
+            userjs_path = Path(__file__).parent.parent / "browser" / "continuum.user.js"
+            if userjs_path.is_file():
+                content = userjs_path.read_text(encoding="utf-8")
+                # Inject active auth token if auth manager is active
+                if self.auth_manager:
+                    token = self.auth_manager.get_token() or ""
+                    if token:
+                        content = content.replace(
+                            "storageTokenKey: 'continuum_auth_token',",
+                            f"storageTokenKey: 'continuum_auth_token',\n    defaultToken: '{token}',"
+                        )
+                self._set_headers(200, "application/javascript; charset=utf-8")
+                self.wfile.write(content.encode("utf-8"))
+                return
+
+        # 4. Static assets serving for Web Dashboard SPA (index.html, dashboard.css, dashboard.js, etc.)
         asset_result = self.static_manager.resolve_asset(raw_path)
         if asset_result is not None:
             content, mime_type = asset_result

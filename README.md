@@ -162,7 +162,19 @@ cd CONTINUUM
 pip install -e .
 ```
 
-### 2. Generate an Instant AI Handoff (The 1-Command Workflow)
+### 2. Launch Local Web Dashboard & Browser Companion (v1.2.0)
+
+Run inside any project directory to launch the embedded Web Control Dashboard:
+
+```bash
+continuum serve
+```
+
+- **Dashboard UI**: Open `http://127.0.0.1:8765` in your browser.
+- **Install Companion Userscript**: Click **🧩 Install Companion** in the dashboard header (or open `http://127.0.0.1:8765/continuum.user.js` in Tampermonkey / Violentmonkey).
+- **In-Chat AI Injection**: Works seamlessly on ChatGPT, Claude.ai, Google AI Studio, Gemini, and DeepSeek.
+
+### 3. Generate an Instant AI Handoff via CLI (v1.0.0)
 
 Run inside any project directory — Continuum automatically scans your codebase, extracts AST symbols, builds the dependency graph, and creates your ready-to-resume AI handoff package:
 
