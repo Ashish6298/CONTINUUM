@@ -200,6 +200,14 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         asset_result = self.static_manager.resolve_asset(raw_path)
         if asset_result is not None:
             content, mime_type = asset_result
+            # Automatically bootstrap session token into index.html
+            if "text/html" in mime_type and self.auth_manager:
+                token = self.auth_manager.get_token() or ""
+                if token:
+                    html_str = content.decode("utf-8", errors="replace")
+                    bootstrap_script = f"<script>window.__CONTINUUM_SESSION_TOKEN__ = '{token}'; try {{ localStorage.setItem('continuum_token', '{token}'); }} catch(e){{}}</script></head>"
+                    html_str = html_str.replace("</head>", bootstrap_script)
+                    content = html_str.encode("utf-8")
             self._set_headers(200, mime_type)
             self.wfile.write(content)
             return
@@ -272,18 +280,90 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
     # --------------------------------------------------------------------------
     def handle_get_context(self, query: Dict[str, List[str]]) -> None:
         """
-        Executes canonical workspace analysis and returns structured project evidence,
-        detected languages, framework metadata, and token budgets.
+        Returns structured project evidence, detected languages, framework metadata,
+        and token budgets. Loads from cached .continuum/state.json for speed.
+        Pass ?refresh=1 to force a fresh full pipeline scan.
         Filters out high-risk files (.env, *.key, etc.).
         """
+        force_refresh = query.get("refresh", ["0"])[0] in ("1", "true", "yes")
+        storage = ContinuumStorageManager(str(self.workspace_root))
+
+        if not force_refresh and storage.state_exists():
+            # Fast path: load from saved .continuum/state.json (~10ms vs 25s)
+            try:
+                canonical = storage.load_state(validate=False)
+                state_obj = type('obj', (object,), {
+                    'project_id': canonical.project_id,
+                    'project_state': canonical.project_state,
+                    'contradictions': canonical.contradictions,
+                    'graph_nodes': canonical.graph_nodes,
+                })()
+                raw_langs = canonical.project_state.detected_languages or []
+                all_files = canonical.project_state.files or []
+                symbols = canonical.project_state.symbols or []
+
+                safe_files = [f for f in all_files if not DaemonSanitizer.is_high_risk_file(f)]
+
+                char_count = 0
+                lines_of_code = 0
+                for f_rel in safe_files:
+                    f_abs = self.workspace_root / f_rel
+                    if f_abs.is_file():
+                        try:
+                            char_count += f_abs.stat().st_size
+                            with open(f_abs, "r", encoding="utf-8", errors="ignore") as fp:
+                                lines_of_code += sum(1 for _ in fp)
+                        except OSError:
+                            pass
+
+                estimated_tokens = int(char_count / 3.8) if char_count else 0
+                if isinstance(raw_langs, dict):
+                    languages_dict = raw_langs
+                elif isinstance(raw_langs, list):
+                    languages_dict = {lang: 1 for lang in raw_langs}
+                else:
+                    languages_dict = {}
+
+                payload = {
+                    "project_id": canonical.project_id,
+                    "workspace_root": str(self.workspace_root),
+                    "files": safe_files,
+                    "summary": {"languages_detected": raw_langs},
+                    "confidence_score": 0.9,
+                    "languages": languages_dict,
+                    "total_files": len(safe_files),
+                    "lines_of_code": lines_of_code,
+                    "total_symbols": len(symbols),
+                    "contradictions_count": len(canonical.contradictions),
+                    "token_budget_estimation": {
+                        "total_source_characters": char_count,
+                        "estimated_tokens": estimated_tokens,
+                        "gpt4o_percent_budget": round((estimated_tokens / 128000) * 100, 2),
+                        "claude35_percent_budget": round((estimated_tokens / 200000) * 100, 2),
+                        "gemini_percent_budget": round((estimated_tokens / 1000000) * 100, 4)
+                    },
+                    "cached": True,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                self._send_json_response(payload)
+                return
+            except Exception:
+                pass  # Fall through to full pipeline scan on error
+
+        # Full pipeline scan (slow, ~25s) - used on first load or ?refresh=1
         pipeline = ContinuumPipeline(self.workspace_root)
         state, summary, _ = pipeline.run_full_analysis()
 
-        # Filter out high-risk files from state
+        # Persist state for next fast-path load
+        try:
+            storage.initialize_storage()
+            storage.save_state(state)
+        except Exception:
+            pass
+
         safe_files = [f for f in state.project_state.files if not DaemonSanitizer.is_high_risk_file(f)]
         state.project_state.files = safe_files
 
-        # Calculate estimated character, line and token counts
         char_count = 0
         lines_of_code = 0
         for f_rel in safe_files:
@@ -291,7 +371,6 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             if f_abs.is_file():
                 try:
                     char_count += f_abs.stat().st_size
-                    # Read lines
                     with open(f_abs, "r", encoding="utf-8", errors="ignore") as fp:
                         lines_of_code += sum(1 for _ in fp)
                 except OSError:
@@ -299,13 +378,21 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
 
         estimated_tokens = int(char_count / 3.8) if char_count else 0
 
+        raw_langs = summary.languages_detected
+        if isinstance(raw_langs, dict):
+            languages_dict = raw_langs
+        elif isinstance(raw_langs, list):
+            languages_dict = {lang: 1 for lang in raw_langs}
+        else:
+            languages_dict = {}
+
         payload = {
             "project_id": state.project_id,
             "workspace_root": str(self.workspace_root),
             "files": safe_files,
             "summary": summary.to_dict(),
             "confidence_score": summary.project_confidence,
-            "languages": summary.languages_detected,
+            "languages": languages_dict,
             "total_files": len(safe_files),
             "lines_of_code": lines_of_code,
             "total_symbols": len(state.project_state.symbols),
@@ -317,6 +404,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 "claude35_percent_budget": round((estimated_tokens / 200000) * 100, 2),
                 "gemini_percent_budget": round((estimated_tokens / 1000000) * 100, 4)
             },
+            "cached": False,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         self._send_json_response(payload)
@@ -466,15 +554,33 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         }
         target_model = model_map.get(target_model_str, TargetModel.UNIVERSAL)
 
-        # Run pipeline analysis
-        pipeline = ContinuumPipeline(self.workspace_root)
-        state, _, _ = pipeline.run_full_analysis(
-            task_description=task_description,
-            token_budget=token_budget
-        )
+        # Load state from cache (fast ~50ms) or run full pipeline scan if needed
+        storage = ContinuumStorageManager(str(self.workspace_root))
+        if storage.state_exists():
+            try:
+                state = storage.load_state(validate=False)
+            except Exception:
+                # Fall back to pipeline scan if state is corrupted
+                pipeline = ContinuumPipeline(self.workspace_root)
+                state, _, _ = pipeline.run_full_analysis(
+                    task_description=task_description,
+                    token_budget=token_budget
+                )
+        else:
+            # No cached state - run pipeline and persist it
+            pipeline = ContinuumPipeline(self.workspace_root)
+            state, _, _ = pipeline.run_full_analysis(
+                task_description=task_description,
+                token_budget=token_budget
+            )
+            try:
+                storage.initialize_storage()
+                storage.save_state(state)
+            except Exception:
+                pass
 
         # Apply custom file filtering if requested
-        if selected_files is not None:
+        if selected_files is not None and len(selected_files) > 0:
             norm_selected = {Path(f).as_posix() for f in selected_files}
             state.project_state.files = [
                 f for f in state.project_state.files

@@ -19,7 +19,7 @@ class ContinuumDashboardApp {
       includeDiff: true,
       includeSymbols: true,
       includeVerification: true,
-      token: this.getTokenFromUrl() || localStorage.getItem('continuum_token') || ''
+      token: window.__CONTINUUM_SESSION_TOKEN__ || this.getTokenFromUrl() || localStorage.getItem('continuum_token') || ''
     };
 
     // Model context window definitions (tokens)
@@ -36,8 +36,23 @@ class ContinuumDashboardApp {
   }
 
   getTokenFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
+    let search = window.location.search || '';
+    if (!search && window.location.href.includes('?')) {
+      search = '?' + window.location.href.split('?')[1];
+    }
+    // Normalize unicode dashes (e.g. – or —) to standard hyphen/equals
+    search = search.replace(/[\u2013\u2014]/g, '-').replace(/[–—]/g, '-');
+    const params = new URLSearchParams(search);
+    let token = params.get('token');
+    
+    // Fallback: check if token was separated by hyphen instead of equals (e.g. ?token-...)
+    if (!token && search.includes('token')) {
+      const match = search.match(/token[=\-]([a-f0-9]+)/i);
+      if (match) {
+        token = match[1];
+      }
+    }
+
     if (token) {
       localStorage.setItem('continuum_token', token);
       return token;
@@ -46,9 +61,11 @@ class ContinuumDashboardApp {
   }
 
   getHeaders() {
+    const token = window.__CONTINUUM_SESSION_TOKEN__ || this.getTokenFromUrl() || localStorage.getItem('continuum_token') || this.state.token || '';
     const headers = { 'Content-Type': 'application/json' };
-    if (this.state.token) {
-      headers['X-Continuum-Token'] = this.state.token;
+    if (token) {
+      this.state.token = token;
+      headers['X-Continuum-Token'] = token;
     }
     return headers;
   }
@@ -220,6 +237,14 @@ class ContinuumDashboardApp {
 
         this.renderFileTree();
         this.refreshPromptPreview();
+      } else {
+        const errText = await ctxRes.text();
+        console.error('Failed /api/context:', ctxRes.status, errText);
+        if (ctxRes.status === 401) {
+          this.showToast('Auth error: Invalid or missing token');
+        } else {
+          this.showToast(`Error loading workspace (${ctxRes.status})`);
+        }
       }
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -463,8 +488,12 @@ class ContinuumDashboardApp {
   }
 }
 
-// Bootstrap Application on DOM Ready
-document.addEventListener('DOMContentLoaded', () => {
+// Bootstrap Application on DOM Ready or immediately if document is already ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    window.continuumApp = new ContinuumDashboardApp();
+  });
+} else {
   window.continuumApp = new ContinuumDashboardApp();
-});
+}
 

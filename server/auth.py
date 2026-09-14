@@ -29,6 +29,18 @@ class SessionAuthManager:
         self.continuum_dir = self.workspace_root / ".continuum"
         self.token_file = self.continuum_dir / self.TOKEN_FILENAME
         self._current_token: Optional[str] = None
+        # On init, try to load any existing persisted token
+        self._load_persisted_token()
+
+    def _load_persisted_token(self) -> None:
+        """Attempts to load a previously persisted token from disk."""
+        if self.token_file.exists():
+            try:
+                token = self.token_file.read_text(encoding="utf-8").strip()
+                if token and len(token) == 48:  # Valid 24-byte hex token
+                    self._current_token = token
+            except OSError:
+                pass
 
     def generate_token(self) -> str:
         """
@@ -39,11 +51,10 @@ class SessionAuthManager:
         token = secrets.token_hex(24)
         self._current_token = token
 
-        # Write token file
-        self.token_file.write_text(token, encoding="utf-8")
-
-        # Restrict permissions to owner read/write only (0600 on POSIX)
+        # Write token file - persisted so browser refreshes and new tabs work
         try:
+            self.token_file.write_text(token, encoding="utf-8")
+            # Restrict permissions to owner read/write only (0600 on POSIX)
             if sys.platform != "win32":
                 os.chmod(self.token_file, stat.S_IRUSR | stat.S_IWUSR)
         except OSError:
@@ -58,7 +69,7 @@ class SessionAuthManager:
         if self.token_file.exists():
             try:
                 token = self.token_file.read_text(encoding="utf-8").strip()
-                if token:
+                if token and len(token) == 48:
                     self._current_token = token
                     return token
             except OSError:
