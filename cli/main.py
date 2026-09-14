@@ -77,6 +77,10 @@ def build_parser() -> argparse.ArgumentParser:
     daemon_parser.add_argument("action", choices=["start", "stop", "status", "run-once"], help="Daemon action to perform")
     daemon_parser.add_argument("--path", default=".", help="Workspace path")
 
+    # 7. serve
+    from cli.serve import register_serve_subcommand
+    register_serve_subcommand(subparsers)
+
     return parser
 
 
@@ -394,6 +398,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print_welcome_hub()
         return 0
 
+    from cli.serve import handle_serve
+
     handlers = {
         "init": handle_init,
         "status": handle_status,
@@ -401,6 +407,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "graph": handle_graph,
         "handoff": handle_handoff,
         "daemon": handle_daemon,
+        "serve": handle_serve,
     }
 
     handler = handlers.get(args.command)
