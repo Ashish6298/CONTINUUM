@@ -79,6 +79,9 @@ class DefaultHealthHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": "Not Found"}).encode("utf-8"))
 
 
+from server.routes import ContinuumApiHandler
+
+
 class ContinuumHttpDaemon:
     """
     Local HTTP server daemon managing port negotiation, PID lockfiles,
@@ -93,13 +96,20 @@ class ContinuumHttpDaemon:
         host: str = "127.0.0.1",
         default_port: int = 8765,
         max_port_attempts: int = 10,
-        handler_class: Callable[..., BaseHTTPRequestHandler] = DefaultHealthHandler
+        handler_class: Optional[Callable[..., BaseHTTPRequestHandler]] = None
     ):
         self.workspace_root = Path(workspace_root).resolve()
         self.host = host
         self.default_port = default_port
         self.max_port_attempts = max_port_attempts
-        self.handler_class = handler_class
+
+        # Use ContinuumApiHandler as primary handler if none specified
+        if handler_class is None:
+            # Configure handler with target workspace root
+            ContinuumApiHandler.workspace_root = self.workspace_root
+            self.handler_class = ContinuumApiHandler
+        else:
+            self.handler_class = handler_class
 
         # Validate security constraint: strictly loopback only
         self._validate_host_security(self.host)
