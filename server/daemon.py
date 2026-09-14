@@ -327,3 +327,82 @@ class ContinuumHttpDaemon:
                 return True
             except (OSError, ProcessLookupError):
                 return False
+
+    @classmethod
+    def get_saved_status(cls, workspace_root: str) -> DaemonServerStatus:
+        """Retrieves active running status from .continuum/daemon_server.json if alive."""
+        ws = Path(workspace_root).resolve()
+        status_file = ws / ".continuum" / "daemon_server.json"
+        pid_file = ws / ".continuum" / "daemon.pid"
+
+        if not pid_file.exists():
+            return DaemonServerStatus(is_running=False, workspace_root=str(ws))
+
+        try:
+            pid_str = pid_file.read_text(encoding="utf-8").strip()
+            if not pid_str:
+                return DaemonServerStatus(is_running=False, workspace_root=str(ws))
+            pid = int(pid_str)
+            if not cls._is_pid_running(pid):
+                # Stale process
+                pid_file.unlink(missing_ok=True)
+                status_file.unlink(missing_ok=True)
+                return DaemonServerStatus(is_running=False, workspace_root=str(ws))
+
+            # Process is running, load metadata if available
+            if status_file.exists():
+                data = json.loads(status_file.read_text(encoding="utf-8"))
+                return DaemonServerStatus(
+                    is_running=True,
+                    pid=data.get("pid", pid),
+                    host=data.get("host", "127.0.0.1"),
+                    port=data.get("port"),
+                    server_url=data.get("server_url"),
+                    workspace_root=str(ws),
+                    started_at=data.get("started_at")
+                )
+            return DaemonServerStatus(is_running=True, pid=pid, workspace_root=str(ws))
+        except Exception:
+            return DaemonServerStatus(is_running=False, workspace_root=str(ws))
+
+    @classmethod
+    def stop_existing(cls, workspace_root: str) -> bool:
+        """Stops any active running daemon recorded in the workspace."""
+        ws = Path(workspace_root).resolve()
+        pid_file = ws / ".continuum" / "daemon.pid"
+        status_file = ws / ".continuum" / "daemon_server.json"
+        token_file = ws / ".continuum" / "session_token.key"
+
+        if not pid_file.exists():
+            return False
+
+        try:
+            pid_str = pid_file.read_text(encoding="utf-8").strip()
+            if not pid_str:
+                pid_file.unlink(missing_ok=True)
+                return False
+            pid = int(pid_str)
+
+            if cls._is_pid_running(pid):
+                if pid == os.getpid():
+                    # Same process (in-memory daemon in test runner), do not self-terminate
+                    pass
+                elif sys.platform == "win32":
+                    import ctypes
+                    PROCESS_TERMINATE = 0x0001
+                    handle = ctypes.windll.kernel32.OpenProcess(PROCESS_TERMINATE, 0, pid)
+                    if handle:
+                        ctypes.windll.kernel32.TerminateProcess(handle, 0)
+                        ctypes.windll.kernel32.CloseHandle(handle)
+                else:
+                    import signal
+                    os.kill(pid, signal.SIGTERM)
+                time.sleep(0.05)
+
+            pid_file.unlink(missing_ok=True)
+            status_file.unlink(missing_ok=True)
+            token_file.unlink(missing_ok=True)
+            return True
+        except Exception:
+            return False
+

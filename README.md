@@ -22,7 +22,7 @@
     <td align="center"><a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=plastic&logo=python&logoColor=white" alt="Python 3.10+"/></a></td>
     <td align="center"><a href="https://pypi.org/project/continuum-toolkit/"><img src="https://img.shields.io/badge/PyPI-v1.0.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
     <td align="center"><a href="https://pepy.tech/projects/continuum-toolkit"><img src="https://static.pepy.tech/personalized-badge/continuum-toolkit?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads"/></a></td>
-    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-166%2F166_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
+    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-173%2F173_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
   </tr>
   <tr>
     <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Engine-7F77DD?style=plastic&logo=diagramsdotnet&logoColor=white" alt="3-State Architecture"/></a></td>
@@ -327,7 +327,15 @@ $ continuum handoff --model claude         # Tailor specifically for Anthropic C
 $ continuum handoff --model gpt            # Tailor for OpenAI GPT-4o / Codex
 $ continuum handoff --model gemini         # Tailor for Google Gemini Pro
 
-# ── 4. BACKGROUND OBSERVER DAEMON ───────────────────────────────────────────
+# ── 4. LOCAL WEB CONTROL DASHBOARD & REST API ──────────────────────────────
+$ continuum serve                          # Launch Local Web Dashboard & REST API
+$ continuum serve --port 8765              # Launch on custom port (auto-fallback enabled)
+$ continuum serve --no-browser             # Start headless daemon without opening browser
+$ continuum serve --watch                  # Enable live background filesystem observation
+$ continuum serve --status                 # Inspect running web daemon status & auth token
+$ continuum serve --stop                   # Gracefully terminate active web daemon
+
+# ── 5. BACKGROUND OBSERVER DAEMON ───────────────────────────────────────────
 $ continuum daemon start                   # Start background filesystem observer
 $ continuum daemon status                  # Check background daemon health & cycles
 $ continuum daemon run-once                # Trigger a single incremental scan pass
