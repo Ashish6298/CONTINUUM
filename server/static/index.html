@@ -40,13 +40,20 @@
 
   <!-- Main Grid Layout -->
   <main class="dashboard-grid">
-    <!-- Top Stats Row -->
+    <!-- Top Stats Row / Workspace Overview Cards -->
     <section class="stats-row">
       <div class="stat-card glass-panel">
         <div class="stat-icon">📊</div>
         <div class="stat-details">
           <span class="stat-value" id="statFiles">0</span>
           <span class="stat-label">Source Files</span>
+        </div>
+      </div>
+      <div class="stat-card glass-panel">
+        <div class="stat-icon">📝</div>
+        <div class="stat-details">
+          <span class="stat-value" id="statLoc">0</span>
+          <span class="stat-label">Lines of Code</span>
         </div>
       </div>
       <div class="stat-card glass-panel">
@@ -57,10 +64,10 @@
         </div>
       </div>
       <div class="stat-card glass-panel">
-        <div class="stat-icon">🛡️</div>
+        <div class="stat-icon">⚡</div>
         <div class="stat-details">
-          <span class="stat-value" id="statConfidence">100%</span>
-          <span class="stat-label">Confidence Score</span>
+          <span class="stat-value" id="statTech">Python</span>
+          <span class="stat-label">Detected Stack</span>
         </div>
       </div>
       <div class="stat-card glass-panel">
@@ -74,45 +81,56 @@
 
     <!-- Workspace Explorer & Token Budget -->
     <div class="workspace-layout">
-      <!-- Left: File Selector & Toggles -->
+      <!-- Left: Interactive File Tree & Quick Context Toggles -->
       <aside class="sidebar-panel glass-panel">
         <div class="panel-header">
           <h3>Workspace Files</h3>
-          <span class="badge" id="fileCountBadge">0</span>
+          <span class="badge" id="fileCountBadge">0 files</span>
         </div>
+
+        <!-- Quick Filter Presets -->
+        <div class="preset-toolbar">
+          <button class="btn-preset active" id="btnPresetAll" title="Select all analyzed files">All</button>
+          <button class="btn-preset" id="btnPresetChanged" title="Select files modified in Git">Changed</button>
+          <button class="btn-preset" id="btnPresetCore" title="Select core logic excluding tests/docs">Core Logic</button>
+          <button class="btn-preset" id="btnPresetNone" title="Deselect all">None</button>
+        </div>
+
         <div class="file-filter-bar">
-          <input type="text" id="fileSearchInput" placeholder="Filter files..." class="input-search">
+          <input type="text" id="fileSearchInput" placeholder="Filter files (e.g. *.py, src/)..." class="input-search">
         </div>
+
+        <!-- Interactive Collapsible File Tree -->
         <div class="file-list-container" id="fileListContainer">
-          <div class="loading-spinner">Loading files...</div>
+          <div class="loading-spinner">Loading workspace tree...</div>
         </div>
         
-        <!-- Context Inclusion Options -->
+        <!-- Quick Context Toggles -->
         <div class="panel-section">
           <h4>Context Inclusions</h4>
           <label class="toggle-option">
             <input type="checkbox" id="chkIncludeDiff" checked>
-            <span>🌿 Include Live Git Diffs</span>
+            <span>🌿 Live Git Diffs (Staged & Unstaged)</span>
           </label>
           <label class="toggle-option">
             <input type="checkbox" id="chkIncludeSymbols" checked>
-            <span>🧩 Include AST Symbol Table</span>
+            <span>🧩 AST Symbols & Signatures</span>
           </label>
           <label class="toggle-option">
-            <input type="checkbox" id="chkIncludeConfidence" checked>
-            <span>⚖️ Include Ground-Truth Proof</span>
+            <input type="checkbox" id="chkIncludeVerification" checked>
+            <span>⚖️ 5-Tier Verification & Test Proof</span>
           </label>
         </div>
       </aside>
 
-      <!-- Center: Prompt Composer & Live Preview -->
+      <!-- Center: Prompt Composer & Live Token Visualizer -->
       <section class="main-composer-panel glass-panel">
         <div class="composer-header">
           <div class="model-selector-group">
             <span class="label">Target Platform:</span>
             <button class="model-btn active" data-model="universal">🌐 Universal</button>
-            <button class="model-btn" data-model="claude">🟣 Claude</button>
-            <button class="model-btn" data-model="gpt">🟢 ChatGPT / Codex</button>
+            <button class="model-btn" data-model="claude">🟣 Claude 3.5</button>
+            <button class="model-btn" data-model="gpt">🟢 GPT-4o / Codex</button>
             <button class="model-btn" data-model="gemini">🔵 Gemini Pro</button>
           </div>
           <div class="composer-actions">
@@ -123,22 +141,56 @@
         </div>
 
         <div class="task-input-section">
-          <input type="text" id="taskInput" placeholder="Enter specific task directive for the AI agent (optional)..." class="input-task">
+          <input type="text" id="taskInput" placeholder="Enter specific task directive for the AI agent (optional, e.g. 'Refactor Auth Engine')..." class="input-task">
         </div>
 
-        <!-- Token Meter Bar -->
-        <div class="token-meter-bar">
-          <div class="token-labels">
-            <span class="token-count-text">Estimated Payload: <strong id="tokenCount">0</strong> tokens</span>
-            <span class="model-limit-text" id="tokenLimitRatio">0.0% of Claude 3.5 limit</span>
+        <!-- Token Budget Visualizer Gauge -->
+        <div class="token-visualizer-card">
+          <div class="token-header-row">
+            <div class="token-main-metric">
+              <span class="token-label">Payload Size:</span>
+              <strong class="token-number" id="tokenCount">0</strong>
+              <span class="token-unit">tokens</span>
+            </div>
+            <div class="token-status-pill safe" id="tokenStatusPill">
+              <span class="status-dot"></span> Within Limits
+            </div>
           </div>
-          <div class="meter-track">
-            <div class="meter-fill" id="meterFill" style="width: 2%;"></div>
+
+          <!-- Multi-Model Context Limit Comparative Meter -->
+          <div class="multi-gauge-container">
+            <div class="gauge-row">
+              <span class="gauge-label">Claude 3.5 Sonnet (200k)</span>
+              <div class="meter-track">
+                <div class="meter-fill fill-claude" id="meterClaude" style="width: 2%;"></div>
+              </div>
+              <span class="gauge-percent" id="pctClaude">0.0%</span>
+            </div>
+
+            <div class="gauge-row">
+              <span class="gauge-label">GPT-4o / Codex (128k)</span>
+              <div class="meter-track">
+                <div class="meter-fill fill-gpt" id="meterGpt" style="width: 2%;"></div>
+              </div>
+              <span class="gauge-percent" id="pctGpt">0.0%</span>
+            </div>
+
+            <div class="gauge-row">
+              <span class="gauge-label">Gemini 1.5 / 2.0 (1M)</span>
+              <div class="meter-track">
+                <div class="meter-fill fill-gemini" id="meterGemini" style="width: 0.5%;"></div>
+              </div>
+              <span class="gauge-percent" id="pctGemini">0.0%</span>
+            </div>
           </div>
         </div>
 
-        <!-- Prompt Preview Box -->
+        <!-- Live Formatted Preview Box -->
         <div class="preview-container">
+          <div class="preview-header">
+            <span class="preview-title">Live Prompt Preview</span>
+            <span class="preview-format" id="previewFormatLabel">Markdown</span>
+          </div>
           <pre><code id="promptPreviewText" class="code-preview">Loading live context...</code></pre>
         </div>
       </section>
@@ -152,3 +204,4 @@
   <script src="/dashboard.js"></script>
 </body>
 </html>
+

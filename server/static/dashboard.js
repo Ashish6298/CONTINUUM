@@ -1,6 +1,6 @@
 /**
  * Project Continuum - Web Control Dashboard Client Logic (Vanilla JS ES6+)
- * Milestone 27 - Phase 29: Embedded Dashboard Architecture & Asset Serving
+ * Milestone 27 - Phase 30: Interactive Prompt Composer & Token Budget Visualizer
  */
 
 class ContinuumDashboardApp {
@@ -9,15 +9,25 @@ class ContinuumDashboardApp {
       workspaceRoot: '',
       status: null,
       context: null,
+      diffData: null,
       files: [],
       selectedFiles: new Set(),
+      changedFiles: new Set(),
       targetModel: 'universal',
       taskDescription: '',
       tokenBudget: 0,
       includeDiff: true,
       includeSymbols: true,
-      includeConfidence: true,
+      includeVerification: true,
       token: this.getTokenFromUrl() || localStorage.getItem('continuum_token') || ''
+    };
+
+    // Model context window definitions (tokens)
+    this.modelLimits = {
+      claude: 200000,
+      gpt: 128000,
+      gemini: 1000000,
+      universal: 200000
     };
 
     this.initElements();
@@ -49,21 +59,32 @@ class ContinuumDashboardApp {
       connectionStatus: document.getElementById('connectionStatus'),
       workspacePath: document.getElementById('workspacePath'),
       statFiles: document.getElementById('statFiles'),
+      statLoc: document.getElementById('statLoc'),
       statSymbols: document.getElementById('statSymbols'),
-      statConfidence: document.getElementById('statConfidence'),
+      statTech: document.getElementById('statTech'),
       statGitBranch: document.getElementById('statGitBranch'),
       fileCountBadge: document.getElementById('fileCountBadge'),
       fileSearchInput: document.getElementById('fileSearchInput'),
       fileListContainer: document.getElementById('fileListContainer'),
+      btnPresetAll: document.getElementById('btnPresetAll'),
+      btnPresetChanged: document.getElementById('btnPresetChanged'),
+      btnPresetCore: document.getElementById('btnPresetCore'),
+      btnPresetNone: document.getElementById('btnPresetNone'),
       chkIncludeDiff: document.getElementById('chkIncludeDiff'),
       chkIncludeSymbols: document.getElementById('chkIncludeSymbols'),
-      chkIncludeConfidence: document.getElementById('chkIncludeConfidence'),
+      chkIncludeVerification: document.getElementById('chkIncludeVerification'),
       modelButtons: document.querySelectorAll('.model-btn'),
       taskInput: document.getElementById('taskInput'),
       tokenCount: document.getElementById('tokenCount'),
-      tokenLimitRatio: document.getElementById('tokenLimitRatio'),
-      meterFill: document.getElementById('meterFill'),
+      tokenStatusPill: document.getElementById('tokenStatusPill'),
+      meterClaude: document.getElementById('meterClaude'),
+      pctClaude: document.getElementById('pctClaude'),
+      meterGpt: document.getElementById('meterGpt'),
+      pctGpt: document.getElementById('pctGpt'),
+      meterGemini: document.getElementById('meterGemini'),
+      pctGemini: document.getElementById('pctGemini'),
       promptPreviewText: document.getElementById('promptPreviewText'),
+      previewFormatLabel: document.getElementById('previewFormatLabel'),
       btnRefresh: document.getElementById('btnRefresh'),
       btnCopyPrompt: document.getElementById('btnCopyPrompt'),
       btnExport: document.getElementById('btnExport'),
@@ -74,29 +95,53 @@ class ContinuumDashboardApp {
   bindEvents() {
     this.el.btnRefresh?.addEventListener('click', () => this.loadInitialData());
 
+    // Presets
+    this.el.btnPresetAll?.addEventListener('click', () => this.applyPreset('all'));
+    this.el.btnPresetChanged?.addEventListener('click', () => this.applyPreset('changed'));
+    this.el.btnPresetCore?.addEventListener('click', () => this.applyPreset('core'));
+    this.el.btnPresetNone?.addEventListener('click', () => this.applyPreset('none'));
+
+    // Model Selector
     this.el.modelButtons?.forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         this.el.modelButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.state.targetModel = btn.dataset.model;
+        if (this.el.previewFormatLabel) {
+          this.el.previewFormatLabel.textContent = this.state.targetModel === 'claude' ? 'XML Encapsulated' : 'Markdown';
+        }
         this.refreshPromptPreview();
       });
     });
 
+    // Task input
     this.el.taskInput?.addEventListener('input', (e) => {
       this.state.taskDescription = e.target.value;
       this.debounce(() => this.refreshPromptPreview(), 300)();
     });
 
+    // Quick Context Toggles
     this.el.chkIncludeDiff?.addEventListener('change', (e) => {
       this.state.includeDiff = e.target.checked;
       this.refreshPromptPreview();
     });
 
+    this.el.chkIncludeSymbols?.addEventListener('change', (e) => {
+      this.state.includeSymbols = e.target.checked;
+      this.refreshPromptPreview();
+    });
+
+    this.el.chkIncludeVerification?.addEventListener('change', (e) => {
+      this.state.includeVerification = e.target.checked;
+      this.refreshPromptPreview();
+    });
+
+    // Search filter
     this.el.fileSearchInput?.addEventListener('input', (e) => {
       this.filterFileList(e.target.value);
     });
 
+    // Clipboard & Export
     this.el.btnCopyPrompt?.addEventListener('click', () => this.copyPromptToClipboard());
     this.el.btnExport?.addEventListener('click', () => this.exportHandoffFile());
   }
@@ -111,7 +156,9 @@ class ContinuumDashboardApp {
 
   async loadInitialData() {
     try {
-      this.showToast('Fetching workspace telemetry...');
+      this.showToast('Fetching workspace context...');
+
+      // 1. GET /api/status
       const statusRes = await fetch('/api/status', { headers: this.getHeaders() });
       if (statusRes.ok) {
         const status = await statusRes.json();
@@ -125,6 +172,20 @@ class ContinuumDashboardApp {
         }
       }
 
+      // 2. GET /api/diff (to discover changed files for preset)
+      const diffRes = await fetch('/api/diff', { headers: this.getHeaders() });
+      if (diffRes.ok) {
+        const diffData = await diffRes.json();
+        this.state.diffData = diffData;
+        const changed = new Set([
+          ...(diffData.staged_files || []),
+          ...(diffData.unstaged_files || []),
+          ...(diffData.untracked_files || [])
+        ]);
+        this.state.changedFiles = changed;
+      }
+
+      // 3. GET /api/context
       const ctxRes = await fetch('/api/context', { headers: this.getHeaders() });
       if (ctxRes.ok) {
         const ctx = await ctxRes.json();
@@ -132,12 +193,18 @@ class ContinuumDashboardApp {
         this.state.files = ctx.files || [];
         this.state.selectedFiles = new Set(this.state.files);
 
-        if (this.el.statFiles) this.el.statFiles.textContent = ctx.total_files || 0;
-        if (this.el.statSymbols) this.el.statSymbols.textContent = ctx.total_symbols || 0;
-        if (this.el.statConfidence) this.el.statConfidence.textContent = `${Math.round((ctx.confidence_score || 1.0) * 100)}%`;
-        if (this.el.fileCountBadge) this.el.fileCountBadge.textContent = ctx.total_files || 0;
+        if (this.el.statFiles) this.el.statFiles.textContent = (ctx.total_files || 0).toLocaleString();
+        if (this.el.statLoc) this.el.statLoc.textContent = (ctx.lines_of_code || 0).toLocaleString();
+        if (this.el.statSymbols) this.el.statSymbols.textContent = (ctx.total_symbols || 0).toLocaleString();
+        if (this.el.statTech) {
+          const techList = Object.keys(ctx.languages || {});
+          this.el.statTech.textContent = techList.length > 0 ? techList.join(', ') : 'Polyglot';
+        }
+        if (this.el.fileCountBadge) {
+          this.el.fileCountBadge.textContent = `${this.state.selectedFiles.size} of ${ctx.total_files || 0} selected`;
+        }
 
-        this.renderFileList();
+        this.renderFileTree();
         this.refreshPromptPreview();
       }
     } catch (err) {
@@ -146,43 +213,107 @@ class ContinuumDashboardApp {
     }
   }
 
-  renderFileList() {
+  applyPreset(presetType) {
+    // Update toolbar active class
+    [this.el.btnPresetAll, this.el.btnPresetChanged, this.el.btnPresetCore, this.el.btnPresetNone].forEach(b => b?.classList.remove('active'));
+
+    if (presetType === 'all') {
+      this.el.btnPresetAll?.classList.add('active');
+      this.state.selectedFiles = new Set(this.state.files);
+    } else if (presetType === 'changed') {
+      this.el.btnPresetChanged?.classList.add('active');
+      this.state.selectedFiles = new Set(
+        this.state.files.filter(f => this.state.changedFiles.has(f) || this.state.changedFiles.has(f.replace(/\\/g, '/')))
+      );
+    } else if (presetType === 'core') {
+      this.el.btnPresetCore?.classList.add('active');
+      this.state.selectedFiles = new Set(
+        this.state.files.filter(f => !f.startsWith('tests/') && !f.startsWith('docs/') && !f.endsWith('.md'))
+      );
+    } else if (presetType === 'none') {
+      this.el.btnPresetNone?.classList.add('active');
+      this.state.selectedFiles = new Set();
+    }
+
+    this.renderFileTree();
+    this.refreshPromptPreview();
+  }
+
+  renderFileTree() {
     if (!this.el.fileListContainer) return;
     this.el.fileListContainer.innerHTML = '';
 
     if (this.state.files.length === 0) {
-      this.el.fileListContainer.innerHTML = '<div class="empty-state">No files found</div>';
+      this.el.fileListContainer.innerHTML = '<div class="empty-state">No files indexed</div>';
       return;
     }
 
+    // Group files by directory
+    const dirMap = {};
     this.state.files.forEach(file => {
-      const item = document.createElement('label');
-      item.className = 'file-item';
-      
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = this.state.selectedFiles.has(file);
-      checkbox.addEventListener('change', () => {
-        if (checkbox.checked) {
-          this.state.selectedFiles.add(file);
-        } else {
-          this.state.selectedFiles.delete(file);
-        }
-        this.refreshPromptPreview();
-      });
-
-      const nameSpan = document.createElement('span');
-      nameSpan.textContent = file;
-
-      item.appendChild(checkbox);
-      item.appendChild(nameSpan);
-      this.el.fileListContainer.appendChild(item);
+      const parts = file.split(/[\\/]/);
+      const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
+      if (!dirMap[dir]) dirMap[dir] = [];
+      dirMap[dir].push(file);
     });
+
+    Object.keys(dirMap).sort().forEach(dir => {
+      if (dir !== 'root') {
+        const dirHeader = document.createElement('div');
+        dirHeader.className = 'tree-node-dir';
+        dirHeader.innerHTML = `<span>📁</span> <span>${dir}/</span>`;
+        this.el.fileListContainer.appendChild(dirHeader);
+      }
+
+      dirMap[dir].forEach(file => {
+        const item = document.createElement('label');
+        item.className = 'tree-node-file';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = this.state.selectedFiles.has(file);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            this.state.selectedFiles.add(file);
+          } else {
+            this.state.selectedFiles.delete(file);
+          }
+          this.updateBadge();
+          this.refreshPromptPreview();
+        });
+
+        const nameSpan = document.createElement('span');
+        const baseName = file.split(/[\\/]/).pop();
+        nameSpan.textContent = dir === 'root' ? file : `└─ ${baseName}`;
+
+        item.appendChild(checkbox);
+        item.appendChild(nameSpan);
+
+        // Add modified tag if changed
+        if (this.state.changedFiles.has(file) || this.state.changedFiles.has(file.replace(/\\/g, '/'))) {
+          const tag = document.createElement('span');
+          tag.className = 'file-status-tag modified';
+          tag.textContent = 'M';
+          tag.title = 'Modified in Git';
+          item.appendChild(tag);
+        }
+
+        this.el.fileListContainer.appendChild(item);
+      });
+    });
+
+    this.updateBadge();
+  }
+
+  updateBadge() {
+    if (this.el.fileCountBadge) {
+      this.el.fileCountBadge.textContent = `${this.state.selectedFiles.size} of ${this.state.files.length} selected`;
+    }
   }
 
   filterFileList(filterText) {
     const q = filterText.toLowerCase();
-    const items = this.el.fileListContainer.querySelectorAll('.file-item');
+    const items = this.el.fileListContainer.querySelectorAll('.tree-node-file, .tree-node-dir');
     items.forEach(item => {
       const txt = item.textContent.toLowerCase();
       item.style.display = txt.includes(q) ? 'flex' : 'none';
@@ -195,6 +326,8 @@ class ContinuumDashboardApp {
         target_model: this.state.targetModel,
         task_description: this.state.taskDescription,
         include_diff: this.state.includeDiff,
+        include_symbols: this.state.includeSymbols,
+        include_verification: this.state.includeVerification,
         files: Array.from(this.state.selectedFiles)
       };
 
@@ -207,17 +340,43 @@ class ContinuumDashboardApp {
       if (res.ok) {
         const data = await res.json();
         const tokens = data.estimated_tokens || 0;
+        
         if (this.el.tokenCount) this.el.tokenCount.textContent = tokens.toLocaleString();
         if (this.el.promptPreviewText) this.el.promptPreviewText.textContent = data.prompt || '';
         
-        // Update Token Meter
-        const maxTokens = 200000; // Claude 3.5 Sonnet default
-        const ratio = Math.min((tokens / maxTokens) * 100, 100);
-        if (this.el.meterFill) this.el.meterFill.style.width = `${Math.max(ratio, 2)}%`;
-        if (this.el.tokenLimitRatio) this.el.tokenLimitRatio.textContent = `${ratio.toFixed(1)}% of Claude 3.5 window`;
+        // Update Multi-Model Comparative Gauges
+        this.updateModelGauges(tokens);
       }
     } catch (err) {
       console.error('Failed to update prompt preview:', err);
+    }
+  }
+
+  updateModelGauges(tokens) {
+    // Claude 3.5 Sonnet (200k)
+    const claudePct = Math.min((tokens / this.modelLimits.claude) * 100, 100);
+    if (this.el.meterClaude) this.el.meterClaude.style.width = `${Math.max(claudePct, 1)}%`;
+    if (this.el.pctClaude) this.el.pctClaude.textContent = `${claudePct.toFixed(1)}%`;
+
+    // GPT-4o (128k)
+    const gptPct = Math.min((tokens / this.modelLimits.gpt) * 100, 100);
+    if (this.el.meterGpt) this.el.meterGpt.style.width = `${Math.max(gptPct, 1)}%`;
+    if (this.el.pctGpt) this.el.pctGpt.textContent = `${gptPct.toFixed(1)}%`;
+
+    // Gemini 1.5/2.0 (1M)
+    const geminiPct = Math.min((tokens / this.modelLimits.gemini) * 100, 100);
+    if (this.el.meterGemini) this.el.meterGemini.style.width = `${Math.max(geminiPct, 0.5)}%`;
+    if (this.el.pctGemini) this.el.pctGemini.textContent = `${geminiPct.toFixed(2)}%`;
+
+    // Status Pill
+    if (this.el.tokenStatusPill) {
+      if (gptPct > 90) {
+        this.el.tokenStatusPill.className = 'token-status-pill warning';
+        this.el.tokenStatusPill.innerHTML = '<span class="status-dot"></span> Exceeding GPT Limits';
+      } else {
+        this.el.tokenStatusPill.className = 'token-status-pill safe';
+        this.el.tokenStatusPill.innerHTML = '<span class="status-dot"></span> Within Context Limits';
+      }
     }
   }
 
@@ -269,3 +428,4 @@ class ContinuumDashboardApp {
 document.addEventListener('DOMContentLoaded', () => {
   window.continuumApp = new ContinuumDashboardApp();
 });
+

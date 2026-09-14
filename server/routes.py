@@ -266,13 +266,17 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         safe_files = [f for f in state.project_state.files if not DaemonSanitizer.is_high_risk_file(f)]
         state.project_state.files = safe_files
 
-        # Calculate estimated character and token counts
+        # Calculate estimated character, line and token counts
         char_count = 0
+        lines_of_code = 0
         for f_rel in safe_files:
             f_abs = self.workspace_root / f_rel
             if f_abs.is_file():
                 try:
                     char_count += f_abs.stat().st_size
+                    # Read lines
+                    with open(f_abs, "r", encoding="utf-8", errors="ignore") as fp:
+                        lines_of_code += sum(1 for _ in fp)
                 except OSError:
                     pass
 
@@ -286,6 +290,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "confidence_score": summary.project_confidence,
             "languages": summary.languages_detected,
             "total_files": len(safe_files),
+            "lines_of_code": lines_of_code,
             "total_symbols": len(state.project_state.symbols),
             "contradictions_count": len(state.contradictions),
             "token_budget_estimation": {
@@ -298,6 +303,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         self._send_json_response(payload)
+
 
     # --------------------------------------------------------------------------
     # 3. GET /api/symbols
@@ -425,6 +431,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         task_description: Optional[str] = req_data.get("task_description")
         token_budget: Optional[int] = req_data.get("token_budget")
         include_diff: bool = req_data.get("include_diff", True)
+        include_symbols: bool = req_data.get("include_symbols", True)
         include_verification: bool = req_data.get("include_verification", True)
 
         # Map target model
@@ -452,6 +459,39 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 f for f in state.project_state.files
                 if Path(f).as_posix() in norm_selected
             ]
+            # Filter symbols to selected files
+            state.project_state.symbols = [
+                s for s in state.project_state.symbols
+                if Path(s.file_path).as_posix() in norm_selected
+            ]
+            # Filter graph nodes to only those belonging to selected files
+            selected_sym_ids = {f"sym_{s.name}" for s in state.project_state.symbols}
+            filtered_nodes = {}
+            for nid, n in state.graph_nodes.items():
+                if n.node_type.value in ("COMPONENT", "API", "AST_SYMBOL"):
+                    if nid in selected_sym_ids or n.name in {s.name for s in state.project_state.symbols}:
+                        filtered_nodes[nid] = n
+                else:
+                    filtered_nodes[nid] = n
+            state.graph_nodes = filtered_nodes
+
+        # Apply symbol toggle filtering
+        if not include_symbols:
+            state.project_state.symbols = []
+            state.graph_nodes = {
+                nid: n for nid, n in state.graph_nodes.items()
+                if n.node_type.value != "AST_SYMBOL"
+            }
+
+        # Apply verification / test proof toggle filtering
+        if not include_verification:
+            state.project_state.test_results = []
+            state.contradictions = []
+            state.graph_nodes = {
+                nid: n for nid, n in state.graph_nodes.items()
+                if n.node_type.value != "TEST"
+            }
+
 
         # Generate model-tailored handoff package
         adapter = get_adapter_for_model(target_model)
@@ -484,7 +524,11 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "target_model": target_model_str,
             "task_description": task_description,
             "estimated_tokens": estimated_tokens,
+            "include_diff": include_diff,
+            "include_symbols": include_symbols,
+            "include_verification": include_verification,
             "prompt": handoff_doc,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         self._send_json_response(payload)
+
