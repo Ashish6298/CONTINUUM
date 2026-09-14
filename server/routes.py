@@ -189,8 +189,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     token = self.auth_manager.get_token() or ""
                     if token:
                         content = content.replace(
-                            "storageTokenKey: 'continuum_auth_token',",
-                            f"storageTokenKey: 'continuum_auth_token',\n    defaultToken: '{token}',"
+                            "defaultToken: '',",
+                            f"defaultToken: '{token}',"
                         )
                 self._set_headers(200, "application/javascript; charset=utf-8")
                 self.wfile.write(content.encode("utf-8"))

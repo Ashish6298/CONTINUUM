@@ -13,7 +13,7 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         self.daemon = ContinuumHttpDaemon(
             workspace_root=str(self.workspace_root),
             host="127.0.0.1",
-            default_port=9140,
+            default_port=9150,
             require_auth=True
         )
         self.status = self.daemon.start(run_in_background=True)
@@ -52,6 +52,21 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         self.assertIn("// @connect      localhost", content)
         self.assertIn("// @connect      127.0.0.1", content)
 
+    def test_userscript_shadow_dom_and_floating_ui_components(self):
+        """Verifies Phase 34: Encapsulated Shadow DOM, hotkey handler, and quick menu options."""
+        content = self.userjs_path.read_text(encoding="utf-8")
+        self.assertIn("attachShadow({ mode: 'open' })", content)
+        self.assertIn("continuum-companion-root", content)
+        self.assertIn("continuum-badge", content)
+        self.assertIn("continuum-modal", content)
+        self.assertIn("status-dot", content)
+        self.assertIn("actInjectFull", content)
+        self.assertIn("actInjectDiff", content)
+        self.assertIn("actInjectSymbols", content)
+        self.assertIn("actOpenDashboard", content)
+        self.assertIn("altKey", content)
+        self.assertIn("Alt+C", content)
+
     def test_userscript_http_delivery_and_token_injection(self):
         token = self.daemon.auth_manager.get_token()
         self.assertTrue(bool(token))
@@ -65,6 +80,32 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
             self.assertIn("// ==UserScript==", body)
             self.assertIn(f"defaultToken: '{token}'", body)
 
+    def test_dom_injectors_and_synthetic_event_adapters(self):
+        """Verifies Phase 35: DOM selectors for ChatGPT, Claude, AI Studio, DeepSeek, synthetic events, and insertion modes."""
+        content = self.userjs_path.read_text(encoding="utf-8")
+        self.assertIn("class ContinuumDOMInjector", content)
+        self.assertIn("findTargetInput(platform)", content)
+        self.assertIn("dispatchInputEvents(element)", content)
+        self.assertIn("inject(platform, text, mode", content)
+        
+        # Selectors
+        self.assertIn("#prompt-textarea", content)
+        self.assertIn(".ProseMirror[contenteditable=\"true\"]", content)
+        self.assertIn("textarea.chat-input", content)
+        self.assertIn("textarea[placeholder*=\"Ask\"]", content)
+        
+        # Synthetic event triggers
+        self.assertIn("InputEvent('beforeinput'", content)
+        self.assertIn("Event('input'", content)
+        self.assertIn("Event('change'", content)
+        self.assertIn("KeyboardEvent('keydown'", content)
+        
+        # Insertion modes
+        self.assertIn("mode = 'replace'", content)
+        self.assertIn("mode === 'prepend'", content)
+        self.assertIn("mode === 'append'", content)
+        self.assertIn("selInsertionMode", content)
+
     def test_dashboard_contains_install_companion_button(self):
         index_html_path = Path(__file__).parent.parent / "server" / "static" / "index.html"
         html_content = index_html_path.read_text(encoding="utf-8")
@@ -73,3 +114,4 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
