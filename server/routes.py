@@ -26,6 +26,7 @@ from storage.manager import ContinuumStorageManager
 
 
 from server.auth import CorsOriginGuard, SessionAuthManager
+from server.sanitizer import DaemonSanitizer
 
 
 class ContinuumApiHandler(BaseHTTPRequestHandler):
@@ -123,9 +124,11 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         return True
 
     def _send_json_response(self, data: Any, status_code: int = 200) -> None:
-        """Serializes and sends a JSON response payload."""
+        """Serializes and sends a sanitized JSON response payload."""
         self._set_headers(status_code, "application/json")
-        encoded = json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8")
+        # Apply secret redaction and path relative normalization
+        sanitized_data = DaemonSanitizer.sanitize_payload(data, workspace_root=self.workspace_root)
+        encoded = json.dumps(sanitized_data, indent=2, ensure_ascii=False).encode("utf-8")
         self.wfile.write(encoded)
 
     def _send_error_response(self, message: str, status_code: int = 400, details: Optional[Any] = None) -> None:
@@ -237,13 +240,18 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         """
         Executes canonical workspace analysis and returns structured project evidence,
         detected languages, framework metadata, and token budgets.
+        Filters out high-risk files (.env, *.key, etc.).
         """
         pipeline = ContinuumPipeline(self.workspace_root)
         state, summary, _ = pipeline.run_full_analysis()
 
+        # Filter out high-risk files from state
+        safe_files = [f for f in state.project_state.files if not DaemonSanitizer.is_high_risk_file(f)]
+        state.project_state.files = safe_files
+
         # Calculate estimated character and token counts
         char_count = 0
-        for f_rel in state.project_state.files:
+        for f_rel in safe_files:
             f_abs = self.workspace_root / f_rel
             if f_abs.is_file():
                 try:
@@ -256,10 +264,11 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         payload = {
             "project_id": state.project_id,
             "workspace_root": str(self.workspace_root),
+            "files": safe_files,
             "summary": summary.to_dict(),
             "confidence_score": summary.project_confidence,
             "languages": summary.languages_detected,
-            "total_files": len(state.project_state.files),
+            "total_files": len(safe_files),
             "total_symbols": len(state.project_state.symbols),
             "contradictions_count": len(state.contradictions),
             "token_budget_estimation": {
@@ -280,6 +289,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         """
         Returns extracted AST symbols, exported functions, classes, and signatures
         using existing v1.0.0 symbol extractors.
+        Filters out symbols from high-risk credential files.
         Query params:
         - `file`: Filter symbols belonging to a specific relative file path.
         - `type`: Filter symbols by type (function, class, method, interface).
@@ -298,15 +308,21 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     sym_file = sym.get("file_path")
                     sym_type = sym.get("symbol_type")
 
+                    if sym_file and DaemonSanitizer.is_high_risk_file(sym_file):
+                        continue
                     if file_filter and sym_file != file_filter:
                         continue
                     if type_filter and sym_type != type_filter:
                         continue
 
+                    # Sanitize symbol metadata and normalize file path
+                    if sym_file:
+                        sym["file_path"] = DaemonSanitizer.normalize_path(sym_file, self.workspace_root)
+
                     symbols_data.append(sym)
 
         payload = {
-            "workspace_root": str(self.workspace_root),
+            "workspace_root": DaemonSanitizer.normalize_path(self.workspace_root, self.workspace_root),
             "total_symbols_found": len(symbols_data),
             "filters_applied": {
                 "file": file_filter,
