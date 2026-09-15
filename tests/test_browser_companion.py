@@ -241,6 +241,92 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
             self.assertTrue(out_html.is_file())
             self.assertIn("Continuum Bookmarklet", out_html.read_text(encoding="utf-8"))
 
+    def test_workspace_sync_api_atomic_write_and_security(self):
+        """Verifies Phase 44: POST /api/workspace/sync handles atomic sync, backups, and directory traversal guard."""
+        import json
+        import urllib.request
+
+        url = f"{self.base_url}/api/workspace/sync"
+        token = self.daemon.auth_manager.get_token() or ""
+
+        # 1. Valid file sync payload
+        payload = {
+            "source": "chatgpt",
+            "create_backup": True,
+            "files": [
+                {
+                    "path": "server/test_synced_module.py",
+                    "content": "# Synced module from ChatGPT\ndef test_fn():\n    return 42\n"
+                }
+            ]
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "X-Continuum-Token": token,
+                "Origin": "https://chatgpt.com"
+            }
+        )
+
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data.get("status"), "success")
+            self.assertEqual(data.get("synced_count"), 1)
+
+        # Verify file physically written on disk
+        synced_file = self.workspace_root / "server" / "test_synced_module.py"
+        self.assertTrue(synced_file.is_file())
+        self.assertIn("def test_fn():", synced_file.read_text(encoding="utf-8"))
+
+        # 2. Modify and sync again -> verify backup creation
+        payload["files"][0]["content"] = "# Updated content\ndef test_fn():\n    return 100\n"
+        req2 = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "X-Continuum-Token": token,
+                "Origin": "https://chatgpt.com"
+            }
+        )
+        with urllib.request.urlopen(req2, timeout=5) as resp2:
+            self.assertEqual(resp2.status, 200)
+            data2 = json.loads(resp2.read().decode("utf-8"))
+            self.assertEqual(data2.get("files")[0]["status"], "updated")
+            self.assertIsNotNone(data2.get("files")[0]["backup"])
+
+        backup_dir = self.workspace_root / ".continuum" / "backup"
+        self.assertTrue(backup_dir.is_dir())
+        self.assertTrue(len(list(backup_dir.glob("*.bak"))) >= 1)
+
+        # 3. Path Traversal Attack -> verify rejection
+        malicious_payload = {
+            "source": "attacker",
+            "files": [
+                {
+                    "path": "../../etc/malicious.py",
+                    "content": "evil()"
+                }
+            ]
+        }
+        req_bad = urllib.request.Request(
+            url,
+            data=json.dumps(malicious_payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "X-Continuum-Token": token,
+                "Origin": "https://chatgpt.com"
+            }
+        )
+        try:
+            with urllib.request.urlopen(req_bad, timeout=5) as resp_bad:
+                self.fail("Path traversal request should fail")
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -228,10 +228,108 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         try:
             if path == "/api/prompt":
                 self.handle_post_prompt()
+            elif path == "/api/workspace/sync":
+                self.handle_post_workspace_sync()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
             self._send_error_response(f"Internal server error: {str(e)}", status_code=500, details=traceback.format_exc())
+
+    def handle_post_workspace_sync(self) -> None:
+        """
+        POST /api/workspace/sync (Phase 44)
+        Receives structured file patch payload from browser companion:
+        {
+          "files": [
+            { "path": "server/auth.py", "content": "..." }
+          ],
+          "create_backup": true,
+          "source": "chatgpt"
+        }
+        Applies atomic write with directory creation, path traversal defense,
+        automatic safety backups in .continuum/backup/, and returns sync stats.
+        """
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        files_to_sync = data.get("files", [])
+        if not isinstance(files_to_sync, list) or len(files_to_sync) == 0:
+            self._send_error_response("Missing or empty 'files' list in request body.", status_code=400)
+            return
+
+        create_backup = bool(data.get("create_backup", True))
+        source_model = str(data.get("source", "browser"))
+
+        storage = ContinuumStorageManager(str(self.workspace_root))
+        storage.initialize_storage()
+
+        synced_files = []
+        contradictions = []
+        ts_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+        for item in files_to_sync:
+            rel_path_str = item.get("path", "").strip()
+            new_content = item.get("content", "")
+
+            if not rel_path_str:
+                continue
+
+            # Path Traversal Guard
+            norm_rel = Path(rel_path_str).as_posix().lstrip("/\\")
+            target_path = (self.workspace_root / norm_rel).resolve()
+
+            try:
+                target_path.relative_to(self.workspace_root.resolve())
+            except ValueError:
+                self._send_error_response(f"Security violation: path '{rel_path_str}' escapes workspace boundary.", status_code=400)
+                return
+
+            # Check if file existed previously
+            existed = target_path.is_file()
+            old_size = target_path.stat().st_size if existed else 0
+
+            # Backup if existed
+            backup_path_str = None
+            if existed and create_backup:
+                safe_name = norm_rel.replace("/", "_").replace("\\", "_")
+                backup_dest = storage.backup_dir / f"{safe_name}_{ts_str}.bak"
+                import shutil
+                shutil.copy2(target_path, backup_dest)
+                backup_path_str = str(backup_dest.relative_to(self.workspace_root.resolve()))
+
+            # Ensure parent directories exist
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Atomic Write via temporary file
+            temp_path = target_path.with_suffix(target_path.suffix + f".tmp_{os.getpid()}_{ts_str}")
+            temp_path.write_text(new_content, encoding="utf-8")
+            temp_path.replace(target_path)
+
+            synced_files.append({
+                "path": norm_rel,
+                "status": "updated" if existed else "created",
+                "bytes_written": len(new_content.encode("utf-8")),
+                "backup": backup_path_str
+            })
+
+        response_payload = {
+            "status": "success",
+            "message": f"Successfully synced {len(synced_files)} file(s) from {source_model} to workspace.",
+            "source": source_model,
+            "synced_count": len(synced_files),
+            "files": synced_files,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        self._send_json_response(response_payload)
 
     # --------------------------------------------------------------------------
     # 0. GET /health
