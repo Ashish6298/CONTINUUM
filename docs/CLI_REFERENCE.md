@@ -26,6 +26,15 @@ continuum handoff [DIRECTORY] [--model claude|codex|gemini|local_llm|universal] 
 continuum daemon start [DIRECTORY] [--interval SECONDS]
 continuum daemon status [DIRECTORY]
 continuum daemon stop [DIRECTORY]
+
+# Launch Web Control Dashboard & REST API Daemon (v1.2.0)
+continuum serve [DIRECTORY] [--port PORT] [--host HOST] [--no-browser] [--watch] [--status] [--stop]
+
+# 1-Command Browser Launcher with Continuum Extension Pre-loaded (v1.2.0)
+continuum launch [--target chatgpt|claude|gemini|aistudio|deepseek] [--dry-run]
+
+# Generate Zero-Install Browser Handoff Bookmarklet (v1.2.0)
+continuum bookmarklet [--raw] [--html PATH]
 ```
 
 ---
@@ -88,4 +97,55 @@ Runs the continuous work memory observer in the background, updating state incre
 continuum daemon start .
 continuum daemon status .
 continuum daemon stop .
+```
+
+---
+
+## 7. `continuum serve` (v1.2.0)
+Launches the embedded Web Control Dashboard and REST API daemon on `http://127.0.0.1:8765`. Provides real-time context token budgeting, interactive prompt tailoring, bi-directional code sync, and companion userscript delivery.
+
+```bash
+# Launch dashboard and open in default browser
+continuum serve
+
+# Run headless daemon with background filesystem observation
+continuum serve --no-browser --watch
+
+# Check daemon health and retrieve session token
+continuum serve --status
+
+# Gracefully terminate daemon
+continuum serve --stop
+```
+
+---
+
+## 8. `continuum launch` (v1.2.0)
+Auto-discovers your installed Chromium-based browser (Google Chrome, Microsoft Edge, Brave, Chromium) across Windows, macOS, and Linux, and opens a new window with the Continuum extension pre-loaded.
+
+```bash
+# Launch directly into ChatGPT
+continuum launch
+
+# Launch directly into Claude
+continuum launch --target claude
+
+# Launch directly into Google Gemini
+continuum launch --target gemini
+
+# Inspect launch arguments without starting process
+continuum launch --target deepseek --dry-run
+```
+
+---
+
+## 9. `continuum bookmarklet` (v1.2.0)
+Generates an ultra-portable, zero-install JavaScript bookmarklet URI or interactive HTML installer for browsers where extension installations are restricted.
+
+```bash
+# Output executable javascript: URI to console
+continuum bookmarklet --raw
+
+# Generate interactive drag-and-drop installer HTML page
+continuum bookmarklet --html ./install_bookmarklet.html
 ```

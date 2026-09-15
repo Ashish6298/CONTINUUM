@@ -174,7 +174,28 @@ continuum serve
 - **Install Companion Userscript**: Click **🧩 Install Companion** in the dashboard header (or open `http://127.0.0.1:8765/continuum.user.js` in Tampermonkey / Violentmonkey).
 - **In-Chat AI Injection**: Works seamlessly on ChatGPT, Claude.ai, Google AI Studio, Gemini, and DeepSeek.
 
-### 3. Generate an Instant AI Handoff via CLI (v1.0.0)
+### 3. 1-Command Zero-Setup Browser Companion Auto-Launch (v1.2.0)
+
+Launch your browser directly into any AI chat interface with the native Continuum extension pre-loaded:
+
+```bash
+# Auto-discover Chrome/Edge/Brave and launch directly into Claude
+continuum launch --target claude
+
+# Or launch into Google Gemini, ChatGPT, or DeepSeek
+continuum launch --target gemini
+```
+
+### 4. Zero-Install 1-Click Bookmarklet (v1.2.0)
+
+For restricted corporate or mobile environments where extensions cannot be installed:
+
+```bash
+# Generate drag-and-drop installer HTML page
+continuum bookmarklet --html ./install_bookmarklet.html
+```
+
+### 5. Generate an Instant AI Handoff via CLI (v1.0.0)
 
 Run inside any project directory — Continuum automatically scans your codebase, extracts AST symbols, builds the dependency graph, and creates your ready-to-resume AI handoff package:
 
@@ -182,7 +203,7 @@ Run inside any project directory — Continuum automatically scans your codebase
 continuum handoff
 ```
 
-### 3. Terminal Output
+### 6. Terminal Output
 
 ```text
                  █▀▀ █▀█ █▄ █ ▀█▀ █ █▄ █ █ █ █ █ █▀▄▀█
