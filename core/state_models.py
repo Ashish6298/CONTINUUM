@@ -595,3 +595,21 @@ class HandoffCheckpointManager:
         data = json.loads(file_path.read_text(encoding="utf-8"))
         return HandoffCheckpoint.from_dict(data)
 
+    def get_lineage(self, checkpoint_id: str) -> List[HandoffCheckpoint]:
+        """Traverses the parent chain back to the root, returning chronological lineage."""
+        lineage: List[HandoffCheckpoint] = []
+        curr_id: Optional[str] = checkpoint_id
+        visited = set()
+
+        while curr_id and curr_id not in visited:
+            visited.add(curr_id)
+            cp = self.get_checkpoint(curr_id)
+            if not cp:
+                break
+            lineage.append(cp)
+            curr_id = cp.parent_checkpoint_id
+
+        lineage.reverse()
+        return lineage
+
+
