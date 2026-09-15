@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Continuum - AI Chat Handoff
 // @namespace    https://github.com/Ashish6298/CONTINUUM
-// @version      1.2.2
+// @version      1.2.3
 // @description  Seamlessly continue ChatGPT/Claude/Gemini conversations across platforms. When your AI context runs out, extract the chat and inject it into another AI in one click.
 // @author       Project Continuum
 // @match        https://chatgpt.com/*
@@ -15,7 +15,7 @@
 
 (function () {
   'use strict';
-  console.log('[Continuum v1.2.2] Initializing on:', window.location.hostname);
+  console.log('[Continuum v1.2.3] Initializing on:', window.location.hostname);
 
   const CONFIG = {
     hotkey: { key: 'c', altKey: true },
@@ -24,7 +24,7 @@
   };
 
   // ============================================================
-  // CLASS 1: ChatConversationExtractor
+  // CLASS 1: ChatConversationExtractor (Phase 38)
   // Reads the current AI platform's DOM and extracts all
   // messages and code blocks from the conversation.
   // ============================================================
@@ -151,7 +151,9 @@
   }
 
   // ============================================================
-  // CLASS 2: ContextCompressor
+  // CLASS 2: ContextCompressor (Phase 39)
+  // Smartly compresses raw conversation into high-signal,
+  // target-model-tailored prompt within strict token budget.
   // ============================================================
   class ContextCompressor {
     static _label(p) {
@@ -167,6 +169,191 @@
         return '[Continuum Handoff]\nNo conversation found on page. Start a conversation first, then switch.';
       }
 
+      // Deduplicate code blocks preserving last edits
+      const uniqueCode = this.deduplicateCodeBlocks(codeBlocks);
+
+      const firstUser = messages.find(m => m.role === 'user');
+      const lastUser = [...messages].reverse().find(m => m.role === 'user');
+      const recentTurns = messages.slice(-4);
+
+      let synthesized = '';
+      // Model-specific formatting synthesis
+      switch (targetModel) {
+        case 'claude':
+          synthesized = this._formatClaudeXML(sn, firstUser, uniqueCode, recentTurns, lastUser);
+          break;
+        case 'gemini':
+        case 'aistudio':
+          synthesized = this._formatGeminiHierarchy(sn, firstUser, uniqueCode, recentTurns, lastUser);
+          break;
+        case 'deepseek':
+          synthesized = this._formatDeepSeekCompact(sn, firstUser, uniqueCode, recentTurns, lastUser);
+          break;
+        case 'chatgpt':
+        default:
+          synthesized = this._formatMarkdownChecklist(sn, tn, firstUser, uniqueCode, recentTurns, lastUser);
+          break;
+      }
+
+      return this.capTokenBudget(synthesized, 2000);
+    }
+
+    static deduplicateCodeBlocks(codeBlocks) {
+      const unique = [];
+      const seen = new Set();
+      for (let i = (codeBlocks || []).length - 1; i >= 0; i--) {
+        const b = codeBlocks[i];
+        const hash = (b.language || '') + '::' + b.content.slice(0, 100);
+        if (!seen.has(hash)) {
+          seen.add(hash);
+          unique.unshift(b);
+        }
+      }
+      return unique;
+    }
+
+    static capTokenBudget(text, maxEstimatedTokens = 2000) {
+      const maxChars = maxEstimatedTokens * 4; // ~4 chars per token rule of thumb
+      if (!text || text.length <= maxChars) return text;
+      return text.slice(0, maxChars - 30) + '\n\n... [Context capped to budget]';
+    }
+
+    static _formatClaudeXML(sn, firstUser, uniqueCode, recentTurns, lastUser) {
+      const out = [];
+      out.push('🔁 CONTINUUM HANDOFF — Continuing from ' + sn + ' to Claude');
+      out.push('<project_continuation_context>');
+      out.push('  <metadata>');
+      out.push('    <origin_model>' + sn + '</origin_model>');
+      out.push('    <target_model>Claude</target_model>');
+      out.push('    <handoff_reason>Context window / token exhaustion</handoff_reason>');
+      out.push('    <instruction>Pick up software engineering implementation from ground truth state. Do NOT restart from scratch.</instruction>');
+      out.push('  </metadata>');
+      out.push('');
+
+      if (firstUser) {
+        out.push('  <initial_requirements>');
+        out.push('    ' + firstUser.text.slice(0, 500) + (firstUser.text.length > 500 ? '...' : ''));
+        out.push('  </initial_requirements>');
+        out.push('');
+      }
+
+      if (uniqueCode.length > 0) {
+        out.push('  <verified_code_artifacts>');
+        uniqueCode.forEach((b, i) => {
+          out.push('    <artifact index="' + (i + 1) + '" language="' + (b.language || 'code') + '">');
+          out.push('```' + (b.language || ''));
+          out.push(b.content);
+          out.push('```');
+          out.push('    </artifact>');
+        });
+        out.push('  </verified_code_artifacts>');
+        out.push('');
+      }
+
+      out.push('  <recent_conversation_trail>');
+      recentTurns.forEach(m => {
+        const role = m.role === 'user' ? 'user' : 'assistant';
+        let txt = m.text || '';
+        if (!m.hasCode && txt.length > 400) txt = txt.slice(0, 400) + '...';
+        out.push('    <turn role="' + role + '">' + txt + '</turn>');
+      });
+      out.push('  </recent_conversation_trail>');
+      out.push('');
+
+      if (lastUser) {
+        out.push('  <immediate_task>');
+        out.push('    ' + lastUser.text.slice(0, 500));
+        out.push('  </immediate_task>');
+      }
+
+      out.push('</project_continuation_context>');
+      out.push('');
+      out.push('Please fulfill the immediate task above directly, continuing from the artifacts provided.');
+      return out.join('\n');
+    }
+
+    static _formatGeminiHierarchy(sn, firstUser, uniqueCode, recentTurns, lastUser) {
+      const out = [];
+      out.push('🔁 CONTINUUM HANDOFF — Multi-Model Knowledge Transfer');
+      out.push('================================================================================');
+      out.push('TOPOLOGY: ' + sn + ' (Source) ──► Gemini / AI Studio (Target)');
+      out.push('DIRECTIVE: Preserve project state and continue implementation with zero drift.');
+      out.push('================================================================================');
+      out.push('');
+
+      if (firstUser) {
+        out.push('### [1.0] PROJECT INTENT & SPECIFICATION');
+        out.push(firstUser.text.slice(0, 500) + (firstUser.text.length > 500 ? '...' : ''));
+        out.push('');
+      }
+
+      if (uniqueCode.length > 0) {
+        out.push('### [2.0] VERIFIED CODE REPOSITORY (GROUND TRUTH)');
+        uniqueCode.forEach((b, i) => {
+          out.push('#### [2.' + (i + 1) + '] Code Snippet (' + (b.language || 'code') + ')');
+          out.push('```' + (b.language || ''));
+          out.push(b.content);
+          out.push('```');
+          out.push('');
+        });
+      }
+
+      out.push('### [3.0] RECENT CONVERSATION STATE');
+      recentTurns.forEach(m => {
+        const label = m.role === 'user' ? '► USER' : ('► ' + sn.toUpperCase());
+        let txt = m.text || '';
+        if (!m.hasCode && txt.length > 400) txt = txt.slice(0, 400) + '...';
+        out.push(label + ': ' + txt);
+        out.push('');
+      });
+
+      if (lastUser) {
+        out.push('### [4.0] NEXT IMMEDIATE EXECUTION TARGET');
+        out.push('> ' + lastUser.text.slice(0, 500));
+        out.push('');
+        out.push('Continue execution immediately based on Section [2.0] code blocks.');
+      }
+
+      return out.join('\n');
+    }
+
+    static _formatDeepSeekCompact(sn, firstUser, uniqueCode, recentTurns, lastUser) {
+      const out = [];
+      out.push('🔁 [CONTINUUM HANDOFF: ' + sn + ' -> DeepSeek]');
+      out.push('You are continuing an ongoing programming session. Ground truth is below. Do not restart.');
+      out.push('');
+
+      if (firstUser) {
+        out.push('Goal: ' + firstUser.text.slice(0, 300));
+        out.push('');
+      }
+
+      if (uniqueCode.length > 0) {
+        out.push('--- CODE ARTIFACTS ---');
+        uniqueCode.forEach((b, i) => {
+          out.push('// File/Snippet ' + (i + 1) + ' (' + (b.language || '') + ')');
+          out.push('```' + (b.language || ''));
+          out.push(b.content);
+          out.push('```');
+        });
+        out.push('');
+      }
+
+      out.push('--- LAST CONTEXT ---');
+      recentTurns.slice(-2).forEach(m => {
+        out.push((m.role === 'user' ? 'User: ' : (sn + ': ')) + m.text.slice(0, 250));
+      });
+      out.push('');
+
+      if (lastUser) {
+        out.push('--- YOUR TASK ---');
+        out.push(lastUser.text);
+      }
+
+      return out.join('\n');
+    }
+
+    static _formatMarkdownChecklist(sn, tn, firstUser, uniqueCode, recentTurns, lastUser) {
       const out = [];
       out.push('🔁 CONTINUUM HANDOFF — Continuing from ' + sn + ' to ' + tn);
       out.push('');
@@ -177,38 +364,34 @@
       out.push('---');
       out.push('');
 
-      const firstUser = messages.find(m => m.role === 'user');
       if (firstUser) {
         out.push('## Project / Initial Request');
         out.push(firstUser.text.slice(0, 500) + (firstUser.text.length > 500 ? '...' : ''));
         out.push('');
       }
 
-      if (codeBlocks.length > 0) {
+      if (uniqueCode.length > 0) {
         out.push('## All Code Produced So Far');
         out.push('');
-        codeBlocks.forEach((b, i) => {
-          if (b.content && b.content.trim().length > 5) {
-            out.push('### Code Snippet ' + (i + 1));
-            out.push('```' + (b.language || ''));
-            out.push(b.content);
-            out.push('```');
-            out.push('');
-          }
+        uniqueCode.forEach((b, i) => {
+          out.push('### Code Snippet ' + (i + 1));
+          out.push('```' + (b.language || ''));
+          out.push(b.content);
+          out.push('```');
+          out.push('');
         });
       }
 
       out.push('## Recent Context');
       out.push('');
-      messages.slice(-6).forEach(m => {
+      recentTurns.forEach(m => {
         const label = m.role === 'user' ? 'User:' : (sn + ':');
         let text = m.text || '';
-        if (!m.hasCode && text.length > 500) text = text.slice(0, 500) + '... [truncated]';
+        if (!m.hasCode && text.length > 400) text = text.slice(0, 400) + '... [truncated]';
         out.push(label + ' ' + text);
         out.push('');
       });
 
-      const lastUser = [...messages].reverse().find(m => m.role === 'user');
       if (lastUser) {
         out.push('---');
         out.push('');
@@ -223,7 +406,7 @@
 
       out.push('');
       out.push('---');
-      out.push('Continuum v1.2.2 | github.com/Ashish6298/CONTINUUM');
+      out.push('Continuum v1.2.3 | github.com/Ashish6298/CONTINUUM');
       return out.join('\n');
     }
   }
@@ -478,7 +661,7 @@
   }
 
   // ============================================================
-  // CLASS 5: ContinuumDOMInjector
+  // CLASS 5: ContinuumDOMInjector (Phase 40)
   // ============================================================
   class ContinuumDOMInjector {
     static copyToClipboard(text) {

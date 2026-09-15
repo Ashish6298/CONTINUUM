@@ -39,7 +39,7 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         self.assertIn("// ==UserScript==", content)
         self.assertIn("// ==/UserScript==", content)
         self.assertIn("@name         Continuum - AI Chat Handoff", content)
-        self.assertIn("@version      1.2.2", content)
+        self.assertIn("@version      1.2.3", content)
         expected_matches = [
             "https://chatgpt.com/*",
             "https://claude.ai/*",
@@ -82,13 +82,25 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         self.assertIn("pre code", content)
 
     def test_context_compressor_and_prompt_synthesis(self):
-        """Verifies Phase 39: ContextCompressor synthesizes ground-truth code and next tasks."""
+        """Verifies Phase 39: ContextCompressor synthesizes ground-truth code, token budgeting, and multi-model tailored formatting."""
         content = self.userjs_path.read_text(encoding="utf-8")
         self.assertIn("class ContextCompressor", content)
-        self.assertIn("CONTINUUM HANDOFF", content)
-        self.assertIn("Ground truth = the code blocks below", content)
-        self.assertIn("All Code Produced So Far", content)
-        self.assertIn("YOUR IMMEDIATE TASK", content)
+        self.assertIn("_formatClaudeXML", content)
+        self.assertIn("_formatGeminiHierarchy", content)
+        self.assertIn("_formatDeepSeekCompact", content)
+        self.assertIn("_formatMarkdownChecklist", content)
+        self.assertIn("deduplicateCodeBlocks", content)
+        self.assertIn("capTokenBudget", content)
+        self.assertIn("<project_continuation_context>", content)
+        self.assertIn("<verified_code_artifacts>", content)
+        self.assertIn("<immediate_task>", content)
+        self.assertIn("[1.0] PROJECT INTENT & SPECIFICATION", content)
+        self.assertIn("[2.0] VERIFIED CODE REPOSITORY (GROUND TRUTH)", content)
+        self.assertIn("[3.0] RECENT CONVERSATION STATE", content)
+        self.assertIn("[4.0] NEXT IMMEDIATE EXECUTION TARGET", content)
+        self.assertIn("[CONTINUUM HANDOFF: ", content)
+        self.assertIn("--- CODE ARTIFACTS ---", content)
+        self.assertIn("--- YOUR TASK ---", content)
 
     def test_cross_tab_relay_and_dom_injector(self):
         """Verifies Phase 40: CrossTabHandoff and ContinuumDOMInjector with synthetic event dispatching."""
