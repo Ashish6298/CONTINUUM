@@ -362,7 +362,7 @@ $ continuum daemon stop                    # Gracefully stop the background daem
 Project Continuum v1.2.0 is fully certified with **181 / 181 automated tests passing (100%)** across all core CLI and Browser Companion roadmap phases:
 - **Milestones 1–8 (Phases 0–23):** Core Engine, AST Extractors, DAG State Graph, Contradiction Ledger, and Omni-Model CLI Handoffs.
 - **Milestones 24–30 (Phases 25–37):** Web Control Dashboard, REST API Daemon, Secret Sanitizer, and Security CORS Guards.
-- **Milestones 31–34 (Phases 38–48):** Browser-to-Browser Cross-Model Handoff Companion, DOM Extractors, Model-Tailored Prompt Synthesis (`ContextCompressor`), and Cross-Tab Relays.
+- **Milestones 31–34 (Phases 38–48):** Browser-to-Browser Cross-Model Handoff Companion, DOM Extractors, Model-Tailored Prompt Synthesis (`ContextCompressor`), Ephemeral `localStorage` Cross-Tab Relays, and Synthetic DOM Input Injection (`ContinuumDOMInjector`).
 
 Detailed engineering reports and verification logs are available in [docs/reports/](docs/reports/).
 

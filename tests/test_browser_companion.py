@@ -103,7 +103,7 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         self.assertIn("--- YOUR TASK ---", content)
 
     def test_cross_tab_relay_and_dom_injector(self):
-        """Verifies Phase 40: CrossTabHandoff and ContinuumDOMInjector with synthetic event dispatching."""
+        """Verifies Phase 40: CrossTabHandoff TTL expiry, routing, and ContinuumDOMInjector synthetic input dispatch engine."""
         content = self.userjs_path.read_text(encoding="utf-8")
         self.assertIn("class CrossTabHandoff", content)
         self.assertIn("class ContinuumDOMInjector", content)
@@ -113,6 +113,17 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         self.assertIn("InputEvent('beforeinput'", content)
         self.assertIn("Event('input'", content)
         self.assertIn("Event('change'", content)
+        self.assertIn("KeyboardEvent('keydown'", content)
+        self.assertIn("KeyboardEvent('keyup'", content)
+        self.assertIn("90000", content)  # 90s TTL
+        self.assertIn("https://claude.ai/new", content)
+        self.assertIn("https://gemini.google.com/app", content)
+        self.assertIn("https://chatgpt.com/", content)
+        self.assertIn("https://chat.deepseek.com/", content)
+        self.assertIn("ProseMirror", content)
+        self.assertIn("GM_setClipboard", content)
+        self.assertIn("navigator.clipboard", content)
+        self.assertIn("document.execCommand('copy')", content)
 
     def test_userscript_http_delivery(self):
         """Verifies Phase 38: Local daemon properly serves continuum.user.js over HTTP."""
