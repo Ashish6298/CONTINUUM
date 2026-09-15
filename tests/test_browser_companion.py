@@ -143,6 +143,32 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         self.assertIn('id="btnInstallCompanion"', html_content)
         self.assertIn('href="/continuum.user.js"', html_content)
 
+    def test_native_manifest_v3_extension_packaging(self):
+        """Verifies Phase 41: browser/extension/ directory contains valid Manifest V3 packaging."""
+        import json
+        ext_dir = Path(__file__).parent.parent / "browser" / "extension"
+        manifest_path = ext_dir / "manifest.json"
+        bg_path = ext_dir / "background.js"
+        content_script_path = ext_dir / "content_script.js"
+        icons_dir = ext_dir / "icons"
+
+        self.assertTrue(manifest_path.is_file(), "manifest.json must exist")
+        self.assertTrue(bg_path.is_file(), "background.js must exist")
+        self.assertTrue(content_script_path.is_file(), "content_script.js must exist")
+        self.assertTrue(icons_dir.is_dir(), "icons directory must exist")
+        self.assertTrue((icons_dir / "icon16.png").is_file())
+        self.assertTrue((icons_dir / "icon48.png").is_file())
+        self.assertTrue((icons_dir / "icon128.png").is_file())
+
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(manifest_data.get("manifest_version"), 3)
+        self.assertEqual(manifest_data.get("version"), "1.2.0")
+        self.assertIn("storage", manifest_data.get("permissions", []))
+        self.assertIn("https://chatgpt.com/*", manifest_data.get("host_permissions", []))
+        self.assertIn("https://claude.ai/*", manifest_data.get("host_permissions", []))
+        self.assertIn("https://gemini.google.com/*", manifest_data.get("host_permissions", []))
+        self.assertIn("https://chat.deepseek.com/*", manifest_data.get("host_permissions", []))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,7 +22,7 @@
     <td align="center"><a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=plastic&logo=python&logoColor=white" alt="Python 3.10+"/></a></td>
     <td align="center"><a href="https://pypi.org/project/continuum-toolkit/"><img src="https://img.shields.io/badge/PyPI-v1.2.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
     <td align="center"><a href="https://pepy.tech/projects/continuum-toolkit"><img src="https://static.pepy.tech/personalized-badge/continuum-toolkit?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads"/></a></td>
-    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-181%2F181_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
+    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-182%2F182_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
   </tr>
   <tr>
     <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Engine-7F77DD?style=plastic&logo=diagramsdotnet&logoColor=white" alt="3-State Architecture"/></a></td>
@@ -359,10 +359,10 @@ $ continuum daemon stop                    # Gracefully stop the background daem
 <a id="verified-roadmap-all-24-phases"></a>
 ## 🗺️ Architecture Milestones & Verification
 
-Project Continuum v1.2.0 is fully certified with **181 / 181 automated tests passing (100%)** across all core CLI and Browser Companion roadmap phases:
+Project Continuum v1.2.0 is fully certified with **182 / 182 automated tests passing (100%)** across all core CLI and Browser Companion roadmap phases:
 - **Milestones 1–8 (Phases 0–23):** Core Engine, AST Extractors, DAG State Graph, Contradiction Ledger, and Omni-Model CLI Handoffs.
 - **Milestones 24–30 (Phases 25–37):** Web Control Dashboard, REST API Daemon, Secret Sanitizer, and Security CORS Guards.
-- **Milestones 31–34 (Phases 38–48):** Browser-to-Browser Cross-Model Handoff Companion, DOM Extractors, Model-Tailored Prompt Synthesis (`ContextCompressor`), Ephemeral `localStorage` Cross-Tab Relays, and Synthetic DOM Input Injection (`ContinuumDOMInjector`).
+- **Milestones 31–34 (Phases 38–48):** Browser-to-Browser Cross-Model Handoff Companion, Native Manifest V3 WebExtension (`browser/extension/`), DOM Extractors, Model-Tailored Prompt Synthesis (`ContextCompressor`), Ephemeral `localStorage` Cross-Tab Relays, and Synthetic DOM Input Injection (`ContinuumDOMInjector`).
 
 Detailed engineering reports and verification logs are available in [docs/reports/](docs/reports/).
 
@@ -372,7 +372,7 @@ Detailed engineering reports and verification logs are available in [docs/report
 ## 🧪 Testing & Enterprise Security
 
 ```bash
-$ py tests/run_all_tests.py    # 181/181 Passed (100% Test Coverage across all Phases)
+$ py tests/run_all_tests.py    # 182/182 Passed (100% Test Coverage across all Phases)
 ```
 
 ```text
