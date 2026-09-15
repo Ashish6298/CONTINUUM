@@ -86,6 +86,10 @@ def build_parser() -> argparse.ArgumentParser:
     launch_parser.add_argument("--target", choices=["chatgpt", "claude", "gemini", "aistudio", "deepseek"], default="chatgpt", help="Target AI platform to open (default: chatgpt)")
     launch_parser.add_argument("--dry-run", action="store_true", help="Print browser discovery and invocation details without launching")
 
+    # 9. bookmarklet (Phase 43)
+    from cli.bookmarklet import register_bookmarklet_subcommand
+    register_bookmarklet_subcommand(subparsers)
+
     return parser
 
 
@@ -417,6 +421,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     from cli.serve import handle_serve
+    from cli.bookmarklet import handle_bookmarklet
 
     handlers = {
         "init": handle_init,
@@ -427,6 +432,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "daemon": handle_daemon,
         "serve": handle_serve,
         "launch": handle_launch,
+        "bookmarklet": handle_bookmarklet,
     }
 
     handler = handlers.get(args.command)

@@ -202,6 +202,45 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
             self.assertIn("[OK] [DRY-RUN]", fake_out.getvalue())
             self.assertIn("https://chat.deepseek.com/", fake_out.getvalue())
 
+    def test_bookmarklet_generator_and_cli_subcommand(self):
+        """Verifies Phase 43: BookmarkletGenerator produces valid javascript: URI, minification, and HTML installer."""
+        from cli.bookmarklet import BookmarkletGenerator
+        from cli.main import build_parser, main
+        import io
+        from unittest.mock import patch
+
+        gen = BookmarkletGenerator()
+        raw_js = gen.get_javascript_code()
+        self.assertNotIn("// ==UserScript==", raw_js)
+        self.assertIn("ChatConversationExtractor", raw_js)
+
+        minified = gen.minify(raw_js)
+        self.assertNotIn("\n\n", minified)
+
+        uri = gen.generate_bookmarklet_uri()
+        self.assertTrue(uri.startswith("javascript:"))
+        self.assertIn("Continuum", uri)
+
+        # Test installer HTML generation
+        html = gen.generate_installer_html()
+        self.assertIn("<!DOCTYPE html>", html)
+        self.assertIn("Continuum Bookmarklet", html)
+        self.assertIn("Drag me to Bookmarks Bar", html)
+
+        # Test CLI invocation --raw
+        with patch("sys.stdout", new=io.StringIO()) as fake_out:
+            exit_code = main(["bookmarklet", "--raw"])
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(fake_out.getvalue().strip().startswith("javascript:"))
+
+        # Test CLI invocation --html
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_html = Path(tmpdir) / "test_installer.html"
+            exit_code = main(["bookmarklet", "--html", str(out_html)])
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(out_html.is_file())
+            self.assertIn("Continuum Bookmarklet", out_html.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
