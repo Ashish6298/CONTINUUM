@@ -168,6 +168,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_symbols(query)
                 elif path == "/api/diff":
                     self.handle_get_diff()
+                elif path == "/api/checkpoints":
+                    self.handle_get_checkpoints()
                 else:
                     self._send_error_response(f"Endpoint not found: {path}", status_code=404)
             except Exception as e:
@@ -230,10 +232,62 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_prompt()
             elif path == "/api/workspace/sync":
                 self.handle_post_workspace_sync()
+            elif path == "/api/checkpoints":
+                self.handle_post_checkpoint()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
             self._send_error_response(f"Internal server error: {str(e)}", status_code=500, details=traceback.format_exc())
+
+    def handle_get_checkpoints(self) -> None:
+        """GET /api/checkpoints - List all recorded handoff checkpoints."""
+        from core.state_models import HandoffCheckpointManager
+        mgr = HandoffCheckpointManager(str(self.workspace_root))
+        checkpoints = mgr.list_checkpoints()
+        self._send_json_response({
+            "status": "success",
+            "count": len(checkpoints),
+            "checkpoints": [c.to_dict() for c in checkpoints],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_checkpoint(self) -> None:
+        """POST /api/checkpoints - Record an immutable handoff checkpoint."""
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        from core.state_models import HandoffCheckpoint, HandoffCheckpointManager
+        checkpoint_id = data.get("checkpoint_id") or uuid.uuid4().hex[:12]
+        checkpoint = HandoffCheckpoint(
+            checkpoint_id=checkpoint_id,
+            origin_model=data.get("origin_model", "unknown"),
+            target_model=data.get("target_model", "unknown"),
+            timestamp=data.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+            prompt_summary=data.get("prompt_summary", ""),
+            compressed_prompt=data.get("compressed_prompt", ""),
+            total_messages=int(data.get("total_messages", 0)),
+            total_code_blocks=int(data.get("total_code_blocks", 0)),
+            parent_checkpoint_id=data.get("parent_checkpoint_id"),
+            metadata=data.get("metadata", {})
+        )
+        mgr = HandoffCheckpointManager(str(self.workspace_root))
+        saved_path = mgr.record_checkpoint(checkpoint)
+        self._send_json_response({
+            "status": "success",
+            "message": f"Checkpoint {checkpoint_id} recorded successfully.",
+            "checkpoint": checkpoint.to_dict(),
+            "file": str(saved_path.name),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
 
     def handle_post_workspace_sync(self) -> None:
         """

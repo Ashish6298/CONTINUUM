@@ -327,6 +327,82 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         except urllib.error.HTTPError as e:
             self.assertEqual(e.code, 400)
 
+    def test_handoff_checkpoint_chain_and_multi_turn_history(self):
+        """Verifies Phase 45: HandoffCheckpoint schema, persistence, 3-model relay trail, and branching."""
+        from core.state_models import HandoffCheckpoint, HandoffCheckpointManager
+        import json
+        import urllib.request
+
+        mgr = HandoffCheckpointManager(str(self.workspace_root))
+
+        # 1. Step 1: ChatGPT -> Claude
+        cp1 = HandoffCheckpoint(
+            checkpoint_id="chk_001_gpt_to_claude",
+            origin_model="chatgpt",
+            target_model="claude",
+            timestamp="2026-09-15T12:00:00Z",
+            prompt_summary="Initial OAuth architecture requirement",
+            compressed_prompt="<project_continuation_context>OAuth</project_continuation_context>",
+            total_messages=4,
+            total_code_blocks=2,
+            parent_checkpoint_id=None
+        )
+        mgr.record_checkpoint(cp1)
+
+        # 2. Step 2: Claude -> Gemini (Chained)
+        cp2 = HandoffCheckpoint(
+            checkpoint_id="chk_002_claude_to_gemini",
+            origin_model="claude",
+            target_model="gemini",
+            timestamp="2026-09-15T12:30:00Z",
+            prompt_summary="Implemented token refresh logic",
+            compressed_prompt="[1.0] OAuth Token Refresh Logic",
+            total_messages=8,
+            total_code_blocks=4,
+            parent_checkpoint_id="chk_001_gpt_to_claude"
+        )
+        mgr.record_checkpoint(cp2)
+
+        # 3. Step 3: Re-branching test from cp1 -> DeepSeek
+        cp3_branch = HandoffCheckpoint(
+            checkpoint_id="chk_003_gpt_to_deepseek_branch",
+            origin_model="chatgpt",
+            target_model="deepseek",
+            timestamp="2026-09-15T12:45:00Z",
+            prompt_summary="Alternative FastAPI implementation branch",
+            compressed_prompt="--- Fastapi Auth Branch ---",
+            total_messages=4,
+            total_code_blocks=2,
+            parent_checkpoint_id="chk_001_gpt_to_claude"
+        )
+        mgr.record_checkpoint(cp3_branch)
+
+        # Verify list and retrieval
+        all_cps = mgr.list_checkpoints()
+        self.assertEqual(len(all_cps), 3)
+
+        retrieved1 = mgr.get_checkpoint("chk_001_gpt_to_claude")
+        self.assertIsNotNone(retrieved1)
+        self.assertEqual(retrieved1.origin_model, "chatgpt")
+        self.assertEqual(retrieved1.target_model, "claude")
+
+        # Test HTTP API endpoints
+        url = f"{self.base_url}/api/checkpoints"
+        token = self.daemon.auth_manager.get_token() or ""
+
+        req_get = urllib.request.Request(
+            url,
+            headers={
+                "X-Continuum-Token": token,
+                "Origin": "https://claude.ai"
+            }
+        )
+        with urllib.request.urlopen(req_get, timeout=5) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data.get("status"), "success")
+            self.assertEqual(data.get("count"), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
