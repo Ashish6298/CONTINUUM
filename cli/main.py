@@ -81,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
     from cli.serve import register_serve_subcommand
     register_serve_subcommand(subparsers)
 
+    # 8. launch (Phase 42)
+    launch_parser = subparsers.add_parser("launch", help="Launch Chromium browser with Continuum extension pre-loaded")
+    launch_parser.add_argument("--target", choices=["chatgpt", "claude", "gemini", "aistudio", "deepseek"], default="chatgpt", help="Target AI platform to open (default: chatgpt)")
+    launch_parser.add_argument("--dry-run", action="store_true", help="Print browser discovery and invocation details without launching")
+
     return parser
 
 
@@ -389,6 +394,19 @@ def print_welcome_hub() -> None:
         print(banner_text)
 
 
+def handle_launch(args: argparse.Namespace) -> int:
+    """Handles `continuum launch` command."""
+    from core.launcher import BrowserLauncher
+    launcher = BrowserLauncher()
+    success, msg = launcher.launch(target_model=args.target, dry_run=args.dry_run)
+    if success:
+        print(f"[OK] {msg}")
+        return 0
+    else:
+        print(f"[ERROR] {msg}")
+        return 1
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint."""
     parser = build_parser()
@@ -408,6 +426,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "handoff": handle_handoff,
         "daemon": handle_daemon,
         "serve": handle_serve,
+        "launch": handle_launch,
     }
 
     handler = handlers.get(args.command)

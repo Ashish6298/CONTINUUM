@@ -169,6 +169,39 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         self.assertIn("https://gemini.google.com/*", manifest_data.get("host_permissions", []))
         self.assertIn("https://chat.deepseek.com/*", manifest_data.get("host_permissions", []))
 
+    def test_browser_launcher_discovery_and_cli_subcommand(self):
+        """Verifies Phase 42: BrowserLauncher discovers browser binaries and builds launch command."""
+        from core.launcher import BrowserLauncher, TARGET_URLS
+        from cli.main import build_parser, main
+        import io
+        from unittest.mock import patch
+
+        launcher = BrowserLauncher()
+        self.assertTrue(launcher.extension_path.is_dir())
+        self.assertEqual(TARGET_URLS["claude"], "https://claude.ai/new")
+        self.assertEqual(TARGET_URLS["gemini"], "https://gemini.google.com/app")
+        self.assertEqual(TARGET_URLS["deepseek"], "https://chat.deepseek.com/")
+
+        # Test dry-run execution
+        success, msg = launcher.launch(target_model="claude", dry_run=True)
+        self.assertTrue(success)
+        self.assertIn("[DRY-RUN]", msg)
+        self.assertIn("https://claude.ai/new", msg)
+
+        # Test CLI parser support
+        parser = build_parser()
+        args = parser.parse_args(["launch", "--target", "gemini", "--dry-run"])
+        self.assertEqual(args.command, "launch")
+        self.assertEqual(args.target, "gemini")
+        self.assertTrue(args.dry_run)
+
+        # Test main CLI execution
+        with patch("sys.stdout", new=io.StringIO()) as fake_out:
+            exit_code = main(["launch", "--target", "deepseek", "--dry-run"])
+            self.assertEqual(exit_code, 0)
+            self.assertIn("[OK] [DRY-RUN]", fake_out.getvalue())
+            self.assertIn("https://chat.deepseek.com/", fake_out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
