@@ -10,6 +10,7 @@ and the aggregated CanonicalProjectState container.
 
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 import uuid
 
@@ -528,3 +529,87 @@ class CanonicalProjectState:
             graph_edges=g_edges,
             contradictions=contradictions
         )
+
+
+# ==============================================================================
+# 4. HANDOFF CHECKPOINT & MULTI-TURN CHAIN OF CUSTODY (Phase 45)
+# ==============================================================================
+
+@dataclass
+class HandoffCheckpoint:
+    """Represents an immutable checkpoint in a multi-model conversational chain."""
+    checkpoint_id: str
+    origin_model: str
+    target_model: str
+    timestamp: str
+    prompt_summary: str
+    compressed_prompt: str
+    total_messages: int
+    total_code_blocks: int
+    parent_checkpoint_id: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "HandoffCheckpoint":
+        return cls(**data)
+
+
+class HandoffCheckpointManager:
+    """Manages persistent checkpoint trails in .continuum/handoffs/."""
+
+    def __init__(self, workspace_root: str):
+        self.workspace_root = Path(workspace_root).resolve()
+        self.handoffs_dir = self.workspace_root / ".continuum" / "handoffs"
+
+    def initialize(self) -> None:
+        self.handoffs_dir.mkdir(parents=True, exist_ok=True)
+
+    def record_checkpoint(self, checkpoint: HandoffCheckpoint) -> Path:
+        self.initialize()
+        file_path = self.handoffs_dir / f"checkpoint_{checkpoint.checkpoint_id}.json"
+        import json
+        file_path.write_text(json.dumps(checkpoint.to_dict(), indent=2), encoding="utf-8")
+        return file_path
+
+    def list_checkpoints(self) -> List[HandoffCheckpoint]:
+        if not self.handoffs_dir.is_dir():
+            return []
+        import json
+        checkpoints = []
+        for p in sorted(self.handoffs_dir.glob("checkpoint_*.json")):
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                checkpoints.append(HandoffCheckpoint.from_dict(data))
+            except Exception:
+                continue
+        return checkpoints
+
+    def get_checkpoint(self, checkpoint_id: str) -> Optional[HandoffCheckpoint]:
+        file_path = self.handoffs_dir / f"checkpoint_{checkpoint_id}.json"
+        if not file_path.is_file():
+            return None
+        import json
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+        return HandoffCheckpoint.from_dict(data)
+
+    def get_lineage(self, checkpoint_id: str) -> List[HandoffCheckpoint]:
+        """Traverses the parent chain back to the root, returning chronological lineage."""
+        lineage: List[HandoffCheckpoint] = []
+        curr_id: Optional[str] = checkpoint_id
+        visited = set()
+
+        while curr_id and curr_id not in visited:
+            visited.add(curr_id)
+            cp = self.get_checkpoint(curr_id)
+            if not cp:
+                break
+            lineage.append(cp)
+            curr_id = cp.parent_checkpoint_id
+
+        lineage.reverse()
+        return lineage
+
+

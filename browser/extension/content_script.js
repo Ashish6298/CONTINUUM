@@ -1,20 +1,9 @@
-// ==UserScript==
-// @name         Continuum - AI Chat Handoff
-// @namespace    https://github.com/Ashish6298/CONTINUUM
-// @version      1.2.4
-// @description  Seamlessly continue ChatGPT/Claude/Gemini conversations across platforms. When your AI context runs out, extract the chat and inject it into another AI in one click.
-// @author       Project Continuum
-// @match        https://chatgpt.com/*
-// @match        https://chat.openai.com/*
-// @match        https://claude.ai/*
-// @match        https://aistudio.google.com/*
-// @match        https://gemini.google.com/*
-// @match        https://chat.deepseek.com/*
-// @grant        GM_setClipboard
-// @run-at       document-idle
-// ==/UserScript==
-
+/**
+ * Continuum Native Browser Extension - Content Script (Manifest V3)
+ * Automatically loaded on ChatGPT, Claude, Gemini, AI Studio, and DeepSeek.
+ */
 (function () {
+
   'use strict';
   console.log('[Continuum v1.2.3] Initializing on:', window.location.hostname);
 
@@ -769,26 +758,7 @@
   // ============================================================
   // BOOT
   // ============================================================
-  function bootContinuum() {
-    try {
-      window.ContinuumDOMInjector = ContinuumDOMInjector;
-      if (!window.continuumCompanion) {
-        window.continuumCompanion = new ContinuumCompanionUI();
-      } else if (!document.getElementById('continuum-companion-root') && document.body) {
-        window.continuumCompanion.createShadowDOM();
-      }
-    } catch(err) {
-      console.error('[Continuum] Boot error:', err);
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bootContinuum);
-  } else {
-    bootContinuum();
-  }
-
-  // Ensure companion mounts even if React / Next.js rewrites document.body
-  setInterval(bootContinuum, 1000);
+  window.ContinuumDOMInjector = ContinuumDOMInjector;
+  window.continuumCompanion   = new ContinuumCompanionUI();
 
 })();

@@ -148,6 +148,16 @@ class GitEvidenceExtractor(BaseEvidenceExtractor):
             "deleted_files": sorted(list(set(deleted)))
         }
 
+    def get_staged_diff(self, root_path: Path) -> str:
+        """Retrieves raw diff of staged changes."""
+        code, out, _ = self._run_git_command(root_path, ["diff", "--cached"])
+        return out.strip() if code == 0 else ""
+
+    def get_unstaged_diff(self, root_path: Path) -> str:
+        """Retrieves raw diff of unstaged working tree changes."""
+        code, out, _ = self._run_git_command(root_path, ["diff"])
+        return out.strip() if code == 0 else ""
+
     def get_recent_commits(self, root_path: Path, max_count: int = 15) -> List[Dict[str, Any]]:
         """
         Retrieves recent commit log with SHA, author, timestamp, and message.

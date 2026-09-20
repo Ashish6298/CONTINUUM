@@ -80,6 +80,8 @@ def print_serve_banner(status: DaemonServerStatus, token: str, watch_enabled: bo
     GRAY = "\033[90m"
     MAGENTA = "\033[35m"
 
+    authenticated_url = f"{status.server_url}?token={token}" if token else status.server_url
+
     banner = f"""
 {BOLD}{MAGENTA}┌─ CONTINUUM WEB CONTROL DASHBOARD ──────────────────────────────────────────┐{RESET}
 │                                                                            │
@@ -91,7 +93,7 @@ def print_serve_banner(status: DaemonServerStatus, token: str, watch_enabled: bo
 │                                                                            │
 │  {BOLD}Shortcuts & Actions:{RESET}                                                     │
 │    • Press {BOLD}Ctrl+C{RESET} to gracefully stop server daemon                        │
-│    • Open in browser: {CYAN}{status.server_url}{RESET}                             │
+│    • Direct URL: {CYAN}{authenticated_url}{RESET}
 │                                                                            │
 {BOLD}{MAGENTA}└────────────────────────────────────────────────────────────────────────────┘{RESET}
 """
@@ -187,10 +189,11 @@ def handle_serve(args: argparse.Namespace, sleep_func=time.sleep) -> int:
     # Print rich startup banner
     print_serve_banner(status, token, watch)
 
-    # Launch browser if not disabled
+    # Launch browser if not disabled - open with token in URL for auto-auth
     if not no_browser and status.server_url:
         try:
-            webbrowser.open(status.server_url)
+            browser_url = f"{status.server_url}?token={token}" if token else status.server_url
+            webbrowser.open(browser_url)
         except Exception:
             pass
 

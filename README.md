@@ -20,9 +20,9 @@
 <table>
   <tr>
     <td align="center"><a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=plastic&logo=python&logoColor=white" alt="Python 3.10+"/></a></td>
-    <td align="center"><a href="https://pypi.org/project/continuum-toolkit/"><img src="https://img.shields.io/badge/PyPI-v1.0.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
+    <td align="center"><a href="https://pypi.org/project/continuum-toolkit/"><img src="https://img.shields.io/badge/PyPI-v1.2.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
     <td align="center"><a href="https://pepy.tech/projects/continuum-toolkit"><img src="https://static.pepy.tech/personalized-badge/continuum-toolkit?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads"/></a></td>
-    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-173%2F173_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
+    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-197%2F197_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
   </tr>
   <tr>
     <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Engine-7F77DD?style=plastic&logo=diagramsdotnet&logoColor=white" alt="3-State Architecture"/></a></td>
@@ -53,7 +53,7 @@
  └── <b>[03] TOOLING & GOVERNANCE</b>
       ├── ❯ <a href="#smart-omni-model-handoff-adapters"><b>Omni-Model Handoff Adapters</b></a>
       ├── ❯ <a href="#complete-cli-reference"><b>Complete CLI Command Reference</b></a>
-      ├── ❯ <a href="#verified-roadmap-all-24-phases"><b>Roadmap to v1.0.0 (All 24 Phases)</b></a>
+      ├── ❯ <a href="#verified-roadmap-all-24-phases"><b>Roadmap to v1.2.0 (All 48 Phases)</b></a>
       ├── ❯ <a href="#testing--verification"><b>Testing & Verification</b></a>
       ├── ❯ <a href="#contributing"><b>Contributing Guide</b></a>
       ├── ❯ <a href="#code-of-conduct"><b>Code of Conduct</b></a>
@@ -174,7 +174,28 @@ continuum serve
 - **Install Companion Userscript**: Click **🧩 Install Companion** in the dashboard header (or open `http://127.0.0.1:8765/continuum.user.js` in Tampermonkey / Violentmonkey).
 - **In-Chat AI Injection**: Works seamlessly on ChatGPT, Claude.ai, Google AI Studio, Gemini, and DeepSeek.
 
-### 3. Generate an Instant AI Handoff via CLI (v1.0.0)
+### 3. 1-Command Zero-Setup Browser Companion Auto-Launch (v1.2.0)
+
+Launch your browser directly into any AI chat interface with the native Continuum extension pre-loaded:
+
+```bash
+# Auto-discover Chrome/Edge/Brave and launch directly into Claude
+continuum launch --target claude
+
+# Or launch into Google Gemini, ChatGPT, or DeepSeek
+continuum launch --target gemini
+```
+
+### 4. Zero-Install 1-Click Bookmarklet (v1.2.0)
+
+For restricted corporate or mobile environments where extensions cannot be installed:
+
+```bash
+# Generate drag-and-drop installer HTML page
+continuum bookmarklet --html ./install_bookmarklet.html
+```
+
+### 5. Generate an Instant AI Handoff via CLI (v1.0.0)
 
 Run inside any project directory — Continuum automatically scans your codebase, extracts AST symbols, builds the dependency graph, and creates your ready-to-resume AI handoff package:
 
@@ -182,7 +203,7 @@ Run inside any project directory — Continuum automatically scans your codebase
 continuum handoff
 ```
 
-### 3. Terminal Output
+### 6. Terminal Output
 
 ```text
                  █▀▀ █▀█ █▄ █ ▀█▀ █ █▄ █ █ █ █ █ █▀▄▀█
@@ -347,7 +368,16 @@ $ continuum serve --watch                  # Enable live background filesystem o
 $ continuum serve --status                 # Inspect running web daemon status & auth token
 $ continuum serve --stop                   # Gracefully terminate active web daemon
 
-# ── 5. BACKGROUND OBSERVER DAEMON ───────────────────────────────────────────
+# ── 5. ZERO-SETUP BROWSER LAUNCHER & BOOKMARKLET ────────────────────────────
+$ continuum launch                         # Auto-launch Chrome with Continuum pre-loaded
+$ continuum launch --target claude         # Launch directly into Claude.ai
+$ continuum launch --target gemini         # Launch directly into Google Gemini
+$ continuum launch --target deepseek       # Launch directly into DeepSeek Chat
+$ continuum launch --dry-run               # Inspect browser executable discovery
+$ continuum bookmarklet                    # Print zero-install browser bookmarklet URI
+$ continuum bookmarklet --html ./card.html # Generate interactive drag-and-drop installer
+
+# ── 6. BACKGROUND OBSERVER DAEMON ───────────────────────────────────────────
 $ continuum daemon start                   # Start background filesystem observer
 $ continuum daemon status                  # Check background daemon health & cycles
 $ continuum daemon run-once                # Trigger a single incremental scan pass
@@ -359,7 +389,12 @@ $ continuum daemon stop                    # Gracefully stop the background daem
 <a id="verified-roadmap-all-24-phases"></a>
 ## 🗺️ Architecture Milestones & Verification
 
-Project Continuum v1.0.0 is fully certified with **126 / 126 automated tests passing (100%)** across all 24 roadmap phases (Milestones 1 through 8). Detailed engineering reports and verification logs are available in [docs/reports/](docs/reports/).
+Project Continuum v1.2.0 is fully certified with **197 / 197 automated tests passing (100%)** across all core CLI and Browser Companion roadmap phases:
+- **Milestones 1–8 (Phases 0–23):** Core Engine, AST Extractors, DAG State Graph, Contradiction Ledger, and Omni-Model CLI Handoffs.
+- **Milestones 24–30 (Phases 25–37):** Web Control Dashboard, REST API Daemon, Secret Sanitizer, and Security CORS Guards.
+- **Milestones 31–34 (Phases 38–48):** Browser-to-Browser Cross-Model Handoff Companion, Native Manifest V3 WebExtension (`browser/extension/`), CLI Browser Launcher (`continuum launch`), Zero-Install Bookmarklet (`continuum bookmarklet`), Bi-Directional Code Sync (`/api/workspace/sync`), Multi-Turn Handoff History & Checkpointing (`HandoffCheckpointManager`, `/api/checkpoints`), Automated Browser Companion Test Suite (`tests/test_browser_companion.py`), CLI Launcher Test Suite (`tests/test_cli_launcher.py`), and General Availability Release Validation (`tests/test_ga_validation.py`).
+
+Detailed engineering reports and verification logs are available in [docs/reports/](docs/reports/).
 
 <br>
 
@@ -367,7 +402,7 @@ Project Continuum v1.0.0 is fully certified with **126 / 126 automated tests pas
 ## 🧪 Testing & Enterprise Security
 
 ```bash
-$ py tests/run_all_tests.py    # 160/160 Passed (100% Test Coverage across 30 Phases)
+$ py tests/run_all_tests.py    # 197/197 Passed (100% Test Coverage across all Phases)
 ```
 
 ```text

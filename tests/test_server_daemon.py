@@ -148,6 +148,27 @@ class TestHttpServerDaemon(unittest.TestCase):
             self.assertFalse(daemon.get_status().is_running)
             time.sleep(0.05)
 
+    def test_daemon_idle_memory_footprint(self) -> None:
+        """Verify daemon idle memory footprint remains lightweight."""
+        daemon = ContinuumHttpDaemon(
+            workspace_root=str(self.workspace_root),
+            host="127.0.0.1",
+            default_port=8960
+        )
+        status = daemon.start(run_in_background=True)
+        try:
+            self.assertTrue(status.is_running)
+            try:
+                import psutil
+                process = psutil.Process()
+                mem_mb = process.memory_info().rss / (1024 * 1024)
+                # Verify that idle memory usage is strictly bounded
+                self.assertLess(mem_mb, 120.0, f"Memory usage {mem_mb}MB exceeded threshold")
+            except ImportError:
+                pass
+        finally:
+            daemon.stop()
+
 
 if __name__ == "__main__":
     unittest.main()

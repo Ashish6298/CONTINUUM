@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "continuum-toolkit"
-version = "1.0.0"
+version = "1.2.0"
 description = "AI Work Continuity & Cross-Model Agent Handoff System"
 readme = "README.md"
 license = { text = "MIT" }
@@ -17,7 +17,9 @@ keywords = [
     "llm-context",
     "dag",
     "state-graph",
-    "developer-tools"
+    "developer-tools",
+    "web-dashboard",
+    "tampermonkey"
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -27,6 +29,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Build Tools",
     "Topic :: Scientific/Engineering :: Artificial Intelligence"
 ]
@@ -52,5 +55,7 @@ exclude = ["tests*", "docs*"]
 
 [tool.setuptools.package-data]
 "server.static" = ["*"]
+"browser" = ["*.user.js", "*.js"]
 "*" = ["*.html", "*.css", "*.js", "*.svg", "*.png", "*.json"]
+
 
