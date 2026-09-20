@@ -42,6 +42,7 @@
 # SYSTEM NAVIGATION MAP
  ├── <b>[01] FOUNDATION & BENCHMARK</b>
  │    ├── ❯ <a href="#what-is-continuum"><b>Overview & Core Problem</b></a>
+ │    ├── ❯ <a href="#whats-new-in-v120"><b>🚀 What's New in v1.2.0 (Browser Companion & Web Suite)</b></a>
  │    ├── ❯ <a href="#why-continuum-over-chat-summaries"><b>Benchmark: Continuum vs Chat Summaries</b></a>
  │    └── ❯ <a href="#quick-start-guide"><b>1-Command Quickstart Guide</b></a>
  │
@@ -53,7 +54,7 @@
  └── <b>[03] TOOLING & GOVERNANCE</b>
       ├── ❯ <a href="#smart-omni-model-handoff-adapters"><b>Omni-Model Handoff Adapters</b></a>
       ├── ❯ <a href="#complete-cli-reference"><b>Complete CLI Command Reference</b></a>
-      ├── ❯ <a href="#verified-roadmap-all-24-phases"><b>Roadmap to v1.2.0 (All 48 Phases)</b></a>
+      ├── ❯ <a href="#verified-roadmap-all-48-phases"><b>Roadmap to v1.2.0 (All 48 Phases)</b></a>
       ├── ❯ <a href="#testing--verification"><b>Testing & Verification</b></a>
       ├── ❯ <a href="#contributing"><b>Contributing Guide</b></a>
       ├── ❯ <a href="#code-of-conduct"><b>Code of Conduct</b></a>
@@ -94,6 +95,66 @@
   <tr>
     <td><b>🛡️ Autonomous Governance</b></td>
     <td>Background observer daemon paired with non-blocking Git commit hooks, SHA-256 state provenance, corruption self-healing, and 100% local zero telemetry.</td>
+  </tr>
+</table>
+
+<a id="whats-new-in-v120"></a>
+## 🚀 What's New in v1.2.0: In-Depth Feature Architecture
+
+> **Continuum v1.2.0** expands Continuum from an automated CLI AST extraction engine into a complete **Cross-Model AI Chat & Browser Continuity Ecosystem**. It bridges the gap between web-based AI chats (ChatGPT, Claude.ai, Gemini, DeepSeek) and local terminal IDE coding agents (Claude Code, Cursor, Codex, Antigravity).
+
+<br/>
+
+<table>
+  <tr>
+    <th width="30%"><b>v1.2.0 Feature</b></th>
+    <th width="70%"><b>Technical Architecture & Capabilities</b></th>
+  </tr>
+  <tr>
+    <td><b>🧩 1-Click Browser Companion</b></td>
+    <td>
+      Tampermonkey / Violentmonkey userscript (<code>browser/continuum.user.js</code>) and native Manifest V3 WebExtension (<code>browser/extension/</code>) running directly on ChatGPT, Claude.ai, Google AI Studio, Gemini, and DeepSeek.
+      <ul>
+        <li><b>DOM Conversation Extractor</b>: Intelligently scrapes conversational turns and code blocks across dynamic DOM trees without token truncation.</li>
+        <li><b>Shadow DOM UI</b>: Fully isolated UI badge (<code>Alt+C</code>) with live token stats, code block counters, and instant model switch buttons.</li>
+        <li><b>Cross-Tab Context Relay</b>: Auto-opens the target AI in a new tab and injects formatted context using synthetic <code>InputEvent</code> / <code>KeyboardEvent</code> dispatchers into ProseMirror, Monaco, and standard editors.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td><b>🖥️ Local Web Control Dashboard</b></td>
+    <td>
+      Embedded, zero-dependency HTTP server (<code>server/daemon.py</code>) running at <code>http://127.0.0.1:8765</code> with automatic port fallback negotiation.
+      <ul>
+        <li><b>Visual State Graph Explorer</b>: Interactive topology inspector visualizing physical symbols, milestones, and test statuses.</li>
+        <li><b>Live Model Prompt Composer</b>: Real-time token budget calculator with instant format switching (Claude XML, GPT Checklist, Gemini Hierarchy, DeepSeek Compact).</li>
+        <li><b>Session Auth Guard</b>: Constant-time token verification (<code>X-Continuum-Token</code>, <code>Authorization: Bearer</code>) strictly bound to loopback interfaces.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td><b>🚀 Native Browser Launcher</b></td>
+    <td>
+      <code>continuum launch --target &lt;model&gt;</code> automatically discovers Chrome, Brave, and Edge binaries across Windows, macOS, and Linux, launching Chromium with the Continuum companion extension pre-loaded.
+    </td>
+  </tr>
+  <tr>
+    <td><b>🔖 Zero-Install 1-Click Bookmarklet</b></td>
+    <td>
+      <code>continuum bookmarklet</code> compiles a standalone, minified <code>javascript:</code> URI installer for enterprise or restricted environments where browser extensions cannot be installed.
+    </td>
+  </tr>
+  <tr>
+    <td><b>🔄 Bi-Directional Code Sync Engine</b></td>
+    <td>
+      <code>POST /api/workspace/sync</code> enables the browser companion to push generated code snippets directly back into workspace files with atomic write safety, automatic backups (<code>.bak</code>), and path traversal guards.
+    </td>
+  </tr>
+  <tr>
+    <td><b>📜 Multi-Turn Relay & Checkpoints</b></td>
+    <td>
+      <code>/api/checkpoints</code> manages multi-turn handoff lineage, capturing branching trails across 3+ AI models (e.g. ChatGPT ➔ Claude ➔ DeepSeek ➔ Gemini) with rollback and resume points.
+    </td>
   </tr>
 </table>
 
@@ -149,61 +210,21 @@
 <br>
 
 <a id="quick-start-guide"></a>
-## ⚡ Quick Start Guide (1-Command)
+## ⚡ Quick Start Guide
 
 ### 1. Installation
 
 ```bash
-# Clone the repository
+# Install via PyPI
+pip install continuum-toolkit
+
+# Or install from source
 git clone https://github.com/Ashish6298/CONTINUUM.git
 cd CONTINUUM
-
-# Install globally in editable mode
 pip install -e .
 ```
 
-### 2. Launch Local Web Dashboard & Browser Companion (v1.2.0)
-
-Run inside any project directory to launch the embedded Web Control Dashboard:
-
-```bash
-continuum serve
-```
-
-- **Dashboard UI**: Open `http://127.0.0.1:8765` in your browser.
-- **Install Companion Userscript**: Click **🧩 Install Companion** in the dashboard header (or open `http://127.0.0.1:8765/continuum.user.js` in Tampermonkey / Violentmonkey).
-- **In-Chat AI Injection**: Works seamlessly on ChatGPT, Claude.ai, Google AI Studio, Gemini, and DeepSeek.
-
-### 3. 1-Command Zero-Setup Browser Companion Auto-Launch (v1.2.0)
-
-Launch your browser directly into any AI chat interface with the native Continuum extension pre-loaded:
-
-```bash
-# Auto-discover Chrome/Edge/Brave and launch directly into Claude
-continuum launch --target claude
-
-# Or launch into Google Gemini, ChatGPT, or DeepSeek
-continuum launch --target gemini
-```
-
-### 4. Zero-Install 1-Click Bookmarklet (v1.2.0)
-
-For restricted corporate or mobile environments where extensions cannot be installed:
-
-```bash
-# Generate drag-and-drop installer HTML page
-continuum bookmarklet --html ./install_bookmarklet.html
-```
-
-### 5. Generate an Instant AI Handoff via CLI (v1.0.0)
-
-Run inside any project directory — Continuum automatically scans your codebase, extracts AST symbols, builds the dependency graph, and creates your ready-to-resume AI handoff package:
-
-```bash
-continuum handoff
-```
-
-### 6. Terminal Output
+### 2. Choose Your Workflow
 
 ```text
                  █▀▀ █▀█ █▄ █ ▀█▀ █ █▄ █ █ █ █ █ █▀▄▀█
@@ -212,15 +233,60 @@ continuum handoff
              AI Work Continuity & Cross-Model Agent Handoff System
   ─────────────────────────────────────────────────────────────────────────────
 
-    The one-Command Workflow: $ continuum handoff
+  1. Terminal & IDE Coding Agents:
 
-    Automatically captures your project state, extracts AST symbols,
-    and generates a ready-to-use 'ai_handoff/' package for your next
-    AI Agent (Claude, GPT, Gemini, Cursor, Antigravity, etc.)
+     $ continuum handoff
+
+     • When to use: When your AI coding assistant (Claude Code, Cursor, Codex,
+       Antigravity) hits token limits, drifts from ground truth, or when you
+       want to switch to a different AI model without losing progress.
+
+     • Why to use:  Automatically captures workspace state, extracts AST symbols,
+       and generates verified, model-tailored handoff prompt packages.
+
+
+  2. Web Browser AI Chats (ChatGPT, Claude, Gemini, DeepSeek, Local LLMs, etc.):
+
+     $ continuum setup --browser
+
+     • When to use: When using web chat AI interfaces and you run out of context,
+       hit token exhaustion, or want to continue the discussion in another AI.
+
+     • Why to use:  1-Click installer for the Continuum browser companion that
+       lets you extract conversations and inject them across AI tabs seamlessly.
 
   ─────────────────────────────────────────────────────────────────────────────
-  v1.0.0   python 3.11.4   mit license   
+  v1.2.0   python 3.11.4   mit license   github.com/Ashish6298/CONTINUUM   
+```
 
+---
+
+### 3. Web Browser Workflow (1-Click Companion Setup)
+
+Run inside any project directory:
+
+```bash
+# 1-Click Browser Companion Setup (Opens Tampermonkey & Companion Installer)
+continuum setup --browser
+
+# Or launch local web dashboard & live REST API server
+continuum serve
+```
+
+- **Dashboard UI**: Open `http://127.0.0.1:8765` in your browser.
+- **In-Chat AI Injection**: Press **Alt+C** on ChatGPT, Claude.ai, Gemini, or DeepSeek to extract conversations and inject them across tabs in 1-click.
+
+---
+
+### 4. Terminal & IDE Coding Agent Workflow (Instant Handoff)
+
+Run inside any project directory — Continuum automatically scans your codebase, extracts AST symbols, builds the dependency graph, and creates your ready-to-resume AI handoff package:
+
+```bash
+continuum handoff
+```
+
+```text
 ◈ [HANDOFF READY] Generated Omni-Model Continuity Package:
 
   Location: D:\myproject\ai_handoff
@@ -360,22 +426,24 @@ $ continuum handoff --model claude         # Tailor specifically for Anthropic C
 $ continuum handoff --model gpt            # Tailor for OpenAI GPT-4o / Codex
 $ continuum handoff --model gemini         # Tailor for Google Gemini Pro
 
-# ── 4. LOCAL WEB CONTROL DASHBOARD & REST API ──────────────────────────────
+# ── 4. BROWSER COMPANION & 1-CLICK SETUP ──────────────────────────────────
+$ continuum setup --browser                # 1-Click Tampermonkey & Companion installer
+$ continuum browser --install              # Launch browser setup wizard
+$ continuum launch                         # Auto-launch Chrome with Continuum pre-loaded
+$ continuum launch --target claude         # Launch directly into Claude.ai
+$ continuum launch --target gemini         # Launch directly into Google Gemini
+$ continuum launch --target deepseek       # Launch directly into DeepSeek Chat
+$ continuum launch --dry-run               # Inspect browser discovery without launch
+$ continuum bookmarklet                    # Print zero-install browser bookmarklet URI
+$ continuum bookmarklet --html ./card.html # Generate interactive drag-and-drop installer
+
+# ── 5. LOCAL WEB CONTROL DASHBOARD & REST API ──────────────────────────────
 $ continuum serve                          # Launch Local Web Dashboard & REST API
 $ continuum serve --port 8765              # Launch on custom port (auto-fallback enabled)
 $ continuum serve --no-browser             # Start headless daemon without opening browser
 $ continuum serve --watch                  # Enable live background filesystem observation
 $ continuum serve --status                 # Inspect running web daemon status & auth token
 $ continuum serve --stop                   # Gracefully terminate active web daemon
-
-# ── 5. ZERO-SETUP BROWSER LAUNCHER & BOOKMARKLET ────────────────────────────
-$ continuum launch                         # Auto-launch Chrome with Continuum pre-loaded
-$ continuum launch --target claude         # Launch directly into Claude.ai
-$ continuum launch --target gemini         # Launch directly into Google Gemini
-$ continuum launch --target deepseek       # Launch directly into DeepSeek Chat
-$ continuum launch --dry-run               # Inspect browser executable discovery
-$ continuum bookmarklet                    # Print zero-install browser bookmarklet URI
-$ continuum bookmarklet --html ./card.html # Generate interactive drag-and-drop installer
 
 # ── 6. BACKGROUND OBSERVER DAEMON ───────────────────────────────────────────
 $ continuum daemon start                   # Start background filesystem observer
@@ -386,7 +454,7 @@ $ continuum daemon stop                    # Gracefully stop the background daem
 
 <br>
 
-<a id="verified-roadmap-all-24-phases"></a>
+<a id="verified-roadmap-all-48-phases"></a>
 ## 🗺️ Architecture Milestones & Verification
 
 Project Continuum v1.2.0 is fully certified with **197 / 197 automated tests passing (100%)** across all core CLI and Browser Companion roadmap phases:

@@ -351,7 +351,7 @@ def handle_daemon(args: argparse.Namespace) -> int:
 
 def print_welcome_hub() -> None:
     """Prints a solid, unbroken block-font terminal welcome hub with Natural Blood Moon palette."""
-    version = "v1.0.0"
+    version = "v1.2.0"
     py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
     if os.name == "nt":
@@ -360,6 +360,7 @@ def print_welcome_hub() -> None:
     RESET = "\033[0m"
     BOLD = "\033[1m"
     GRAY = "\033[90m"
+    CYAN = "\033[36m"
 
     def rgb(r: int, g: int, b: int) -> str:
         return f"\033[38;2;{r};{g};{b}m"
@@ -390,14 +391,30 @@ def print_welcome_hub() -> None:
              AI Work Continuity & Cross-Model Agent Handoff System
   {GRAY}─────────────────────────────────────────────────────────────────────────────{RESET}
 
-    The one-Command Workflow: $ continuum handoff
+  {BOLD}1. Terminal & IDE Coding Agents:{RESET}
 
-    Automatically captures your project state, extracts AST symbols,
-    and generates a ready-to-use 'ai_handoff/' package for your next
-    AI Agent (Claude, GPT, Gemini, Cursor, Antigravity, etc.)
+     {CYAN}$ continuum handoff{RESET}
+
+     • {BOLD}When to use:{RESET} When your AI coding assistant (Claude Code, Cursor, Codex,
+       Antigravity) hits token limits, drifts from ground truth, or when you
+       want to switch to a different AI model without losing progress.
+
+     • {BOLD}Why to use:{RESET}  Automatically captures workspace state, extracts AST symbols,
+       and generates verified, model-tailored handoff prompt packages.
+
+
+  {BOLD}2. Web Browser AI Chats (ChatGPT, Claude, Gemini, DeepSeek, Local LLMs, etc.):{RESET}
+
+     {CYAN}$ continuum setup --browser{RESET}
+
+     • {BOLD}When to use:{RESET} When using web chat AI interfaces and you run out of context,
+       hit token exhaustion, or want to continue the discussion in another AI.
+
+     • {BOLD}Why to use:{RESET}  1-Click installer for the Continuum browser companion that
+       lets you extract conversations and inject them across AI tabs seamlessly.
 
   {GRAY}─────────────────────────────────────────────────────────────────────────────{RESET}
-  {GRAY}{version}   python {py_version}   mit license{RESET}   
+  {GRAY}{version}   python {py_version}   mit license   github.com/Ashish6298/CONTINUUM{RESET}   
 
 """
     try:
