@@ -36,8 +36,7 @@ class BookmarkletGenerator:
         return content
 
     def minify(self, js_code: str) -> str:
-        """Applies whitespace and comment reduction to produce a compact single-line script."""
-        # Remove single-line comments (except those within URLs/strings)
+        """Applies whitespace and comment reduction to produce a compact script."""
         lines = []
         for line in js_code.splitlines():
             line_s = line.strip()
@@ -45,28 +44,148 @@ class BookmarkletGenerator:
                 continue
             lines.append(line)
         cleaned = "\n".join(lines)
-
-        # Remove multi-line comments
         cleaned = re.sub(r'/\*[\s\S]*?\*/', '', cleaned)
-
-        # Compress consecutive whitespaces while preserving string integrity
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
         return cleaned
 
+    def get_bookmarklet_action_code(self) -> str:
+        """Generates the direct, self-executing bookmarklet action script."""
+        return """(function(){
+  try {
+    var host = window.location.hostname;
+    var sn = host.indexOf('chatgpt') !== -1 ? 'ChatGPT' : host.indexOf('claude') !== -1 ? 'Claude' : host.indexOf('deepseek') !== -1 ? 'DeepSeek' : 'AI';
+    var msgs = [], codes = [];
+    
+    if (host.indexOf('chatgpt') !== -1) {
+      var turns = document.querySelectorAll('[data-message-author-role], article, div[data-testid*="conversation-turn"]');
+      turns.forEach(function(t) {
+        var role = t.getAttribute('data-message-author-role') || (t.textContent.indexOf('You said') !== -1 ? 'user' : 'assistant');
+        var textEl = t.querySelector('.markdown') || t.querySelector('[class*="prose"]') || t;
+        var text = (textEl && textEl.innerText) ? textEl.innerText.trim() : '';
+        t.querySelectorAll('pre code, pre').forEach(function(c) {
+          var ct = c.innerText ? c.innerText.trim() : '';
+          var langMatch = c.className ? c.className.match(/language-(\\w+)/) : null;
+          var lang = langMatch ? langMatch[1] : 'code';
+          if (ct && ct.length > 5) codes.push({ lang: lang, content: ct });
+        });
+        if (text) msgs.push({ role: role, text: text });
+      });
+    } else if (host.indexOf('claude') !== -1) {
+      document.querySelectorAll('.human-turn, [data-testid*="human"], div[data-is-streaming="false"]').forEach(function(el) {
+        var role = (el.classList.contains('human-turn') || (el.getAttribute('data-testid') && el.getAttribute('data-testid').indexOf('human') !== -1)) ? 'user' : 'assistant';
+        el.querySelectorAll('pre code, pre').forEach(function(c) {
+          var ct = c.innerText ? c.innerText.trim() : '';
+          var langMatch = c.className ? c.className.match(/language-(\\w+)/) : null;
+          var lang = langMatch ? langMatch[1] : 'code';
+          if (ct) codes.push({ lang: lang, content: ct });
+        });
+        var text = el.innerText ? el.innerText.trim() : '';
+        if (text) msgs.push({ role: role, text: text });
+      });
+    } else {
+      document.querySelectorAll('div, p, pre').forEach(function(el) {
+        var t = el.innerText ? el.innerText.trim() : '';
+        if (t && t.length > 30) msgs.push({ role: 'context', text: t });
+      });
+    }
+
+    if (msgs.length === 0) {
+      alert('Continuum: No active conversation detected on this page.');
+      return;
+    }
+
+    var seen = {}, uniqueCodes = [];
+    for (var i = codes.length - 1; i >= 0; i--) {
+      var h = codes[i].lang + '::' + codes[i].content.slice(0, 100);
+      if (!seen[h]) { seen[h] = true; uniqueCodes.unshift(codes[i]); }
+    }
+
+    var firstUser = null, lastUser = null;
+    for (var j = 0; j < msgs.length; j++) {
+      if (msgs[j].role === 'user') { firstUser = msgs[j]; break; }
+    }
+    for (var k = msgs.length - 1; k >= 0; k--) {
+      if (msgs[k].role === 'user') { lastUser = msgs[k]; break; }
+    }
+    var recent = msgs.slice(-4);
+
+    var out = [];
+    out.push('🔁 CONTINUUM HANDOFF — Continuing from ' + sn + ' to Claude');
+    out.push('<project_continuation_context>');
+    out.push('  <metadata>');
+    out.push('    <origin_model>' + sn + '</origin_model>');
+    out.push('    <target_model>Claude</target_model>');
+    out.push('    <handoff_reason>Context window / token exhaustion</handoff_reason>');
+    out.push('    <instruction>Pick up software engineering implementation from ground truth state. Do NOT restart from scratch.</instruction>');
+    out.push('  </metadata>');
+    out.push('');
+    if (firstUser) {
+      out.push('  <initial_requirements>');
+      out.push('    ' + firstUser.text.slice(0, 500));
+      out.push('  </initial_requirements>');
+      out.push('');
+    }
+    if (uniqueCodes.length > 0) {
+      out.push('  <verified_code_artifacts>');
+      for (var ci = 0; ci < uniqueCodes.length; ci++) {
+        var b = uniqueCodes[ci];
+        out.push('    <artifact index="' + (ci + 1) + '" language="' + b.lang + '">');
+        out.push('```' + b.lang);
+        out.push(b.content);
+        out.push('```');
+        out.push('    </artifact>');
+      }
+      out.push('  </verified_code_artifacts>');
+      out.push('');
+    }
+    out.push('  <recent_turns>');
+    for (var ri = 0; ri < recent.length; ri++) {
+      var m = recent[ri];
+      out.push('    <turn role="' + m.role + '">' + m.text.slice(0, 400) + '</turn>');
+    }
+    out.push('  </recent_turns>');
+    out.push('');
+    if (lastUser) {
+      out.push('  <immediate_task>');
+      out.push('    ' + lastUser.text.slice(0, 400));
+      out.push('  </immediate_task>');
+    }
+    out.push('</project_continuation_context>');
+    out.push('');
+    out.push('Continue implementation immediately. Ground all reasoning in the verified code artifacts above.');
+
+    var payload = out.join('\\n');
+
+    var ta = document.createElement('textarea');
+    ta.value = payload;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+
+    var toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:2147483647;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;padding:14px 20px;border-radius:12px;font-size:14px;font-weight:bold;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:sans-serif;';
+    toast.innerHTML = '&#x2B22; Continuum: Handoff copied! Ready to paste into Claude (Ctrl+V)';
+    document.body.appendChild(toast);
+    setTimeout(function(){ toast.remove(); }, 4000);
+  } catch(e) {
+    alert('Continuum Error: ' + e.message);
+  }
+})();"""
+
     def generate_bookmarklet_uri(self) -> str:
         """Encodes the minified JS into a `javascript:(...)` URI."""
-        raw_js = self.get_javascript_code()
+        raw_js = self.get_bookmarklet_action_code()
         minified = self.minify(raw_js)
-        # Wrap in IIFE if not already enclosed
-        if not minified.startswith("javascript:"):
-            # Percent-encode special characters for bookmark URL standards
-            encoded = urllib.parse.quote(minified, safe="();{}=:+-*/!_.,'\"~[]$@<>?&|#^%`")
-            return f"javascript:{encoded}"
-        return minified
+        encoded = urllib.parse.quote(minified)
+        return f"javascript:{encoded}"
 
     def generate_installer_html(self, output_path: Optional[str] = None) -> str:
         """Generates an interactive drag-and-drop HTML installation page."""
         bookmarklet_uri = self.generate_bookmarklet_uri()
+        
         html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -114,23 +233,25 @@ class BookmarkletGenerator:
       border: 2px dashed #6366f1;
       background: rgba(99, 102, 241, 0.08);
       border-radius: 12px;
-      padding: 24px;
+      padding: 28px 16px;
       margin-bottom: 24px;
     }}
     .bookmarklet-button {{
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 10px;
       background: linear-gradient(135deg, #6366f1, #4f46e5);
-      color: #ffffff;
+      color: #ffffff !important;
       font-weight: 700;
-      font-size: 15px;
+      font-size: 16px;
       padding: 14px 28px;
       border-radius: 9999px;
       text-decoration: none;
       cursor: grab;
       box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
       transition: transform 0.2s, box-shadow 0.2s;
+      user-select: none;
     }}
     .bookmarklet-button:hover {{
       transform: translateY(-2px);
@@ -158,23 +279,23 @@ class BookmarkletGenerator:
 </head>
 <body>
   <div class="card">
-    <div class="logo">&#8734;</div>
+    <div class="logo">&#x2B22;</div>
     <h1>Continuum Bookmarklet</h1>
-    <p>Zero-install, cross-platform AI chat handoff tool. Works on Chrome, Edge, Safari, Firefox, and mobile browsers without extensions.</p>
+    <p>Zero-install, cross-platform AI chat handoff tool. Works on Chrome, Edge, Safari, Firefox without extensions.</p>
 
     <div class="drag-zone">
       <a class="bookmarklet-button" href="{bookmarklet_uri}" title="Drag this button to your Bookmarks Bar">
-        <span>&#8734;</span> Drag me to Bookmarks Bar
+        &#x2B22; Continuum Handoff
       </a>
     </div>
 
     <div class="steps">
       <strong>How to Install & Use:</strong>
       <ol>
-        <li>Make sure your browser's <strong>Bookmarks Bar</strong> is visible (<code>Ctrl+Shift+B</code> or <code>Cmd+Shift+B</code>).</li>
-        <li>Drag the purple button above directly into your Bookmarks Bar.</li>
-        <li>Open any active conversation on ChatGPT, Claude, Gemini, or DeepSeek.</li>
-        <li>Click <strong>&#8734; Drag me to Bookmarks Bar</strong> in your bookmark bar to trigger instant context handoff!</li>
+        <li>Make sure your browser's <strong>Bookmarks Bar</strong> is visible (<code>Ctrl+Shift+B</code>).</li>
+        <li><strong>Drag</strong> the purple button above directly into your Bookmarks Bar.</li>
+        <li>Open your active conversation on ChatGPT or Claude.</li>
+        <li>Click <strong>⬢ Continuum Handoff</strong> in your Bookmarks Bar to extract and copy the conversation handoff!</li>
       </ol>
     </div>
   </div>

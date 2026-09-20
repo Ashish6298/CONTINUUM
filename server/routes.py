@@ -181,12 +181,21 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             self.handle_get_health()
             return
 
-        # 3. Public browser companion userscript distribution (/continuum.user.js)
+        if path == "/api/open-extensions":
+            import webbrowser
+            ext_url = "chrome://extensions/?id=dhdgffkkebhmkfjojejmpbldmpobfkfo"
+            try:
+                webbrowser.open(ext_url)
+            except Exception:
+                pass
+            self._send_json_response({"status": "opened", "url": ext_url})
+            return
+
+        # 3. Public browser companion userscript distribution (/continuum.user.js and /install)
         if path == "/continuum.user.js":
             userjs_path = Path(__file__).parent.parent / "browser" / "continuum.user.js"
             if userjs_path.is_file():
                 content = userjs_path.read_text(encoding="utf-8")
-                # Inject active auth token if auth manager is active
                 if self.auth_manager:
                     token = self.auth_manager.get_token() or ""
                     if token:
@@ -194,9 +203,125 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                             "defaultToken: '',",
                             f"defaultToken: '{token}',"
                         )
-                self._set_headers(200, "application/javascript; charset=utf-8")
+                self._set_headers(200, "text/javascript; charset=utf-8")
                 self.wfile.write(content.encode("utf-8"))
                 return
+
+        if path in ("/install", "/install.html"):
+            token = (self.auth_manager.get_token() if self.auth_manager else "") or ""
+            install_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Continuum — Browser Companion Setup</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; box-sizing: border-box; }}
+    .card {{ background: rgba(17, 24, 39, 0.95); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 16px; padding: 36px; max-width: 580px; width: 100%; text-align: center; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6); }}
+    .logo {{ font-size: 36px; color: #818cf8; margin-bottom: 6px; }}
+    h1 {{ font-size: 22px; margin: 0 0 10px 0; }}
+    p {{ color: #94a3b8; font-size: 13.5px; line-height: 1.5; margin: 0 0 20px 0; }}
+    
+    .alert-box {{
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: left;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 22px;
+      color: #fde68a;
+    }}
+    .alert-box strong {{ color: #fef08a; display: block; margin-bottom: 4px; font-size: 14px; }}
+    .alert-box code {{ background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; color: #fff; font-family: monospace; }}
+
+    .btn {{ display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; font-weight: 700; font-size: 15px; padding: 14px 20px; border-radius: 10px; text-decoration: none; cursor: pointer; transition: transform .15s, opacity .15s; border: none; margin-bottom: 12px; }}
+    .btn:hover {{ transform: translateY(-2px); opacity: 0.95; }}
+    .btn-primary {{ background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35); }}
+    .btn-warning {{ background: linear-gradient(135deg, #d97706, #b45309); color: #fff; font-size: 14px; box-shadow: 0 6px 18px rgba(217, 119, 6, 0.35); }}
+    .btn-secondary {{ background: rgba(255, 255, 255, 0.08); color: #cbd5e1; border: 1px solid rgba(255, 255, 255, 0.12); font-size: 13px; font-weight: 600; padding: 11px; }}
+    .btn-secondary:hover {{ background: rgba(255, 255, 255, 0.14); color: #fff; }}
+    
+    .steps {{ text-align: left; background: rgba(10, 15, 28, 0.7); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 16px 20px; font-size: 13px; color: #cbd5e1; margin-top: 16px; }}
+    .steps ol {{ margin: 0; padding-left: 20px; }}
+    .steps li {{ margin-bottom: 8px; }}
+    .steps li:last-child {{ margin-bottom: 0; }}
+    .toast {{ position: fixed; top: 20px; right: 20px; background: #10b981; color: #fff; padding: 12px 18px; border-radius: 8px; font-weight: 600; font-size: 13px; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">&#x2B22;</div>
+    <h1>Continuum AI Companion Setup</h1>
+    <p>Enable 1-click cross-model handoff (ChatGPT &rarr; Claude &rarr; Gemini) with zero context loss.</p>
+
+    <div class="alert-box">
+      <strong>&#x26A0;&#xFE0F; Step 1: Enable Browser Permission (Chrome & Brave)</strong>
+      Chromium requires enabling <strong>Allow User Scripts</strong> in extension settings:
+      <div style="margin: 10px 0; background: rgba(0,0,0,0.35); padding: 10px 12px; border-radius: 8px; font-family: monospace; font-size: 12.5px; word-break: break-all; color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+        <span>chrome://extensions/?id=dhdgffkkebhmkfjojejmpbldmpobfkfo</span>
+        <button onclick="copyExtAddress()" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap;">
+          &#x1F4CB; Copy
+        </button>
+      </div>
+      <ol style="margin: 6px 0 0 16px; padding: 0; font-size: 12.5px; color: #fef3c7; line-height: 1.6;">
+        <li>Copy the URL above and paste it into a <strong>new tab</strong>.</li>
+        <li>Scroll down to <strong>Allow User Scripts</strong> and toggle it <strong>ON</strong>.</li>
+      </ol>
+    </div>
+
+    <div style="margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #cbd5e1; text-align: left;">
+      Step 2: Install Companion Script
+    </div>
+
+    <a class="btn btn-primary" href="/continuum.user.js?token={token}">
+      &#x26A1; 1-Click Install / Update Script
+    </a>
+
+    <button class="btn btn-secondary" onclick="copyScript()">
+      &#x1F4CB; Copy Script to Clipboard (Fallback)
+    </button>
+
+    <div class="steps">
+      <strong>How to Use Continuum Handoff:</strong>
+      <ol>
+        <li>Open <strong><a href="https://chatgpt.com" target="_blank" style="color:#818cf8;">chatgpt.com</a></strong> or <strong><a href="https://claude.ai" target="_blank" style="color:#818cf8;">claude.ai</a></strong>.</li>
+        <li>Press <strong>Alt + C</strong> (or click <strong>&#x2B22; Continuum</strong> in bottom-right corner).</li>
+        <li>Click <strong>Claude &rarr;</strong> to continue your conversation with full context and verified code!</li>
+      </ol>
+    </div>
+  </div>
+  <div class="toast" id="toast">&#x2713; Script copied to clipboard! Paste into Tampermonkey if needed.</div>
+
+  <script>
+    function copyExtAddress() {{
+      const extUrl = 'chrome://extensions/?id=dhdgffkkebhmkfjojejmpbldmpobfkfo';
+      navigator.clipboard.writeText(extUrl).catch(() => {{}});
+      const t = document.getElementById('toast');
+      t.innerHTML = '&#x1F4CB; Address copied! Open a new tab, paste, and turn ON "Allow User Scripts".';
+      t.style.display = 'block';
+      setTimeout(() => {{ t.style.display = 'none'; }}, 5000);
+    }}
+
+    async function copyScript() {{
+      try {{
+        const res = await fetch('/continuum.user.js?token={token}');
+        const text = await res.text();
+        await navigator.clipboard.writeText(text);
+        const t = document.getElementById('toast');
+        t.innerHTML = '&#x2713; Script copied to clipboard! Paste into Tampermonkey if needed.';
+        t.style.display = 'block';
+        setTimeout(() => {{ t.style.display = 'none'; }}, 3000);
+      }} catch (e) {{
+        alert('Could not copy automatically: ' + e);
+      }}
+    }}
+  </script>
+</body>
+</html>"""
+            self._set_headers(200, "text/html; charset=utf-8")
+            self.wfile.write(install_html.encode("utf-8"))
+            return
 
         # 4. Static assets serving for Web Dashboard SPA (index.html, dashboard.css, dashboard.js, etc.)
         asset_result = self.static_manager.resolve_asset(raw_path)

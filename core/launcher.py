@@ -12,6 +12,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Dict, List, Optional, Tuple
 
 
@@ -86,9 +87,12 @@ class BrowserLauncher:
     def build_launch_command(self, browser_exe: Path, target_model: str = "chatgpt", extra_args: Optional[List[str]] = None) -> List[str]:
         """Constructs the subprocess invocation command."""
         url = TARGET_URLS.get(target_model.lower(), TARGET_URLS["chatgpt"])
+        user_data = Path(os.environ.get("LOCALAPPDATA", tempfile.gettempdir())) / "Continuum" / "browser_profile"
+        user_data.mkdir(parents=True, exist_ok=True)
         cmd = [
             str(browser_exe),
             f"--load-extension={str(self.extension_path)}",
+            f"--user-data-dir={str(user_data)}",
             "--new-window",
             url
         ]

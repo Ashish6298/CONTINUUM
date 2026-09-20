@@ -90,6 +90,15 @@ def build_parser() -> argparse.ArgumentParser:
     from cli.bookmarklet import register_bookmarklet_subcommand
     register_bookmarklet_subcommand(subparsers)
 
+    # 10. browser & setup (1-Click Automated Tampermonkey / Companion setup)
+    browser_parser = subparsers.add_parser("browser", help="Manage browser companion integration and 1-click install")
+    browser_parser.add_argument("--install", action="store_true", help="Launch 1-click Tampermonkey / userscript installer in default browser")
+    browser_parser.add_argument("--path", default=".", help="Workspace root path")
+
+    setup_parser = subparsers.add_parser("setup", help="One-command automated environment setup and browser integration")
+    setup_parser.add_argument("--browser", action="store_true", help="Launch 1-click browser companion installer")
+    setup_parser.add_argument("--path", default=".", help="Workspace root path")
+
     return parser
 
 
@@ -411,6 +420,56 @@ def handle_launch(args: argparse.Namespace) -> int:
         return 1
 
 
+def handle_browser(args: argparse.Namespace) -> int:
+    """Handles `continuum browser` command for automated Tampermonkey & Companion installation."""
+    import webbrowser
+    import time
+    from server.daemon import ContinuumHttpDaemon
+    from server.auth import SessionAuthManager
+
+    workspace_root = Path(getattr(args, "path", ".")).resolve()
+    print("================================================================================")
+    print("CONTINUUM AUTOMATED BROWSER COMPANION INSTALLER")
+    print("================================================================================")
+    
+    # 1. Start or find existing daemon
+    status = ContinuumHttpDaemon.get_saved_status(str(workspace_root))
+    if not status.is_running:
+        print(f"[*] Starting local Continuum server on workspace: {workspace_root}...")
+        daemon = ContinuumHttpDaemon(workspace_root=str(workspace_root), default_port=8765, require_auth=True)
+        status = daemon.start(run_in_background=True)
+    
+    auth_mgr = SessionAuthManager(workspace_root)
+    token = auth_mgr.get_token() or ""
+    server_url = status.server_url or "http://127.0.0.1:8765"
+    install_url = f"{server_url}/install?token={token}"
+    tampermonkey_store_url = "https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo"
+
+    print(f"[OK] Local Continuum server is running at {server_url}")
+    print(f"[*] Opening Tampermonkey Chrome Store page to install/verify Tampermonkey...")
+    webbrowser.open(tampermonkey_store_url)
+    
+    print(f"[*] Opening interactive 1-click companion installer in 3 seconds: {install_url}")
+    time.sleep(3)
+    webbrowser.open(install_url)
+
+    print("\n--------------------------------------------------------------------------------")
+    print("INSTRUCTIONS:")
+    print("1. On the Chrome Web Store tab: Click 'Add to Chrome' / 'Add to Brave'.")
+    print("2. On the Setup page: Click '1-Click Install Script' (or 'Copy Script to Clipboard').")
+    print("3. Open ChatGPT (https://chatgpt.com), click ⬢ Continuum in the bottom right (or press Alt+C),")
+    print("   and click 'Claude →' to test the instant cross-model handoff!")
+    print("--------------------------------------------------------------------------------")
+    print("(*) Local installer server is active. Press Ctrl+C once installed to return to terminal.\n")
+
+    try:
+        while True:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("\n[OK] Setup complete! Exiting installer server.")
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint."""
     parser = build_parser()
@@ -433,6 +492,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         "serve": handle_serve,
         "launch": handle_launch,
         "bookmarklet": handle_bookmarklet,
+        "browser": handle_browser,
+        "setup": handle_browser,
     }
 
     handler = handlers.get(args.command)
