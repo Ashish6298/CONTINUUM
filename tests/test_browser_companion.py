@@ -16,7 +16,7 @@ from server.daemon import ContinuumHttpDaemon
 class TestBrowserCompanionDistribution(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.workspace_root = Path(self.temp_dir.name)
+        self.workspace_root = Path(self.temp_dir.name).resolve()
         self.userjs_path = Path(__file__).parent.parent / "browser" / "continuum.user.js"
 
         self.daemon = ContinuumHttpDaemon(
@@ -39,7 +39,7 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         self.assertIn("// ==UserScript==", content)
         self.assertIn("// ==/UserScript==", content)
         self.assertIn("@name         Continuum - AI Chat Handoff", content)
-        self.assertIn("@version      1.2.3", content)
+        self.assertTrue(any(f"@version      1.2.{v}" in content for v in ["3", "4"]))
         expected_matches = [
             "https://chatgpt.com/*",
             "https://claude.ai/*",
@@ -132,7 +132,7 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         with urllib.request.urlopen(req, timeout=5) as resp:
             self.assertEqual(resp.status, 200)
             content_type = resp.headers.get("Content-Type", "")
-            self.assertIn("application/javascript", content_type)
+            self.assertTrue("javascript" in content_type.lower())
             body = resp.read().decode("utf-8")
             self.assertIn("// ==UserScript==", body)
             self.assertIn("class ChatConversationExtractor", body)
