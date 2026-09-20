@@ -203,7 +203,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                             "defaultToken: '',",
                             f"defaultToken: '{token}',"
                         )
-                self._set_headers(200, "text/javascript; charset=utf-8")
+                self._set_headers(200, "application/javascript; charset=utf-8")
                 self.wfile.write(content.encode("utf-8"))
                 return
 

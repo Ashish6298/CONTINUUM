@@ -28,7 +28,7 @@ class TestRestApiEndpoints(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.workspace_root = Path(self.temp_dir.name)
+        self.workspace_root = Path(self.temp_dir.name).resolve()
 
         # Create sample workspace files
         self.app_file = self.workspace_root / "app.py"
@@ -80,14 +80,14 @@ class TestRestApiEndpoints(unittest.TestCase):
         data = self._get_json("/api/status")
         self.assertEqual(data.get("status"), "online")
         self.assertEqual(data.get("version"), "1.2.0-dev")
-        self.assertEqual(data.get("workspace_root"), str(self.workspace_root))
+        self.assertEqual(Path(data.get("workspace_root", "")).resolve(), self.workspace_root)
         self.assertIn("server_started_at", data)
         self.assertIn("timestamp", data)
 
     def test_get_context_endpoint(self) -> None:
         """Test GET /api/context executes analysis and computes token budgets."""
         data = self._get_json("/api/context")
-        self.assertEqual(data.get("workspace_root"), str(self.workspace_root))
+        self.assertEqual(Path(data.get("workspace_root", "")).resolve(), self.workspace_root)
         self.assertIn("token_budget_estimation", data)
         self.assertGreater(data["token_budget_estimation"]["estimated_tokens"], 0)
         self.assertIn("languages", data)

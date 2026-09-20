@@ -284,7 +284,7 @@ class BookmarkletGenerator:
     <p>Zero-install, cross-platform AI chat handoff tool. Works on Chrome, Edge, Safari, Firefox without extensions.</p>
 
     <div class="drag-zone">
-      <a class="bookmarklet-button" href="{bookmarklet_uri}" title="Drag this button to your Bookmarks Bar">
+      <a class="bookmarklet-button" href="{bookmarklet_uri}" title="Drag me to Bookmarks Bar">
         &#x2B22; Continuum Handoff
       </a>
     </div>
