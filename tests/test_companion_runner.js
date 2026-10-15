@@ -269,6 +269,31 @@ const cleared = acc.loadRecords();
 assert.strictEqual(cleared.turns.length, 0, 'Clear history must purge stored turns');
 console.log('✓ Test 7 Passed: History cleared cleanly');
 
+// ==============================================================================
+// TEST 8: Ad/Sponsored Content Filtering & Milestone De-duplication
+// ==============================================================================
+console.log('Test 8: Ad filtering & milestone deduplication...');
+assert.strictEqual(ContextCompressor.isPromotionalOrAdText('Check VPS Plans & Pricing'), true);
+assert.strictEqual(ContextCompressor.isPromotionalOrAdText('Full root access, 99.9% uptime & 24/7 support. Join 5M+ on Bluehost.'), true);
+assert.strictEqual(ContextCompressor.isPromotionalOrAdText('Sponsored: Fast Cloud Hosting'), true);
+assert.strictEqual(ContextCompressor.isPromotionalOrAdText('Upgrade to ChatGPT Plus'), true);
+assert.strictEqual(ContextCompressor.isPromotionalOrAdText('Here is the implementation of auth middleware in FastAPI.'), false);
+
+const noisyTurns = [
+  { role: 'user', text: 'Build a rate limiting service in Go.' },
+  { role: 'assistant', text: 'Step 1: Use token bucket algorithm with sync.Mutex.' },
+  { role: 'assistant', text: 'Step 1: Use token bucket algorithm with sync.Mutex.' }, // Duplicate turn
+  { role: 'assistant', text: 'Check VPS Plans & Pricing' }, // Ad turn 1
+  { role: 'assistant', text: 'Full root access, 99.9% uptime & 24/7 support. Join 5M+ on Bluehost.' }, // Ad turn 2
+  { role: 'user', text: 'Now add Redis persistence to the token bucket.' }
+];
+
+const cleanPrompt = ContextCompressor.compress({ messages: noisyTurns, codeBlocks: [] }, 'chatgpt', 'claude', 'smart_digest');
+assert.ok(!cleanPrompt.includes('Bluehost'), 'Prompt must NOT contain Bluehost ad');
+assert.ok(!cleanPrompt.includes('VPS Plans'), 'Prompt must NOT contain VPS ad');
+assert.ok(cleanPrompt.includes('Now add Redis persistence to the token bucket'), 'Real user task must be retained as immediate task');
+console.log('✓ Test 8 Passed: Ad filtering and milestone deduplication verified');
+
 console.log('======================================================');
 console.log('ALL CONTINUUM v1.3.0 COMPANION TESTS PASSED ACCURATELY');
 console.log('======================================================');

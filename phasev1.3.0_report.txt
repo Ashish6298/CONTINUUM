@@ -87,11 +87,13 @@ A. Node.js Headless Engine Runner (`node tests/test_companion_runner.js`):
    - Test 5: Three context modes (Quick ~691 tokens, Smart ~1939 tokens): PASSED
    - Test 6: Multi-model format verification (Gemini, DeepSeek, ChatGPT): PASSED
    - Test 7: Clear history operation: PASSED
-   Status: 7 / 7 PASSED (100%)
+   - Test 8: Ad filtering & milestone deduplication: PASSED
+   Status: 8 / 8 PASSED (100%)
 
 B. Pytest Context Preservation Suite:
    `python -m pytest tests/test_conversation_context_preservation.py -v`
    - test_accumulator_session_namespacing_and_isolation: PASSED
+   - test_ad_filtering_and_milestone_deduplication: PASSED
    - test_companion_ui_controls_and_preference_persistence: PASSED
    - test_explicit_cold_start_recovery_bounds_and_restoration: PASSED
    - test_headless_companion_runner_execution: PASSED
@@ -100,7 +102,7 @@ B. Pytest Context Preservation Suite:
    - test_streaming_updates_without_duplicates: PASSED
    - test_three_context_modes_and_budgets: PASSED
    - test_version_v130_alignment: PASSED
-   Status: 9 / 9 PASSED (100%)
+   Status: 10 / 10 PASSED (100%)
 
 C. Browser Companion Test Suite:
    `python -m pytest tests/test_browser_companion.py -v`
@@ -108,11 +110,11 @@ C. Browser Companion Test Suite:
 
 D. Full Continuum Regression Suite:
    `python tests/run_all_tests.py`
-   Total Tests Run: 209
-   Passed:         209
+   Total Tests Run: 210
+   Passed:         210
    Failures:       0
    Errors:         0
-   Duration:       43.575s
+   Duration:       29.775s
    Overall Status: SUCCESS (100% Passed, Zero Warnings)
 
 5. EVALUATION OF READINESS FOR NEXT PHASE

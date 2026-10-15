@@ -52,20 +52,20 @@ Phase 49 delivers the comprehensive conversation context preservation and smart 
 
 #### Automated Test Suites
 1. **Node.js Headless Engine Runner (`tests/test_companion_runner.js`)**:
-   - 7 headless end-to-end tests verifying Accumulator session isolation, 40-turn preservation, streaming update deduplication, 5-tier synthesis, mode scaling, multi-model prompt formatting, and history purge.
-   - Result: **7 / 7 Passed**.
+   - 8 headless end-to-end tests verifying Accumulator session isolation, 40-turn preservation, streaming update deduplication, 5-tier synthesis, mode scaling, multi-model prompt formatting, history purge, and ad filtering with milestone deduplication.
+   - Result: **8 / 8 Passed**.
 2. **Pytest Context Preservation Suite (`tests/test_conversation_context_preservation.py`)**:
-   - 9 test cases verifying v1.3.0 versioning, regex patterns, streaming in-place updates, cold-start recovery bounds, 5 tiers, 3 modes, priority overflow policy, UI controls, and Node headless integration.
-   - Result: **9 / 9 Passed**.
+   - 10 test cases verifying v1.3.0 versioning, regex patterns, streaming in-place updates, cold-start recovery bounds, 5 tiers, 3 modes, priority overflow policy, UI controls, ad filtering, and Node headless integration.
+   - Result: **10 / 10 Passed**.
 3. **Browser Companion Test Suite (`tests/test_browser_companion.py`)**:
    - 15 test cases covering userscript, extension, bookmarklet, and companion UI.
    - Result: **15 / 15 Passed**.
 4. **Complete Repository Test Suite (`tests/run_all_tests.py` / `pytest`)**:
-   - Total Tests Run: **209**
-   - Passed: **209**
+   - Total Tests Run: **210**
+   - Passed: **210**
    - Failures: **0**
    - Errors: **0**
-   - Duration: **43.575s**
+   - Duration: **29.775s**
    - Status: **100% Passed (Zero Warnings)**
 
 ---

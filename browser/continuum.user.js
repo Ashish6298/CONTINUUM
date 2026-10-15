@@ -184,8 +184,9 @@
       });
 
       const streamingNow = this.isStreaming();
+      const validTurns = (scrapedTurns || []).filter(nt => nt && nt.text && !ContextCompressor.isPromotionalOrAdText(nt.text));
 
-      scrapedTurns.forEach((nt, idx) => {
+      validTurns.forEach((nt, idx) => {
         const turnId = nt.id || `${nt.role}::${idx}::${(nt.text || '').slice(0, 35)}`;
         if (turnMap.has(turnId)) {
           const existing = turnMap.get(turnId);
@@ -478,7 +479,7 @@
             }
           });
 
-          if (text) {
+          if (text && !ContextCompressor.isPromotionalOrAdText(text)) {
             messages.push({
               role: role || 'assistant',
               text,
@@ -631,8 +632,23 @@
       return Math.ceil(text.length / 3.8);
     }
 
+    static isPromotionalOrAdText(text) {
+      if (!text || typeof text !== 'string') return false;
+      const t = text.trim();
+      if (!t) return false;
+      const adPatterns = [
+        /^(?:check|view|browse)\s+[\w\s-]*\b(?:plans?\b|pricing\b|hosting\b|domain)/i,
+        /\b(?:join\s+\d+[\w+]*\s+on\s+bluehost|bluehost|godaddy|hostinger|namecheap)\b/i,
+        /^(?:sponsored|advertisement|promoted)\b/i,
+        /^(?:upgrade\s+to\s+)?chatgpt\s+(?:plus|team|pro)\b/i,
+        /^upgrade\s+to\s+pro\b/i
+      ];
+      return adPatterns.some(p => p.test(t));
+    }
+
     static compress(extracted, sourceModel, targetModel, mode = 'smart_digest') {
-      const { messages = [], codeBlocks = [], stats = {} } = extracted || {};
+      const { messages: rawMessages = [], codeBlocks = [], stats = {} } = extracted || {};
+      const messages = rawMessages.filter(m => !this.isPromotionalOrAdText(m.text));
       const sn = this._label(sourceModel);
       const tn = this._label(targetModel);
 
@@ -684,19 +700,29 @@
       if (!turns || turns.length === 0 || mode === 'quick_task') return [];
 
       const milestones = [];
+      const seenBullets = new Set();
+
       turns.forEach((t, i) => {
         const role = t.role === 'user' ? 'User' : 'Assistant';
         const txt = (t.text || '').trim();
-        if (!txt) return;
+        if (!txt || this.isPromotionalOrAdText(txt)) return;
 
         let bullet = '';
         if (t.role === 'user') {
           bullet = txt.length > 250 ? txt.slice(0, 250) + '...' : txt;
         } else {
-          const lines = txt.split('\n').filter(l => l.trim().length > 0 && !l.startsWith('```'));
+          const lines = txt.split('\n').filter(l => l.trim().length > 0 && !l.startsWith('```') && !this.isPromotionalOrAdText(l));
           const keyLine = lines.find(l => l.length > 20) || lines[0] || 'Implemented component update.';
           bullet = keyLine.length > 250 ? keyLine.slice(0, 250) + '...' : keyLine;
         }
+
+        // De-duplicate repeated or consecutive identical milestones
+        const normKey = bullet.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 80);
+        if (normKey.length > 15) {
+          if (seenBullets.has(normKey)) return;
+          seenBullets.add(normKey);
+        }
+
         milestones.push({ turnIndex: i + 1, role, text: bullet, hasCode: !!t.hasCode });
       });
 

@@ -138,6 +138,13 @@ class TestConversationContextPreservationV130(unittest.TestCase):
         )
         self.assertIn("ALL CONTINUUM v1.3.0 COMPANION TESTS PASSED ACCURATELY", result.stdout)
 
+    def test_ad_filtering_and_milestone_deduplication(self):
+        """Verify isPromotionalOrAdText and milestone deduplication exist in userscript and extension."""
+        self.assertIn("isPromotionalOrAdText", self.userjs_content)
+        self.assertIn("isPromotionalOrAdText", self.cs_content)
+        self.assertIn("bluehost", self.userjs_content.lower())
+        self.assertIn("seenbullets", self.userjs_content.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
