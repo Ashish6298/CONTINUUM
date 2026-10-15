@@ -20,9 +20,9 @@
 <table>
   <tr>
     <td align="center"><a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=plastic&logo=python&logoColor=white" alt="Python 3.10+"/></a></td>
-    <td align="center"><a href="https://pypi.org/project/continuum-toolkit/"><img src="https://img.shields.io/badge/PyPI-v1.2.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
+    <td align="center"><a href="https://pypi.org/project/continuum-toolkit/"><img src="https://img.shields.io/badge/PyPI-v1.3.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
     <td align="center"><a href="https://pepy.tech/projects/continuum-toolkit"><img src="https://static.pepy.tech/personalized-badge/continuum-toolkit?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads"/></a></td>
-    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-197%2F197_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
+    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-210%2F210_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
   </tr>
   <tr>
     <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Engine-7F77DD?style=plastic&logo=diagramsdotnet&logoColor=white" alt="3-State Architecture"/></a></td>
@@ -42,7 +42,8 @@
 # SYSTEM NAVIGATION MAP
  ├── <b>[01] FOUNDATION & BENCHMARK</b>
  │    ├── ❯ <a href="#what-is-continuum"><b>Overview & Core Problem</b></a>
- │    ├── ❯ <a href="#whats-new-in-v120"><b>🚀 What's New in v1.2.0 (Browser Companion & Web Suite)</b></a>
+ │    ├── ❯ <a href="#whats-new-in-v130"><b>🚀 What's New in v1.3.0 (Context Preservation & Smart Digest)</b></a>
+ │    ├── ❯ <a href="#whats-new-in-v120"><b>What's New in v1.2.0 (Browser Companion & Web Suite)</b></a>
  │    ├── ❯ <a href="#why-continuum-over-chat-summaries"><b>Benchmark: Continuum vs Chat Summaries</b></a>
  │    └── ❯ <a href="#quick-start-guide"><b>1-Command Quickstart Guide</b></a>
  │
@@ -97,6 +98,67 @@
     <td>Background observer daemon paired with non-blocking Git commit hooks, SHA-256 state provenance, corruption self-healing, and 100% local zero telemetry.</td>
   </tr>
 </table>
+
+<a id="whats-new-in-v130"></a>
+## 🚀 What's New in v1.3.0: Conversation Context Preservation & Smart Handoff Suite
+
+> **Continuum v1.3.0** permanently solves the **browser conversation context loss problem** across ChatGPT, Claude, Gemini, and DeepSeek. In earlier versions, long chats suffered from DOM virtualization and tail-slicing that collapsed handoffs to only the last message. v1.3.0 implements the complete **Triad Architecture (A + B + C)** with Smart Digest as default, guaranteeing zero history loss across 500+ turn conversations.
+
+<br/>
+
+<table>
+  <tr>
+    <th width="30%"><b>v1.3.0 Core Pillar</b></th>
+    <th width="70%"><b>Technical Architecture & Capabilities</b></th>
+  </tr>
+  <tr>
+    <td><b>⚡ 5-Tier Smart Digest Engine</b><br/><i>(Approach A)</i></td>
+    <td>
+      Replaces destructive character cuts and arbitrary tail slicing with a structured 5-tier context layout:
+      <ul>
+        <li><b>Tier 1 — Project Goal & Ground Intent</b>: Preserves the user's initial objective, technical stack, and architectural decisions established in Turn 1.</li>
+        <li><b>Tier 2 — Ground Truth Code Artifacts</b>: Deduplicates all generated code blocks into complete files. Cleanly omitted if a chat is purely architectural with no code.</li>
+        <li><b>Tier 3 — Milestone Progression Digest</b>: Chronologically condenses intermediate discussion turns into requirement adjustments and verified milestones.</li>
+        <li><b>Tier 4 — Active Conversation Trail</b>: Preserves recent 6–8 complete turns verbatim with exact error traces and instructions.</li>
+        <li><b>Tier 5 — Immediate Execution Directive</b>: Instructs the destination model on the immediate continuation target and forbids restarting from scratch.</li>
+        <li><b>Priority Overflow Policy</b>: Under token pressure, intermediate milestones condense first; active directives and verified code blocks are <b>never truncated</b>.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td><b>🔄 In-Session Accumulator & Cold Recovery</b><br/><i>(Approach B)</i></td>
+    <td>
+      Turn-by-turn historical capture with multi-platform URL isolation:
+      <ul>
+        <li><b>URL Pattern Isolation</b>: Extracts native conversation UUIDs across ChatGPT (<code>/c/&lt;uuid&gt;</code>), Claude (<code>/chat/&lt;uuid&gt;</code>), Gemini (<code>/(?:app|prompts)/&lt;id&gt;</code>), and DeepSeek (<code>/a/&lt;id&gt;</code>).</li>
+        <li><b>Namespaced Storage</b>: Isolated <code>sessionStorage</code> keys (<code>continuum_chat_v130_${platform}_${id}</code>) with schema v1, bounded to 250 turns.</li>
+        <li><b>Streaming In-Place Updates</b>: Monitors streaming tokens and modifies the active assistant turn in-place without generating duplicate turn entries.</li>
+        <li><b>Bounded Cold-Start Recovery</b>: When DOM virtualization hides earlier turns, displays an incomplete history alert with an explicit <code>[Recover conversation history]</code> button. Executes a bounded upward sweep, pauses for DOM hydration, captures older turns, and restores the user's scroll position. <i>Never auto-scrolls silently.</i></li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td><b>🎛️ Three Context Modes & Live UI</b><br/><i>(Approach C)</i></td>
+    <td>
+      Context mode selector integrated into the floating companion modal (<code>Alt+C</code>):
+      <ul>
+        <li><b><code>⚡ Smart Digest</code> (Default, ~8,000 tokens)</b>: Balanced 5-tier synthesis for standard multi-model handoffs.</li>
+        <li><b><code>📜 Full History</code> (~24,000 tokens)</b>: Comprehensive chronological record of all captured turns verbatim.</li>
+        <li><b><code>🎯 Quick Task</code> (~2,500 tokens)</b>: Lean prompt focused strictly on the latest code snippet and immediate task.</li>
+        <li><b>Preference Persistence</b>: Remembers user's selected mode across browser restarts via <code>localStorage</code>.</li>
+        <li><b>Live Token Estimator & Preview Drawer</b>: Real-time token counter badge (<code>~N tokens</code>) and collapsible prompt preview drawer.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td><b>🧹 Noise & Promotional Blurb Filtering</b></td>
+    <td>
+      <code>isPromotionalOrAdText()</code> automatically detects and strips search ads, sponsored cards, and hosting promos (e.g. <i>"Check VPS Plans & Pricing"</i>, <i>"Join 5M+ on Bluehost"</i>, <i>"Sponsored"</i>, <i>"Upgrade to Plus"</i>) from being ingested into session storage, milestone summaries, and continuation directives. Also deduplicates repeated milestone loops.
+    </td>
+  </tr>
+</table>
+
+<br>
 
 <a id="whats-new-in-v120"></a>
 ## 🚀 What's New in v1.2.0: In-Depth Feature Architecture
@@ -457,10 +519,11 @@ $ continuum daemon stop                    # Gracefully stop the background daem
 <a id="verified-roadmap-all-48-phases"></a>
 ## 🗺️ Architecture Milestones & Verification
 
-Project Continuum v1.2.0 is fully certified with **197 / 197 automated tests passing (100%)** across all core CLI and Browser Companion roadmap phases:
+Project Continuum v1.3.0 is fully certified with **210 / 210 automated tests passing (100%)** across all core CLI, Browser Companion, and Context Preservation roadmap phases:
 - **Milestones 1–8 (Phases 0–23):** Core Engine, AST Extractors, DAG State Graph, Contradiction Ledger, and Omni-Model CLI Handoffs.
 - **Milestones 24–30 (Phases 25–37):** Web Control Dashboard, REST API Daemon, Secret Sanitizer, and Security CORS Guards.
-- **Milestones 31–34 (Phases 38–48):** Browser-to-Browser Cross-Model Handoff Companion, Native Manifest V3 WebExtension (`browser/extension/`), CLI Browser Launcher (`continuum launch`), Zero-Install Bookmarklet (`continuum bookmarklet`), Bi-Directional Code Sync (`/api/workspace/sync`), Multi-Turn Handoff History & Checkpointing (`HandoffCheckpointManager`, `/api/checkpoints`), Automated Browser Companion Test Suite (`tests/test_browser_companion.py`), CLI Launcher Test Suite (`tests/test_cli_launcher.py`), and General Availability Release Validation (`tests/test_ga_validation.py`).
+- **Milestones 31–34 (Phases 38–48):** Browser-to-Browser Cross-Model Handoff Companion, Native Manifest V3 WebExtension (`browser/extension/`), CLI Browser Launcher (`continuum launch`), Zero-Install Bookmarklet (`continuum bookmarklet`), Bi-Directional Code Sync (`/api/workspace/sync`), Multi-Turn Handoff History & Checkpointing (`HandoffCheckpointManager`, `/api/checkpoints`), Automated Browser Companion Test Suite (`tests/test_browser_companion.py`), and General Availability Release Validation (`tests/test_ga_validation.py`).
+- **Milestone 35 (Phase 49):** Conversation Context Preservation & Smart Handoff Suite — In-Session `MutationObserver` Accumulator, URL pattern conversation isolation, streaming in-place updates, explicit bounded cold-start recovery, 5-Tier Smart Digest compression engine, 3 context modes (`smart_digest`, `full_history`, `quick_task`), and ad/promotional content suppression (`tests/test_conversation_context_preservation.py`, `tests/test_companion_runner.js`).
 
 Detailed engineering reports and verification logs are available in [docs/reports/](docs/reports/).
 
@@ -470,7 +533,7 @@ Detailed engineering reports and verification logs are available in [docs/report
 ## 🧪 Testing & Enterprise Security
 
 ```bash
-$ py tests/run_all_tests.py    # 197/197 Passed (100% Test Coverage across all Phases)
+$ py tests/run_all_tests.py    # 210/210 Passed (100% Test Coverage across all 49 Phases)
 ```
 
 ```text
