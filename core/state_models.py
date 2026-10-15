@@ -47,6 +47,7 @@ class AstSymbol:
 @dataclass
 class TestResult:
     """Represents a verifiable test execution result."""
+    __test__ = False
     test_id: str
     name: str
     suite: str
