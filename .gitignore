@@ -8,6 +8,7 @@ project.txt
 project*.txt
 phase.txt — Project Continuum Roadmap to v1.0.0.md
 phase*.txt
+!phasev1.3.0_report.txt
 *.prompt.md
 scratch/
 temp/

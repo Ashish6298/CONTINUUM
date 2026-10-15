@@ -39,7 +39,7 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
         self.assertIn("// ==UserScript==", content)
         self.assertIn("// ==/UserScript==", content)
         self.assertIn("@name         Continuum - AI Chat Handoff", content)
-        self.assertTrue(any(f"@version      1.2.{v}" in content for v in ["3", "4"]))
+        self.assertTrue(any(f"@version      1.2.{v}" in content for v in ["3", "4"]) or "@version      1.3.0" in content)
         expected_matches = [
             "https://chatgpt.com/*",
             "https://claude.ai/*",
@@ -162,7 +162,7 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
 
         manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(manifest_data.get("manifest_version"), 3)
-        self.assertEqual(manifest_data.get("version"), "1.2.0")
+        self.assertIn(manifest_data.get("version"), ["1.2.0", "1.3.0"])
         self.assertIn("storage", manifest_data.get("permissions", []))
         self.assertIn("https://chatgpt.com/*", manifest_data.get("host_permissions", []))
         self.assertIn("https://claude.ai/*", manifest_data.get("host_permissions", []))
@@ -402,6 +402,60 @@ class TestBrowserCompanionDistribution(unittest.TestCase):
             data = json.loads(resp.read().decode("utf-8"))
             self.assertEqual(data.get("status"), "success")
             self.assertEqual(data.get("count"), 3)
+
+    def test_v130_conversation_accumulator_and_session_isolation(self):
+        """Verifies v1.3.0: ConversationAccumulator architecture, platform ID extraction, in-place streaming, and recovery."""
+        content = self.userjs_path.read_text(encoding="utf-8")
+        self.assertIn("class ConversationAccumulator", content)
+        self.assertIn("continuum_chat_v130_", content)
+        self.assertIn("reconcileTurns", content)
+        self.assertIn("isStreaming()", content)
+        self.assertIn("recoverHistory", content)
+        self.assertIn("clearHistory", content)
+        self.assertIn("startNavigationWatcher()", content)
+
+        # Content script must also include ConversationAccumulator
+        ext_cs = (Path(__file__).parent.parent / "browser" / "extension" / "content_script.js").read_text(encoding="utf-8")
+        self.assertIn("class ConversationAccumulator", ext_cs)
+        self.assertIn("continuum_chat_v130_", ext_cs)
+        self.assertIn("reconcileTurns", ext_cs)
+
+    def test_v130_smart_digest_5_tier_engine_and_context_modes(self):
+        """Verifies v1.3.0: ContextCompressor 5-tier architecture, Smart Digest default, Full History, and Quick Task modes."""
+        content = self.userjs_path.read_text(encoding="utf-8")
+        self.assertIn("SMART_DIGEST: 'smart_digest'", content)
+        self.assertIn("FULL_HISTORY: 'full_history'", content)
+        self.assertIn("QUICK_TASK: 'quick_task'", content)
+        self.assertIn("smart_digest: 8000", content)
+        self.assertIn("full_history: 24000", content)
+        self.assertIn("quick_task: 2500", content)
+        self.assertIn("estimateTokens", content)
+        self.assertIn("_generateMilestoneDigest", content)
+
+        # 5 Tier markers in prompts
+        self.assertIn("<initial_requirements>", content)
+        self.assertIn("<verified_code_artifacts>", content)
+        self.assertIn("<milestone_progression_digest>", content)
+        self.assertIn("<recent_conversation_trail>", content)
+        self.assertIn("<immediate_task>", content)
+
+        # Priority overflow policy
+        self.assertIn("Intermediate conversation condensed to maintain token ceiling", content)
+
+    def test_v130_companion_modal_ui_and_recovery_controls(self):
+        """Verifies v1.3.0: Enhanced companion modal with mode selector, telemetry, preview, and cold-start recovery."""
+        content = self.userjs_path.read_text(encoding="utf-8")
+        self.assertIn('class="mode-bar"', content)
+        self.assertIn('data-mode="smart_digest"', content)
+        self.assertIn('data-mode="full_history"', content)
+        self.assertIn('data-mode="quick_task"', content)
+        self.assertIn('id="recoveryBox"', content)
+        self.assertIn('id="btnRecover"', content)
+        self.assertIn("Recover conversation history", content)
+        self.assertIn('id="previewDrawer"', content)
+        self.assertIn('id="btnPreview"', content)
+        self.assertIn('id="btnClearHistory"', content)
+        self.assertIn("continuum_context_mode", content)
 
 
 if __name__ == "__main__":
