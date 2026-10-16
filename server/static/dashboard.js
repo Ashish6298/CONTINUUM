@@ -26,7 +26,20 @@ class ContinuumDashboardApp {
       timelineOrder: 'desc',
       timelineCheckpoints: [],
       timelineTotal: 0,
-      latestCheckpointId: null
+      latestCheckpointId: null,
+      // Search State (Phase 69)
+      searchQuery: '',
+      searchPage: 1,
+      searchLimit: 10,
+      searchTotal: 0,
+      searchFilters: {
+        record_type: '',
+        status: '',
+        activity_type: '',
+        tag: '',
+        collection: '',
+        date_preset: ''
+      }
     };
 
     // Model context window definitions (tokens)
@@ -168,7 +181,29 @@ class ContinuumDashboardApp {
       btnCreateFromOnboarding: document.getElementById('btnCreateFromOnboarding'),
       templateCards: document.querySelectorAll('.template-card'),
       onboardingActivityTitle: document.getElementById('onboardingActivityTitle'),
-      onboardingNextAction: document.getElementById('onboardingNextAction')
+      onboardingNextAction: document.getElementById('onboardingNextAction'),
+      // Unified Search Elements (Phase 69)
+      btnToggleSearch: document.getElementById('btnToggleSearch'),
+      searchCenterView: document.getElementById('searchCenterView'),
+      btnCloseSearchCenter: document.getElementById('btnCloseSearchCenter'),
+      btnRebuildSearchIndex: document.getElementById('btnRebuildSearchIndex'),
+      globalSearchInput: document.getElementById('globalSearchInput'),
+      btnGlobalSearchSubmit: document.getElementById('btnGlobalSearchSubmit'),
+      btnGlobalSearchClear: document.getElementById('btnGlobalSearchClear'),
+      filterRecordType: document.getElementById('filterRecordType'),
+      filterStatus: document.getElementById('filterStatus'),
+      filterType: document.getElementById('filterType'),
+      filterDatePreset: document.getElementById('filterDatePreset'),
+      filterTag: document.getElementById('filterTag'),
+      filterCollection: document.getElementById('filterCollection'),
+      btnResetSearchFilters: document.getElementById('btnResetSearchFilters'),
+      searchResultSummary: document.getElementById('searchResultSummary'),
+      searchPaginationSummary: document.getElementById('searchPaginationSummary'),
+      searchResultsList: document.getElementById('searchResultsList'),
+      searchPagination: document.getElementById('searchPagination'),
+      btnSearchPrevPage: document.getElementById('btnSearchPrevPage'),
+      btnSearchNextPage: document.getElementById('btnSearchNextPage'),
+      searchPageInfo: document.getElementById('searchPageInfo')
     };
   }
 
@@ -291,6 +326,73 @@ class ContinuumDashboardApp {
     this.el.btnCopyMarkdownDiff?.addEventListener('click', () => this.copyMarkdownDiffToClipboard());
     this.el.modalCheckpointDiff?.addEventListener('click', (e) => {
       if (e.target === this.el.modalCheckpointDiff) this.closeDiffModal();
+    });
+
+    // Search Center Events (Phase 69)
+    this.el.btnToggleSearch?.addEventListener('click', () => this.toggleSearchCenter());
+    this.el.btnCloseSearchCenter?.addEventListener('click', () => this.toggleSearchCenter(false));
+    this.el.btnRebuildSearchIndex?.addEventListener('click', () => this.rebuildSearchIndex());
+    this.el.btnGlobalSearchSubmit?.addEventListener('click', () => this.executeSearch(1));
+    this.el.btnGlobalSearchClear?.addEventListener('click', () => this.clearSearch());
+    this.el.btnResetSearchFilters?.addEventListener('click', () => this.resetSearchFilters());
+
+    this.el.globalSearchInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.executeSearch(1);
+      }
+    });
+
+    this.el.filterRecordType?.addEventListener('change', () => this.executeSearch(1));
+    this.el.filterStatus?.addEventListener('change', () => this.executeSearch(1));
+    this.el.filterType?.addEventListener('change', () => this.executeSearch(1));
+    this.el.filterDatePreset?.addEventListener('change', () => this.executeSearch(1));
+
+    this.el.filterTag?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.executeSearch(1);
+      }
+    });
+
+    this.el.filterCollection?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.executeSearch(1);
+      }
+    });
+
+    this.el.btnSearchPrevPage?.addEventListener('click', () => {
+      if (this.state.searchPage > 1) {
+        this.executeSearch(this.state.searchPage - 1);
+      }
+    });
+
+    this.el.btnSearchNextPage?.addEventListener('click', () => {
+      const maxPages = Math.ceil(this.state.searchTotal / this.state.searchLimit);
+      if (this.state.searchPage < maxPages) {
+        this.executeSearch(this.state.searchPage + 1);
+      }
+    });
+
+    // Global keyboard shortcuts (Alt+S for search, Esc to close)
+    window.addEventListener('keydown', (e) => {
+      if (e.altKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        this.toggleSearchCenter();
+        return;
+      }
+      if (e.key === 'Escape') {
+        const isSnapshotOpen = this.el.modalSnapshotDetail && this.el.modalSnapshotDetail.style.display === 'flex';
+        const isDiffOpen = this.el.modalCheckpointDiff && this.el.modalCheckpointDiff.style.display === 'flex';
+        const isCaptureOpen = this.el.modalManualCapture && this.el.modalManualCapture.style.display === 'flex';
+        const isOnboardingOpen = this.el.modalOnboarding && this.el.modalOnboarding.style.display === 'flex';
+        if (!isSnapshotOpen && !isDiffOpen && !isCaptureOpen && !isOnboardingOpen) {
+          if (this.el.searchCenterView && this.el.searchCenterView.style.display !== 'none') {
+            this.toggleSearchCenter(false);
+          }
+        }
+      }
     });
   }
 
@@ -763,6 +865,11 @@ class ContinuumDashboardApp {
     const shouldOpen = forceOpen !== null ? forceOpen : !currentlyOpen;
 
     if (shouldOpen) {
+      if (this.el.searchCenterView) this.el.searchCenterView.style.display = 'none';
+      if (this.el.btnToggleSearch) {
+        this.el.btnToggleSearch.classList.remove('active');
+        this.el.btnToggleSearch.innerHTML = '<span class="btn-icon">🔍</span> Search';
+      }
       this.el.resumeCenterView.style.display = 'block';
       this.el.workspaceComposerView.style.display = 'none';
       if (this.el.btnToggleResumeCenter) {
@@ -777,6 +884,339 @@ class ContinuumDashboardApp {
         this.el.btnToggleResumeCenter.classList.remove('active');
         this.el.btnToggleResumeCenter.innerHTML = '<span class="btn-icon">⚡</span> Resume Center';
       }
+    }
+  }
+
+  // ==========================================================================
+  // Unified Local Search Controller Logic (Phase 69)
+  // ==========================================================================
+  async toggleSearchCenter(forceOpen = null) {
+    if (!this.el.searchCenterView || !this.el.workspaceComposerView) return;
+    const currentlyOpen = this.el.searchCenterView.style.display !== 'none';
+    const shouldOpen = forceOpen !== null ? forceOpen : !currentlyOpen;
+
+    if (shouldOpen) {
+      if (this.el.resumeCenterView) this.el.resumeCenterView.style.display = 'none';
+      if (this.el.btnToggleResumeCenter) {
+        this.el.btnToggleResumeCenter.classList.remove('active');
+        this.el.btnToggleResumeCenter.innerHTML = '<span class="btn-icon">⚡</span> Resume Center';
+      }
+      this.el.searchCenterView.style.display = 'block';
+      this.el.workspaceComposerView.style.display = 'none';
+      if (this.el.btnToggleSearch) {
+        this.el.btnToggleSearch.classList.add('active');
+        this.el.btnToggleSearch.innerHTML = '<span class="btn-icon">✕</span> Close Search';
+      }
+      if (this.el.globalSearchInput) {
+        this.el.globalSearchInput.focus();
+      }
+    } else {
+      this.el.searchCenterView.style.display = 'none';
+      this.el.workspaceComposerView.style.display = 'grid';
+      if (this.el.btnToggleSearch) {
+        this.el.btnToggleSearch.classList.remove('active');
+        this.el.btnToggleSearch.innerHTML = '<span class="btn-icon">🔍</span> Search';
+      }
+    }
+  }
+
+  async executeSearch(page = 1) {
+    if (!this.el.searchResultsList) return;
+    this.state.searchPage = page;
+    const q = this.el.globalSearchInput ? this.el.globalSearchInput.value.trim() : '';
+    this.state.searchQuery = q;
+
+    const recordType = this.el.filterRecordType ? this.el.filterRecordType.value : '';
+    const status = this.el.filterStatus ? this.el.filterStatus.value : '';
+    const type = this.el.filterType ? this.el.filterType.value : '';
+    const datePreset = this.el.filterDatePreset ? this.el.filterDatePreset.value : '';
+    const tag = this.el.filterTag ? this.el.filterTag.value.trim() : '';
+    const collection = this.el.filterCollection ? this.el.filterCollection.value.trim() : '';
+
+    const offset = (page - 1) * this.state.searchLimit;
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (recordType) params.set('record_type', recordType);
+    if (status) params.set('status', status);
+    if (type) params.set('type', type);
+    if (tag) params.set('tag', tag);
+    if (collection) params.set('collection', collection);
+
+    if (datePreset === 'today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      params.set('date_from', today.toISOString());
+    } else if (datePreset === '7d') {
+      const d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      params.set('date_from', d.toISOString());
+    } else if (datePreset === '30d') {
+      const d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      params.set('date_from', d.toISOString());
+    }
+
+    params.set('limit', this.state.searchLimit);
+    params.set('offset', offset);
+
+    this.el.searchResultsList.innerHTML = `
+      <div class="search-empty-state">
+        <div class="loading-spinner"></div>
+        <p>Searching local index with SQLite FTS5...</p>
+      </div>
+    `;
+
+    try {
+      const res = await fetch(`/api/v1/search?${params.toString()}`, {
+        headers: this.getHeaders()
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        this.renderSearchError(errJson.error || `HTTP ${res.status}: Search request failed.`);
+        return;
+      }
+
+      const data = await res.json();
+      const results = data.results || [];
+      const total = data.total || 0;
+      this.state.searchTotal = total;
+
+      this.renderSearchResults(results, total, q);
+    } catch (err) {
+      console.error('Search error:', err);
+      this.renderSearchError(`Local search index query failed: ${err.message || err}`);
+    }
+  }
+
+  renderSearchResults(results, total, query) {
+    if (!this.el.searchResultsList) return;
+
+    if (total === 0) {
+      const queryStr = query ? ` for "<strong>${escapeHtml(query)}</strong>"` : '';
+      this.el.searchResultsList.innerHTML = `
+        <div class="search-no-match-state">
+          <span class="empty-icon">🔎</span>
+          <h3>No matching records found</h3>
+          <p>No activities or checkpoints matched your criteria${queryStr}. Check your search terms, clear active filters, or rebuild the search index if you recently imported files.</p>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button class="btn btn-outline btn-sm" id="btnNoMatchResetFilters">Reset Filters</button>
+            <button class="btn btn-outline btn-sm" id="btnNoMatchRebuildIndex">Rebuild Index</button>
+          </div>
+        </div>
+      `;
+      document.getElementById('btnNoMatchResetFilters')?.addEventListener('click', () => this.resetSearchFilters());
+      document.getElementById('btnNoMatchRebuildIndex')?.addEventListener('click', () => this.rebuildSearchIndex());
+
+      if (this.el.searchResultSummary) {
+        this.el.searchResultSummary.textContent = query
+          ? `0 results found for "${query}"`
+          : '0 results found with active filters';
+      }
+      if (this.el.searchPagination) {
+        this.el.searchPagination.style.display = 'none';
+      }
+      return;
+    }
+
+    const startIdx = (this.state.searchPage - 1) * this.state.searchLimit + 1;
+    const endIdx = Math.min(this.state.searchPage * this.state.searchLimit, total);
+    const totalPages = Math.ceil(total / this.state.searchLimit);
+
+    if (this.el.searchResultSummary) {
+      const qContext = query ? ` for "${query}"` : '';
+      this.el.searchResultSummary.textContent = `Found ${total} matching record${total === 1 ? '' : 's'}${qContext} (Showing ${startIdx}-${endIdx})`;
+    }
+
+    let html = '';
+    for (const r of results) {
+      const isActivity = r.record_type === 'activity';
+      let stateBadge = '';
+      if (isActivity) {
+        stateBadge = '<span class="badge badge-activity" title="Activity entity">ACTIVITY</span>';
+      } else if (r.is_current_head) {
+        stateBadge = '<span class="badge badge-current-state" title="Latest authoritative state (Head)">CURRENT STATE</span>';
+      } else {
+        stateBadge = '<span class="badge badge-history" title="Historical checkpoint snapshot">HISTORICAL</span>';
+      }
+
+      const owningTitle = r.activity_title || (isActivity ? r.title : r.activity_id);
+      const actId = r.activity_id || (isActivity ? r.record_id.replace(/^act:/, '') : '');
+      const chkId = !isActivity ? (r.record_id.replace(/^chk:/, '') || r.title) : null;
+      const formattedDate = r.timestamp ? new Date(r.timestamp).toLocaleString() : '';
+
+      const snippetHtml = this.renderSafeSnippet(r.snippet || r.description || '');
+
+      let tagsHtml = '';
+      if (r.tags && r.tags.length > 0) {
+        tagsHtml = r.tags.map(t => `<span class="result-tag-pill">#${escapeHtml(t)}</span>`).join('');
+      }
+
+      let actionsHtml = '';
+      if (chkId) {
+        actionsHtml += `<button class="btn btn-outline btn-xs btn-search-view-snapshot" data-act-id="${escapeHtml(actId)}" data-chk-id="${escapeHtml(chkId)}">📸 View Snapshot</button>`;
+      }
+      if (actId) {
+        actionsHtml += `<button class="btn btn-outline btn-xs btn-search-open-act" data-act-id="${escapeHtml(actId)}">⚡ Resume Activity</button>`;
+      }
+
+      html += `
+        <article class="search-result-card" role="article" tabindex="0">
+          <header class="result-card-header">
+            <div class="result-owning-activity">
+              📁 Activity: <strong>${escapeHtml(owningTitle)}</strong>
+              ${!isActivity && actId ? `<span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);"> (${escapeHtml(actId)})</span>` : ''}
+            </div>
+            <div class="result-card-badges">
+              ${stateBadge}
+              ${r.status ? `<span class="status-pill status-${escapeHtml(r.status)}">${escapeHtml(r.status)}</span>` : ''}
+              ${r.activity_type ? `<span class="badge">${escapeHtml(r.activity_type)}</span>` : ''}
+              <time class="result-date" datetime="${escapeHtml(r.timestamp)}">${escapeHtml(formattedDate)}</time>
+            </div>
+          </header>
+
+          <h3 class="result-card-title">
+            ${isActivity ? '📋 ' : '📍 '}${escapeHtml(r.title)}
+          </h3>
+
+          ${snippetHtml ? `<div class="result-snippet">${snippetHtml}</div>` : ''}
+
+          <footer class="result-card-footer">
+            <div class="result-tags">
+              ${r.collection ? `<span class="badge badge-accent">📚 ${escapeHtml(r.collection)}</span>` : ''}
+              ${tagsHtml}
+            </div>
+            <div class="result-actions">
+              ${actionsHtml}
+            </div>
+          </footer>
+        </article>
+      `;
+    }
+
+    this.el.searchResultsList.innerHTML = html;
+
+    this.el.searchResultsList.querySelectorAll('.btn-search-view-snapshot').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const aId = btn.dataset.actId;
+        const cId = btn.dataset.chkId;
+        this.openSnapshotById(aId, cId);
+      });
+    });
+
+    this.el.searchResultsList.querySelectorAll('.btn-search-open-act').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const aId = btn.dataset.actId;
+        await this.toggleResumeCenter(true);
+        await this.selectResumeActivity(aId);
+      });
+    });
+
+    if (this.el.searchPagination) {
+      if (totalPages > 1) {
+        this.el.searchPagination.style.display = 'flex';
+        if (this.el.searchPageInfo) {
+          this.el.searchPageInfo.textContent = `Page ${this.state.searchPage} of ${totalPages} (${total} total)`;
+        }
+        if (this.el.btnSearchPrevPage) {
+          this.el.btnSearchPrevPage.disabled = this.state.searchPage <= 1;
+        }
+        if (this.el.btnSearchNextPage) {
+          this.el.btnSearchNextPage.disabled = this.state.searchPage >= totalPages;
+        }
+      } else {
+        this.el.searchPagination.style.display = 'none';
+      }
+    }
+  }
+
+  renderSafeSnippet(snippet) {
+    if (!snippet) return '';
+    return snippet
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/&lt;mark&gt;/g, '<mark class="highlight-mark">')
+      .replace(/&lt;\/mark&gt;/g, '</mark>');
+  }
+
+  renderSearchError(errorMsg) {
+    if (!this.el.searchResultsList) return;
+    this.el.searchResultsList.innerHTML = `
+      <div class="search-error-state">
+        <span class="empty-icon" style="color: var(--accent-danger);">⚠️</span>
+        <h3>Search Index Error</h3>
+        <p>${escapeHtml(errorMsg)}</p>
+        <button class="btn btn-primary btn-sm" id="btnErrorRebuildIndex" style="margin-top: 0.5rem;">
+          <span class="btn-icon">🔄</span> Rebuild Search Index
+        </button>
+      </div>
+    `;
+    document.getElementById('btnErrorRebuildIndex')?.addEventListener('click', () => this.rebuildSearchIndex());
+    if (this.el.searchResultSummary) {
+      this.el.searchResultSummary.textContent = 'Error executing local search.';
+    }
+    if (this.el.searchPagination) {
+      this.el.searchPagination.style.display = 'none';
+    }
+  }
+
+  async rebuildSearchIndex() {
+    this.showToast('Rebuilding local SQLite FTS5 search index...');
+    try {
+      const res = await fetch('/api/v1/search/rebuild', {
+        method: 'POST',
+        headers: this.getHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        this.showToast(`✅ Search index rebuilt! (${data.indexed_count} records indexed)`);
+        await this.executeSearch(1);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        this.showToast(`❌ Index rebuild failed: ${err.error || res.statusText}`);
+      }
+    } catch (e) {
+      this.showToast(`❌ Error rebuilding index: ${e}`);
+    }
+  }
+
+  clearSearch() {
+    if (this.el.globalSearchInput) this.el.globalSearchInput.value = '';
+    this.resetSearchFilters();
+  }
+
+  resetSearchFilters() {
+    if (this.el.filterRecordType) this.el.filterRecordType.value = '';
+    if (this.el.filterStatus) this.el.filterStatus.value = '';
+    if (this.el.filterType) this.el.filterType.value = '';
+    if (this.el.filterDatePreset) this.el.filterDatePreset.value = '';
+    if (this.el.filterTag) this.el.filterTag.value = '';
+    if (this.el.filterCollection) this.el.filterCollection.value = '';
+    this.executeSearch(1);
+  }
+
+  async openSnapshotById(actId, chkId) {
+    try {
+      this.showToast(`Loading snapshot ${chkId}...`);
+      const res = await fetch(`/api/v1/checkpoints?activity_id=${encodeURIComponent(actId)}&limit=100`, {
+        headers: this.getHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const chk = (data.checkpoints || []).find(c => c.id === chkId);
+        if (chk) {
+          this.openSnapshotModal(chk);
+        } else {
+          this.showToast(`Snapshot ${chkId} not found in activity ${actId}.`);
+        }
+      } else {
+        this.showToast(`Failed to load snapshot: ${res.statusText}`);
+      }
+    } catch (e) {
+      this.showToast(`Error opening snapshot: ${e}`);
     }
   }
 

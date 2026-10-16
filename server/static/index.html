@@ -35,6 +35,9 @@
       <button class="btn btn-outline btn-sm" id="btnToggleResumeCenter" title="Open Resume Center (Activities & Timeline)">
         <span class="btn-icon">⚡</span> Resume Center
       </button>
+      <button class="btn btn-outline btn-sm" id="btnToggleSearch" title="Search Activities & Checkpoints (Alt+S)">
+        <span class="btn-icon">🔍</span> Search
+      </button>
       <button class="btn btn-outline btn-sm" id="btnOpenManualCapture" title="Capture Activity Checkpoint">
         <span class="btn-icon">📸</span> Capture Checkpoint
       </button>
@@ -176,6 +179,128 @@
             </div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- Unified Search Center View (Phase 69: Search UI, Filters, Result Context) -->
+    <section class="search-center-view glass-panel" id="searchCenterView" style="display: none;" role="region" aria-label="Unified Local Search">
+      <div class="search-center-header">
+        <div class="search-title-group">
+          <h2>🔍 Unified Local Search</h2>
+          <span class="badge badge-accent">100% Offline • Zero AI • SQLite FTS5</span>
+        </div>
+        <div class="search-actions-group">
+          <button class="btn btn-outline btn-sm" id="btnRebuildSearchIndex" title="Rebuild search index from authoritative JSON records">
+            <span class="btn-icon">🔄</span> Rebuild Index
+          </button>
+          <button class="btn btn-outline btn-sm" id="btnCloseSearchCenter" title="Close Search (Esc)">
+            <span class="btn-icon">✕</span> Close
+          </button>
+        </div>
+      </div>
+
+      <div class="search-controls-container">
+        <!-- Search Input Bar -->
+        <div class="search-input-row">
+          <input type="search" id="globalSearchInput" placeholder="Search keywords across title, description, notes, decisions, actions, artifacts... (Press Enter or Alt+S)" class="input-search search-main-input" aria-label="Search keywords">
+          <button class="btn btn-primary" id="btnGlobalSearchSubmit">
+            <span class="btn-icon">🔍</span> Search
+          </button>
+          <button class="btn btn-outline" id="btnGlobalSearchClear" title="Clear search query and filters">
+            Clear
+          </button>
+        </div>
+
+        <!-- Filter Controls Row -->
+        <div class="search-filters-grid" role="group" aria-label="Search Filters">
+          <div class="filter-item">
+            <label for="filterRecordType" class="filter-label">Target:</label>
+            <select id="filterRecordType" class="filter-select" aria-label="Filter by record type">
+              <option value="">All Records</option>
+              <option value="activity">Activities</option>
+              <option value="checkpoint">Checkpoints</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label for="filterStatus" class="filter-label">Status:</label>
+            <select id="filterStatus" class="filter-select" aria-label="Filter by status">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="completed">Completed</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label for="filterType" class="filter-label">Type:</label>
+            <select id="filterType" class="filter-select" aria-label="Filter by activity type">
+              <option value="">All Types</option>
+              <option value="coding">Coding</option>
+              <option value="study">Study</option>
+              <option value="research">Research</option>
+              <option value="writing">Writing</option>
+              <option value="work_task">Work Task</option>
+              <option value="ai_agent">AI Agent</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label for="filterDatePreset" class="filter-label">Date:</label>
+            <select id="filterDatePreset" class="filter-select" aria-label="Filter by date range">
+              <option value="">All Time</option>
+              <option value="today">Today</option>
+              <option value="7d">Past 7 Days</option>
+              <option value="30d">Past 30 Days</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label for="filterTag" class="filter-label">Tag:</label>
+            <input type="text" id="filterTag" placeholder="Filter by tag..." class="filter-input" aria-label="Filter by tag">
+          </div>
+
+          <div class="filter-item">
+            <label for="filterCollection" class="filter-label">Collection:</label>
+            <input type="text" id="filterCollection" placeholder="Filter by collection..." class="filter-input" aria-label="Filter by collection">
+          </div>
+
+          <div class="filter-item filter-actions">
+            <button class="btn btn-outline btn-sm" id="btnResetSearchFilters" title="Reset all search filters">
+              Reset Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Results Status Bar (Screen Reader Accessible) -->
+      <div class="search-status-bar">
+        <div class="search-results-summary" id="searchResultSummary" aria-live="polite">
+          Ready to search. Enter keywords or select filters to explore activities and checkpoints.
+        </div>
+        <div class="search-pagination-summary" id="searchPaginationSummary"></div>
+      </div>
+
+      <!-- Search Results Feed -->
+      <div class="search-results-container" id="searchResultsList" role="feed" aria-label="Search Results">
+        <div class="search-empty-state">
+          <span class="empty-icon">🔍</span>
+          <h3>Explore Activities and Checkpoints</h3>
+          <p>Search across titles, descriptions, resume briefs, decisions, actions, notes, and artifact metadata. Everything runs locally with zero AI and zero network egress.</p>
+        </div>
+      </div>
+
+      <!-- Bounded Pagination Controls -->
+      <div class="search-pagination-toolbar" id="searchPagination" style="display: none;">
+        <button class="btn btn-outline btn-sm" id="btnSearchPrevPage" disabled aria-label="Previous Page">
+          ◀ Previous
+        </button>
+        <span class="pagination-info" id="searchPageInfo">Page 1 of 1</span>
+        <button class="btn btn-outline btn-sm" id="btnSearchNextPage" disabled aria-label="Next Page">
+          Next ▶
+        </button>
       </div>
     </section>
 

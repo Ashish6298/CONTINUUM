@@ -1497,6 +1497,7 @@ class ActivityCheckpointStore:
         status: Optional[str] = None,
         activity_type: Optional[str] = None,
         tag: Optional[str] = None,
+        tags: Optional[str] = None,
         collection: Optional[str] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
@@ -1506,8 +1507,10 @@ class ActivityCheckpointStore:
         """
         Searches activities and checkpoints using FTS5 with bounded pagination and filtering.
         Returns a tuple of (results_list, total_match_count).
+        Phase 69: Enriched with owning activity title, current head vs history distinction,
+        and bounded excerpts.
         """
-        from core.search_engine import SearchQuerySanitizer, SearchResult
+        from core.search_engine import SearchQuerySanitizer, SearchResult, bound_excerpt
         from server.sanitizer import DaemonSanitizer
 
         clamped_limit = max(1, min(limit, 100))
@@ -1543,17 +1546,24 @@ class ActivityCheckpointStore:
             where_clauses.append("collection = ?")
             params.append(collection.strip())
 
-        if tag:
+        effective_tag = tag or tags
+        if effective_tag:
             where_clauses.append("tags LIKE ?")
-            params.append(f"%{tag.strip().lower()}%")
+            params.append(f"%{effective_tag.strip().lower()}%")
 
         if date_from:
+            df = date_from.strip()
+            if len(df) == 10 and "T" not in df:
+                df = f"{df}T00:00:00.000000Z"
             where_clauses.append("timestamp >= ?")
-            params.append(date_from.strip())
+            params.append(df)
 
         if date_to:
+            dt = date_to.strip()
+            if len(dt) == 10 and "T" not in dt:
+                dt = f"{dt}T23:59:59.999999Z"
             where_clauses.append("timestamp <= ?")
-            params.append(date_to.strip())
+            params.append(dt)
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -1603,11 +1613,71 @@ class ActivityCheckpointStore:
                 else:
                     return [], 0
 
+        # Phase 69: Batch resolve owning activity titles and head checkpoint IDs
+        activity_titles: Dict[str, str] = {}
+        head_checkpoint_ids: Dict[str, str] = {}
+        act_ids = list({r["activity_id"] for r in rows if r["activity_id"]})
+
+        if act_ids:
+            with self._get_db_connection() as conn:
+                cur = conn.cursor()
+                placeholders = ",".join("?" for _ in act_ids)
+                # Fetch activity titles
+                cur.execute(
+                    f"SELECT id, title FROM activities_idx WHERE id IN ({placeholders})",
+                    act_ids
+                )
+                for a_row in cur.fetchall():
+                    activity_titles[a_row["id"]] = a_row["title"]
+
+                # Fetch latest checkpoint ID (current head) for each activity
+                cur.execute(
+                    f"""
+                    SELECT c.activity_id, c.id
+                    FROM checkpoints_idx c
+                    INNER JOIN (
+                        SELECT activity_id, MAX(timestamp) AS max_ts
+                        FROM checkpoints_idx
+                        WHERE activity_id IN ({placeholders})
+                        GROUP BY activity_id
+                    ) latest ON c.activity_id = latest.activity_id AND c.timestamp = latest.max_ts
+                    """,
+                    act_ids
+                )
+                for c_row in cur.fetchall():
+                    head_checkpoint_ids[c_row["activity_id"]] = c_row["id"]
+
         results: List[SearchResult] = []
         for r in rows:
+            rec_id = r["record_id"]
+            rec_type = r["record_type"]
+            act_id = r["activity_id"]
             tags_list = [t for t in (r["tags"] or "").split(" ") if t]
-            snippet_sanitized = DaemonSanitizer.sanitize_text(r["snippet"] or "")
-            desc_sanitized = DaemonSanitizer.sanitize_text(r["description"] or "")
+
+            raw_snippet = r["snippet"] or ""
+            if not raw_snippet and r["description"]:
+                raw_snippet = r["description"]
+
+            snippet_sanitized = DaemonSanitizer.sanitize_text(raw_snippet)
+            bounded_snippet = bound_excerpt(snippet_sanitized, max_chars=280)
+            desc_sanitized = bound_excerpt(DaemonSanitizer.sanitize_text(r["description"] or ""), max_chars=280)
+
+            owning_title = activity_titles.get(act_id, "")
+            if rec_type == "activity":
+                state_kind = "activity"
+                is_head = True
+                if not owning_title:
+                    owning_title = r["title"]
+            else:
+                chk_id = rec_id[4:] if rec_id.startswith("chk:") else r["title"]
+                current_head = head_checkpoint_ids.get(act_id)
+                if current_head and chk_id == current_head:
+                    is_head = True
+                    state_kind = "current_state"
+                else:
+                    is_head = False
+                    state_kind = "history"
+
             results.append(
                 SearchResult(
                     record_id=r["record_id"],
@@ -1616,12 +1686,15 @@ class ActivityCheckpointStore:
                     title=r["title"],
                     description=desc_sanitized,
                     timestamp=r["timestamp"],
-                    snippet=snippet_sanitized,
+                    snippet=bounded_snippet,
                     score=float(r["score"] or 0.0),
                     tags=tags_list,
                     collection=r["collection"] or None,
                     status=r["status"] or None,
                     activity_type=r["type"] or None,
+                    activity_title=owning_title,
+                    is_current_head=is_head,
+                    state_kind=state_kind,
                 )
             )
 

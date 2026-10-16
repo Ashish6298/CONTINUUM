@@ -38,9 +38,38 @@ class SearchResult:
     status: Optional[str] = None
     activity_type: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    activity_title: str = ""
+    is_current_head: bool = True
+    state_kind: str = "current_state"  # "current_state" | "history" | "activity"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+def bound_excerpt(text: Optional[str], max_chars: int = 280) -> str:
+    """
+    Safely bounds excerpt text to max_chars characters while preserving balanced mark tags.
+    Phase 69 requirement: bounded excerpts.
+    """
+    if not text:
+        return ""
+    clean = str(text).strip()
+    if len(clean) <= max_chars:
+        return clean
+
+    truncated = clean[:max_chars]
+    last_space = truncated.rfind(" ")
+    if last_space > max_chars // 2:
+        truncated = truncated[:last_space]
+
+    open_marks = truncated.count("<mark>")
+    close_marks = truncated.count("</mark>")
+    if open_marks > close_marks:
+        truncated += "</mark>"
+
+    if not truncated.endswith("..."):
+        truncated += "..."
+    return truncated
 
 
 class SearchDocumentBuilder:

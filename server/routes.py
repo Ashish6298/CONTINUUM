@@ -1871,7 +1871,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         activity_id = query.get("activity_id", [None])[0]
         status = query.get("status", [None])[0]
         activity_type = query.get("activity_type", [None])[0] or query.get("type", [None])[0]
-        tag = query.get("tag", [None])[0]
+        tag = query.get("tag", [None])[0] or query.get("tags", [None])[0]
         collection = query.get("collection", [None])[0]
         date_from = query.get("date_from", [None])[0]
         date_to = query.get("date_to", [None])[0]
@@ -1934,7 +1934,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         activity_id = data.get("activity_id")
         status = data.get("status")
         activity_type = data.get("activity_type") or data.get("type")
-        tag = data.get("tag")
+        tag = data.get("tag") or data.get("tags")
         collection = data.get("collection")
         date_from = data.get("date_from")
         date_to = data.get("date_to")
