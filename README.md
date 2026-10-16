@@ -22,7 +22,7 @@
     <td align="center"><a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=plastic&logo=python&logoColor=white" alt="Python 3.10+"/></a></td>
     <td align="center"><a href="https://pypi.org/project/continuum-toolkit/"><img src="https://img.shields.io/badge/PyPI-v1.3.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
     <td align="center"><a href="https://pepy.tech/projects/continuum-toolkit"><img src="https://static.pepy.tech/personalized-badge/continuum-toolkit?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads"/></a></td>
-    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-300%2F300_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
+    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-306%2F306_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
   </tr>
   <tr>
     <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Engine-7F77DD?style=plastic&logo=diagramsdotnet&logoColor=white" alt="3-State Architecture"/></a></td>
@@ -456,13 +456,13 @@ $ continuum daemon stop                    # Gracefully stop the background daem
 <a id="system-architecture-verification"></a>
 ## 🗺️ System Architecture & Verification
 
-Project Continuum is certified with **300 / 300 automated tests passing (100% success)** across the entire end-to-end stack:
+Project Continuum is certified with **306 / 306 automated tests passing (100% success)** across the entire end-to-end stack:
 
 - **Core Ground-Truth Engine**: Multi-language AST symbol extraction, 5-tier evidence hierarchy, dependency state graph (DAG) with topological ordering, and automated contradiction detection.
 - **Local Control Plane & Daemon**: Zero-dependency REST API daemon on loopback, live Web Control Dashboard, constant-time session token security, and automated secret/credential masking.
 - **Browser Continuity Ecosystem**: Cross-model companion (Userscript & native Manifest V3 WebExtension) supporting ChatGPT, Claude, Gemini, and DeepSeek with cross-tab context relay, bi-directional workspace code sync (`/api/workspace/sync`), and checkpoint lineage tracking.
 - **Conversation Context Preservation**: In-session incremental accumulator, multi-platform URL isolation, streaming in-place update reconciliation, user-directed cold-start recovery, and 5-Tier Smart Digest compression engine with multi-model prompt formatting.
-- **Universal Resume Anywhere (v1.4.0 Track)**: Milestone 35 Discovery & Baseline certified across Architecture Inventory (Phase 50), Persistence & Security Audit (Phase 51), and Baseline Workflow Verification (Phase 52); Milestone 36 Domain Models & Invariants certified across Activity & Lifecycle Model (Phase 53), Checkpoint & Provenance Model (Phase 54), and Invariant Matrix & ADR-001 Architecture Decision (Phase 55); Milestone 37 Durable Storage & Migration certified across Persistence Extension & Durable Commits (Phase 56), Versioned Idempotent Migration (Phase 57), and Consistency & Safe Recovery (Phase 58); Milestone 38 Capture & Resume certified across Manual Checkpoint Capture & Privacy Sanitization (Phase 59), Deterministic Resume Briefs (Phase 60), Resume Center & Activity Detail (Phase 61), and Skippable Onboarding & Templates (Phase 62).
+- **Universal Resume Anywhere (v1.4.0 Track)**: Milestone 35 Discovery & Baseline certified across Architecture Inventory (Phase 50), Persistence & Security Audit (Phase 51), and Baseline Workflow Verification (Phase 52); Milestone 36 Domain Models & Invariants certified across Activity & Lifecycle Model (Phase 53), Checkpoint & Provenance Model (Phase 54), and Invariant Matrix & ADR-001 Architecture Decision (Phase 55); Milestone 37 Durable Storage & Migration certified across Persistence Extension & Durable Commits (Phase 56), Versioned Idempotent Migration (Phase 57), and Consistency & Safe Recovery (Phase 58); Milestone 38 Capture & Resume certified across Manual Checkpoint Capture & Privacy Sanitization (Phase 59), Deterministic Resume Briefs (Phase 60), Resume Center & Activity Detail (Phase 61), and Skippable Onboarding & Templates (Phase 62); Milestone 39 History, Diffs, Branch & Restore certified across Paginated Timeline & Read-Only History (Phase 63).
 
 <br>
 
@@ -470,7 +470,7 @@ Project Continuum is certified with **300 / 300 automated tests passing (100% su
 ## 🧪 Testing & Enterprise Security
 
 ```bash
-$ py tests/run_all_tests.py    # 300/300 Passed (100% Test Coverage across all System Modules)
+$ py tests/run_all_tests.py    # 306/306 Passed (100% Test Coverage across all System Modules)
 ```
 
 ```text

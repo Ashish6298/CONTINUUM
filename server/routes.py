@@ -487,8 +487,13 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
             return
 
-        checkpoints, total_chk = store.list_checkpoints(activity_id, limit=50, offset=0)
-        latest_chk = checkpoints[0] if checkpoints else None
+        limit = int(query.get("limit", [20])[0])
+        offset = int(query.get("offset", [0])[0])
+        order = query.get("order", ["desc"])[0]
+
+        checkpoints, total_chk = store.list_checkpoints(activity_id, limit=limit, offset=offset, order=order)
+        newest_checkpoints, _ = store.list_checkpoints(activity_id, limit=1, offset=0, order="desc")
+        latest_chk = newest_checkpoints[0] if newest_checkpoints else None
 
         if not latest_chk:
             latest_chk = UniversalCheckpoint.create_minimal(activity_id=activity.id, context=activity.description)
@@ -502,6 +507,11 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "total_checkpoints": total_chk,
             "latest_checkpoint": latest_chk.to_dict(),
             "timeline": [c.to_dict() for c in checkpoints],
+            "timeline_limit": limit,
+            "timeline_offset": offset,
+            "timeline_order": order,
+            "timeline_has_more": (offset + len(checkpoints)) < total_chk,
+            "is_read_only_history": True,
             "resume_brief": brief.to_dict(),
             "resume_brief_markdown": generator.format_brief_as_markdown(brief, activity_title=activity.title),
             "timestamp": datetime.now(timezone.utc).isoformat()
@@ -519,13 +529,16 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         store = ActivityCheckpointStore(self.workspace_root)
         limit = int(query.get("limit", [50])[0])
         offset = int(query.get("offset", [0])[0])
+        order = query.get("order", ["desc"])[0]
 
         try:
-            checkpoints, total = store.list_checkpoints(activity_id, limit=limit, offset=offset)
+            checkpoints, total = store.list_checkpoints(activity_id, limit=limit, offset=offset, order=order)
         except ActivityNotFoundError:
             self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
             return
 
+        # Distinguish current state (newest checkpoint) from historical state
+        # In descending order, offset=0 index=0 is the current active state
         self._send_json_response({
             "status": "success",
             "activity_id": activity_id,
@@ -533,6 +546,9 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "count": len(checkpoints),
             "limit": limit,
             "offset": offset,
+            "order": order,
+            "has_more": (offset + len(checkpoints)) < total,
+            "is_read_only_history": True,
             "checkpoints": [c.to_dict() for c in checkpoints],
             "timestamp": datetime.now(timezone.utc).isoformat()
         })

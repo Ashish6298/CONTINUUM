@@ -19,7 +19,14 @@ class ContinuumDashboardApp {
       includeDiff: true,
       includeSymbols: true,
       includeVerification: true,
-      token: window.__CONTINUUM_SESSION_TOKEN__ || this.getTokenFromUrl() || localStorage.getItem('continuum_token') || ''
+      token: window.__CONTINUUM_SESSION_TOKEN__ || this.getTokenFromUrl() || localStorage.getItem('continuum_token') || '',
+      selectedActivityId: null,
+      timelineOffset: 0,
+      timelineLimit: 20,
+      timelineOrder: 'desc',
+      timelineCheckpoints: [],
+      timelineTotal: 0,
+      latestCheckpointId: null
     };
 
     // Model context window definitions (tokens)
@@ -141,6 +148,13 @@ class ContinuumDashboardApp {
       detailBriefMarkdown: document.getElementById('detailBriefMarkdown'),
       detailTimelineCount: document.getElementById('detailTimelineCount'),
       detailTimelineList: document.getElementById('detailTimelineList'),
+      btnToggleTimelineOrder: document.getElementById('btnToggleTimelineOrder'),
+      btnLoadMoreTimeline: document.getElementById('btnLoadMoreTimeline'),
+      timelineFooter: document.getElementById('timelineFooter'),
+      modalSnapshotDetail: document.getElementById('modalSnapshotDetail'),
+      btnCloseSnapshotModal: document.getElementById('btnCloseSnapshotModal'),
+      btnCloseSnapshotFooter: document.getElementById('btnCloseSnapshotFooter'),
+      snapshotModalBody: document.getElementById('snapshotModalBody'),
       // Onboarding & Template Elements (Phase 62)
       modalOnboarding: document.getElementById('modalOnboarding'),
       btnCloseOnboardingModal: document.getElementById('btnCloseOnboardingModal'),
@@ -254,6 +268,15 @@ class ContinuumDashboardApp {
         const type = card.dataset.type;
         this.handleTemplateSelect(type);
       });
+    });
+
+    // Timeline & Snapshot Events (Phase 63)
+    this.el.btnToggleTimelineOrder?.addEventListener('click', () => this.toggleTimelineOrder());
+    this.el.btnLoadMoreTimeline?.addEventListener('click', () => this.loadMoreTimeline());
+    this.el.btnCloseSnapshotModal?.addEventListener('click', () => this.closeSnapshotModal());
+    this.el.btnCloseSnapshotFooter?.addEventListener('click', () => this.closeSnapshotModal());
+    this.el.modalSnapshotDetail?.addEventListener('click', (e) => {
+      if (e.target === this.el.modalSnapshotDetail) this.closeSnapshotModal();
     });
   }
 
@@ -809,6 +832,7 @@ class ContinuumDashboardApp {
 
   async selectResumeActivity(activityId) {
     this.state.selectedActivityId = activityId;
+    this.state.timelineOffset = 0;
 
     // Highlight selected item in list
     const items = this.el.activitiesListContainer?.querySelectorAll('.activity-item');
@@ -817,7 +841,7 @@ class ContinuumDashboardApp {
     });
 
     try {
-      const res = await fetch(`/api/v1/activities/detail?activity_id=${encodeURIComponent(activityId)}`, {
+      const res = await fetch(`/api/v1/activities/detail?activity_id=${encodeURIComponent(activityId)}&limit=${this.state.timelineLimit}&offset=0&order=${this.state.timelineOrder}`, {
         headers: this.getHeaders()
       });
 
@@ -829,7 +853,9 @@ class ContinuumDashboardApp {
       const data = await res.json();
       const act = data.activity;
       const brief = data.resume_brief;
-      const timeline = data.timeline || [];
+      this.state.latestCheckpointId = data.latest_checkpoint?.id;
+      this.state.timelineCheckpoints = data.timeline || [];
+      this.state.timelineTotal = data.total_checkpoints || this.state.timelineCheckpoints.length;
 
       if (this.el.resumeDetailEmptyState) this.el.resumeDetailEmptyState.style.display = 'none';
       if (this.el.resumeDetailContent) this.el.resumeDetailContent.style.display = 'flex';
@@ -850,37 +876,226 @@ class ContinuumDashboardApp {
       }
 
       // Render Checkpoint Timeline
-      if (this.el.detailTimelineCount) {
-        this.el.detailTimelineCount.textContent = `${timeline.length} checkpoint(s)`;
-      }
-
-      if (this.el.detailTimelineList) {
-        if (timeline.length === 0) {
-          this.el.detailTimelineList.innerHTML = '<div class="empty-state" style="padding:1rem;">No checkpoints captured yet. Click "Capture" above to save state.</div>';
-        } else {
-          this.el.detailTimelineList.innerHTML = '';
-          timeline.forEach(chk => {
-            const chkRow = document.createElement('div');
-            chkRow.className = 'timeline-item';
-            const dateStr = chk.timestamp ? new Date(chk.timestamp).toLocaleString() : '';
-            const prov = chk.provenance?.provenance_type || 'user_confirmed';
-            chkRow.innerHTML = `
-              <div>
-                <span class="timeline-item-id">${chk.id}</span>
-                <span style="color:var(--text-secondary); margin-left:8px;">${escapeHtml(chk.context || 'State Snapshot')}</span>
-              </div>
-              <div class="activity-item-meta">
-                <span class="badge">${prov}</span>
-                <span class="timeline-item-date">${dateStr}</span>
-              </div>
-            `;
-            this.el.detailTimelineList.appendChild(chkRow);
-          });
-        }
-      }
+      this.renderTimelineList(false);
     } catch (err) {
       console.error('Failed to select resume activity:', err);
       this.showToast('Failed to load activity details');
+    }
+  }
+
+  renderTimelineList(append = false) {
+    if (!this.el.detailTimelineList) return;
+
+    if (!append) {
+      this.el.detailTimelineList.innerHTML = '';
+    }
+
+    const checkpoints = this.state.timelineCheckpoints || [];
+    const total = this.state.timelineTotal || checkpoints.length;
+
+    if (this.el.detailTimelineCount) {
+      if (checkpoints.length === 0) {
+        this.el.detailTimelineCount.textContent = '0 checkpoints';
+      } else {
+        this.el.detailTimelineCount.textContent = `Showing ${checkpoints.length} of ${total} checkpoint(s)`;
+      }
+    }
+
+    if (this.el.timelineFooter) {
+      this.el.timelineFooter.style.display = checkpoints.length < total ? 'block' : 'none';
+    }
+
+    if (checkpoints.length === 0) {
+      this.el.detailTimelineList.innerHTML = '<div class="empty-state" style="padding:1rem;">No checkpoints captured yet. Click "Capture" above to save state.</div>';
+      return;
+    }
+
+    const itemsToRender = append ? checkpoints.slice(this.state.timelineOffset) : checkpoints;
+
+    itemsToRender.forEach(chk => {
+      const chkRow = document.createElement('div');
+      chkRow.className = 'timeline-item';
+      chkRow.tabIndex = 0;
+      chkRow.setAttribute('role', 'button');
+      chkRow.setAttribute('aria-label', `View historical snapshot for checkpoint ${chk.id}`);
+
+      const isCurrentState = (chk.id === this.state.latestCheckpointId);
+      if (isCurrentState) {
+        chkRow.classList.add('active-state');
+      }
+
+      const dateStr = chk.timestamp ? new Date(chk.timestamp).toLocaleString() : '';
+      const prov = chk.provenance?.provenance_type || 'user_confirmed';
+      const summaryText = chk.context || chk.summary || 'Initial State Snapshot';
+      const completedCount = (chk.completed_work && chk.completed_work.length) || 0;
+      const pendingCount = (chk.pending_actions && chk.pending_actions.length) || 0;
+      const decisionsCount = (chk.decisions && chk.decisions.length) || 0;
+
+      const stateBadge = isCurrentState
+        ? `<span class="status-pill" style="font-size:0.65rem;">🟢 Current State</span>`
+        : `<span class="badge" style="font-size:0.65rem; background:rgba(255,255,255,0.06); color:var(--text-muted);">📜 Historical (Read-Only)</span>`;
+
+      chkRow.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:0.25rem; max-width:65%;">
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <span class="timeline-item-id">${chk.id}</span>
+            ${stateBadge}
+            <span class="badge" style="font-size:0.65rem;">${prov}</span>
+          </div>
+          <div style="color:var(--text-secondary); font-size:0.8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            ${escapeHtml(summaryText)}
+          </div>
+          <div style="font-size:0.7rem; color:var(--text-muted); display:flex; gap:0.6rem;">
+            <span>✅ ${completedCount} done</span>
+            <span>⏳ ${pendingCount} pending</span>
+            <span>⚖️ ${decisionsCount} decisions</span>
+          </div>
+        </div>
+        <div class="activity-item-meta" style="flex-direction:column; align-items:flex-end;">
+          <span class="timeline-item-date">${dateStr}</span>
+          <span style="font-size:0.7rem; color:var(--accent-info); margin-top:4px;">🔍 Inspect</span>
+        </div>
+      `;
+
+      chkRow.addEventListener('click', () => this.openSnapshotModal(chk));
+      chkRow.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this.openSnapshotModal(chk);
+        }
+      });
+
+      this.el.detailTimelineList.appendChild(chkRow);
+    });
+  }
+
+  openSnapshotModal(chk) {
+    if (!this.el.modalSnapshotDetail || !this.el.snapshotModalBody) return;
+    const isCurrentState = (chk.id === this.state.latestCheckpointId);
+    const dateStr = chk.timestamp ? new Date(chk.timestamp).toLocaleString() : 'Unknown';
+    const prov = chk.provenance?.provenance_type || 'user_confirmed';
+    const author = chk.provenance?.author || 'local_user';
+    const summaryText = chk.context || chk.summary || 'None recorded';
+
+    const completedList = (chk.completed_work && chk.completed_work.length > 0)
+      ? `<ul class="snapshot-list">${chk.completed_work.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>`
+      : '<span style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">None recorded</span>';
+
+    const pendingList = (chk.pending_actions && chk.pending_actions.length > 0)
+      ? `<ul class="snapshot-list">${chk.pending_actions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>`
+      : '<span style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">None recorded</span>';
+
+    const decisionsList = (chk.decisions && chk.decisions.length > 0)
+      ? `<ul class="snapshot-list">${chk.decisions.map(d => `<li><strong>${escapeHtml(d.title || d.id || 'Decision')}</strong>: ${escapeHtml(d.rationale || '')}</li>`).join('')}</ul>`
+      : '<span style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">None recorded</span>';
+
+    const blockersList = (chk.blockers && chk.blockers.length > 0)
+      ? `<ul class="snapshot-list">${chk.blockers.map(b => `<li style="color:var(--accent-danger);">${escapeHtml(b)}</li>`).join('')}</ul>`
+      : '<span style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">None recorded</span>';
+
+    const artifactsList = (chk.artifacts && chk.artifacts.length > 0)
+      ? `<ul class="snapshot-list">${chk.artifacts.map(art => `<li><code>${escapeHtml(art.path || art)}</code></li>`).join('')}</ul>`
+      : '<span style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">None referenced</span>';
+
+    const statePill = isCurrentState
+      ? '<span class="status-pill">🟢 Current Active State</span>'
+      : '<span class="badge" style="background:rgba(255,255,255,0.06); color:var(--text-muted);">📜 Historical State (Read-Only)</span>';
+
+    this.el.snapshotModalBody.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:0.6rem; border-radius:6px;">
+        <div>
+          <span style="font-family:var(--font-mono); color:var(--accent-primary); font-weight:600; font-size:0.9rem;">${chk.id}</span>
+          <span style="color:var(--text-muted); font-size:0.75rem; margin-left:8px;">${dateStr}</span>
+        </div>
+        ${statePill}
+      </div>
+
+      <div class="snapshot-detail-section">
+        <span class="snapshot-detail-title">Provenance & Authorship</span>
+        <div style="font-size:0.8rem; color:var(--text-secondary); display:flex; gap:1rem;">
+          <span>Type: <strong>${escapeHtml(prov)}</strong></span>
+          <span>Author: <strong>${escapeHtml(author)}</strong></span>
+          ${chk.branch ? `<span>Branch: <strong>${escapeHtml(chk.branch)}</strong></span>` : ''}
+          ${chk.parent_id ? `<span>Parent: <code>${escapeHtml(chk.parent_id)}</code></span>` : ''}
+        </div>
+      </div>
+
+      <div class="snapshot-detail-section">
+        <span class="snapshot-detail-title">Context & Summary</span>
+        <div style="font-size:0.85rem; color:var(--text-primary); white-space:pre-wrap;">${escapeHtml(summaryText)}</div>
+      </div>
+
+      <div class="snapshot-detail-section">
+        <span class="snapshot-detail-title">Completed Work</span>
+        ${completedList}
+      </div>
+
+      <div class="snapshot-detail-section">
+        <span class="snapshot-detail-title">Pending Actions</span>
+        ${pendingList}
+      </div>
+
+      <div class="snapshot-detail-section">
+        <span class="snapshot-detail-title">Decisions & Rationale</span>
+        ${decisionsList}
+      </div>
+
+      <div class="snapshot-detail-section">
+        <span class="snapshot-detail-title">Blockers & Unresolved Issues</span>
+        ${blockersList}
+      </div>
+
+      <div class="snapshot-detail-section">
+        <span class="snapshot-detail-title">Artifacts Referenced</span>
+        ${artifactsList}
+      </div>
+    `;
+
+    this.el.modalSnapshotDetail.style.display = 'flex';
+  }
+
+  closeSnapshotModal() {
+    if (this.el.modalSnapshotDetail) {
+      this.el.modalSnapshotDetail.style.display = 'none';
+    }
+  }
+
+  async toggleTimelineOrder() {
+    this.state.timelineOrder = (this.state.timelineOrder === 'desc') ? 'asc' : 'desc';
+    if (this.el.btnToggleTimelineOrder) {
+      this.el.btnToggleTimelineOrder.textContent = (this.state.timelineOrder === 'desc')
+        ? '⬇️ Newest First'
+        : '⬆️ Oldest First';
+    }
+    if (this.state.selectedActivityId) {
+      this.state.timelineOffset = 0;
+      await this.loadTimelinePage(this.state.selectedActivityId, 0, false);
+    }
+  }
+
+  async loadMoreTimeline() {
+    if (!this.state.selectedActivityId) return;
+    const nextOffset = this.state.timelineOffset + this.state.timelineLimit;
+    await this.loadTimelinePage(this.state.selectedActivityId, nextOffset, true);
+  }
+
+  async loadTimelinePage(activityId, offset, append = false) {
+    try {
+      const res = await fetch(`/api/v1/checkpoints?activity_id=${encodeURIComponent(activityId)}&limit=${this.state.timelineLimit}&offset=${offset}&order=${this.state.timelineOrder}`, {
+        headers: this.getHeaders()
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      this.state.timelineOffset = offset;
+      this.state.timelineTotal = data.total;
+      if (append) {
+        this.state.timelineCheckpoints = this.state.timelineCheckpoints.concat(data.checkpoints || []);
+      } else {
+        this.state.timelineCheckpoints = data.checkpoints || [];
+      }
+      this.renderTimelineList(append);
+    } catch (err) {
+      console.error('Failed to load timeline page:', err);
     }
   }
 

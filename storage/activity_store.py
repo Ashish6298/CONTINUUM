@@ -512,9 +512,11 @@ class ActivityCheckpointStore:
         activity_id: str,
         limit: int = DEFAULT_PAGE_LIMIT,
         offset: int = 0,
+        order: str = "desc",
     ) -> Tuple[List[UniversalCheckpoint], int]:
         """
-        Lists checkpoints for an activity ordered by timestamp descending.
+        Lists checkpoints for an activity ordered chronologically (I-17).
+        :param order: 'asc' (oldest first) or 'desc' (newest first). Defaults to 'desc'.
         Enforces bounded pagination (I-17).
         """
         # Verify activity exists
@@ -523,6 +525,7 @@ class ActivityCheckpointStore:
 
         clamped_limit = max(1, min(limit, self.MAX_PAGE_LIMIT))
         clamped_offset = max(0, offset)
+        sort_order = "ASC" if str(order).lower() == "asc" else "DESC"
 
         with self._get_db_connection() as conn:
             cur = conn.cursor()
@@ -530,10 +533,10 @@ class ActivityCheckpointStore:
             total_count = cur.fetchone()[0]
 
             cur.execute(
-                """
+                f"""
                 SELECT id FROM checkpoints_idx
                 WHERE activity_id = ?
-                ORDER BY timestamp DESC
+                ORDER BY timestamp {sort_order}
                 LIMIT ? OFFSET ?
                 """,
                 (activity_id, clamped_limit, clamped_offset),
