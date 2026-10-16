@@ -1,0 +1,119 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING AUDIT & IMPLEMENTATION REPORT
+Milestone 37: Durable Storage and Migration
+Phase 58: Consistency and Recovery
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS (Ready for Milestone 38 / Phase 59)
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 58 concludes Milestone 37 (Durable Storage and Migration) of Project Continuum
+v1.4.0 "Universal Resume Anywhere". Conforming to invariants I-05 (Explicit & Safe
+Restore), I-06 (Derived Briefs & Indexes), I-11 (Guarded Ancestry), and I-14
+(Validated, Recoverable, Idempotent Operations), this phase implements:
+1. `StorageConsistencyEngine`: Diagnostic auditing and safe recovery engine.
+2. Full anomaly detection suite:
+   - Orphaned checkpoints: checkpoints declaring mismatched activity_id.
+   - Missing activity records: directories containing checkpoints but missing activity.json.
+   - Invalid branch / parent references: checkpoints referencing non-existent parent IDs.
+   - Malformed records: corrupt JSON or schema-invalid files.
+   - Derived-index mismatches: discrepancy between authoritative disk JSON and SQLite index.
+   - Stale temporary files: unlinked in-flight `.tmp` files from interrupted processes.
+3. Explicit, Non-Destructive Repair:
+   - Zero silent data loss: malformed files are quarantined with manifests into
+     `<workspace_root>/.continuum/quarantine/<timestamp>/`, never deleted.
+   - Missing activity headers are safely reconstructed, preserving all underlying checkpoints.
+   - Broken ancestry references are quarantined into `metadata["unresolved_parent_id"]`,
+     preserving the checkpoint and removing illegal graph cycles.
+   - Derived SQLite index is deterministically rebuilt from authoritative JSON partitions (I-06).
+4. Repeatable and idempotent operations: a second audit/repair pass confirms 100% clean state.
+
+2. INSPECTED & CHANGED FILES
+--------------------------------------------------------------------------------
+- Inspected Existing Files:
+  * `storage/recovery.py`: Legacy state recovery patterns.
+  * `storage/activity_store.py`: Activity & Checkpoint store and index rebuild.
+  * `storage/migration.py`: Migration engine and version detection.
+- Changed / Created Files:
+  * `storage/consistency.py`: Implemented `StorageConsistencyEngine`, `ConsistencyIssueType`,
+    `ConsistencyIssue`, `ConsistencyAuditReport`, and `ConsistencyRepairResult`.
+  * `storage/__init__.py`: Exported consistency engine and models.
+  * `tests/test_phase58_consistency.py`: Comprehensive test suite (8 test cases).
+  * `docs/reports/PHASE_58_CONSISTENCY_RECOVERY_REPORT.txt`: This engineering report.
+
+3. ARCHITECTURAL CONTRACTS & INVARIANTS ENFORCED
+--------------------------------------------------------------------------------
+A. Non-Destructive Recovery (I-05, I-14):
+   - Corrupted or damaged records are moved into timestamped quarantine directories
+     along with `.manifest.json` files documenting original path and failure reason.
+   - No data is silently destroyed.
+
+B. Ancestry Preservation & Graph Repair (I-11):
+   - When a checkpoint references a non-existent parent, the invalid pointer is
+     nulled on the relational edge while the referenced ID is preserved in
+     `metadata["unresolved_parent_id"]`.
+
+C. Derived-Index Resynchronization (I-06):
+   - Index mismatches between disk files and SQLite are repaired deterministically
+     by executing `store.rebuild_index_from_authoritative_files()`.
+
+D. Repeatability & Idempotence:
+   - Running `engine.repair()` on a repaired storage reports 0 issues detected and
+     0 issues repaired, leaving storage in a verified clean state.
+
+4. VERIFICATION TESTS AND REAL OUTCOMES
+--------------------------------------------------------------------------------
+Command: `pytest tests/test_phase58_consistency.py -v`
+Outcome: 8 passed in 0.75s (100% success rate, 0 failures, 0 errors).
+
+Executed Test Cases:
+1. `test_audit_clean_storage`: PASS
+   Verifies that uncorrupted storage reports 0 issues and is_clean=True.
+2. `test_detect_and_quarantine_malformed_records`: PASS
+   Verifies that corrupted JSON checkpoint is detected, quarantined with manifest,
+   and authoritative directory left clean.
+3. `test_detect_and_reconstruct_missing_activity`: PASS
+   Verifies that missing activity.json is detected and reconstructed without losing
+   underlying checkpoints.
+4. `test_detect_and_harmonize_orphaned_checkpoints`: PASS
+   Verifies that checkpoints with mismatched activity_id are detected and harmonized
+   to match directory location.
+5. `test_detect_and_isolate_invalid_branch_references`: PASS
+   Verifies that broken parent links are isolated in metadata without deleting checkpoints.
+6. `test_detect_and_cleanup_stale_temporary_files`: PASS
+   Verifies that abandoned temporary files from interrupted writes are detected and removed.
+7. `test_detect_and_rebuild_derived_index_mismatch`: PASS
+   Verifies that SQLite index desynchronization is detected and rebuilt from authoritative JSON.
+8. `test_repeat_check_idempotence`: PASS
+   Verifies that repair is completely repeatable and running audit/repair again reports 0 issues.
+
+5. REGRESSION & COMBINED SUITE OUTCOMES
+--------------------------------------------------------------------------------
+Command: `pytest tests/test_phase50_discovery.py tests/test_phase51_audit.py tests/test_phase52_baseline.py tests/test_phase53_activity.py tests/test_phase54_checkpoint.py tests/test_phase55_invariants_and_adr.py tests/test_phase56_persistence.py tests/test_phase57_migration.py tests/test_phase58_consistency.py`
+Outcome: 66 passed in 3.18s (100% success rate).
+
+6. ACCEPTANCE CHECKLIST
+--------------------------------------------------------------------------------
+[x] Orphaned checkpoints detected and safely harmonized.
+[x] Missing activities detected and safely reconstructed.
+[x] Invalid branch/parent references detected and isolated into metadata.
+[x] Malformed records detected and quarantined non-destructively.
+[x] Derived-index mismatches detected and rebuilt from authoritative JSON.
+[x] Stale temporary files detected and cleaned.
+[x] Repair is repeatable, idempotent, and leaves storage 100% clean.
+[x] 8 / 8 automated Phase 58 unit tests passing.
+[x] Zero third-party dependencies added (`dependencies = []`).
+
+7. FINAL STATUS & NEXT-PHASE PREREQUISITES
+--------------------------------------------------------------------------------
+Final Status: PASS
+Readiness for Next Phase: READY
+Milestone 37 (Durable Storage and Migration) is 100% COMPLETE.
+Prerequisites for Milestone 38 (Capture and Resume) - Phase 59:
+- Activity & Checkpoint persistence engine (Phase 56) certified.
+- Idempotent migration engine (Phase 57) certified.
+- Storage consistency and safe recovery engine (Phase 58) certified.
+- Storage layer is 100% ready for manual checkpoint capture workflows in Phase 59.
+================================================================================

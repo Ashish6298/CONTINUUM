@@ -20,6 +20,13 @@ from storage.migration import (
     MigrationRecord,
     CURRENT_SCHEMA_VERSION,
 )
+from storage.consistency import (
+    ConsistencyIssueType,
+    ConsistencyIssue,
+    ConsistencyAuditReport,
+    ConsistencyRepairResult,
+    StorageConsistencyEngine,
+)
 
 __all__ = [
     "StorageMetadata",
@@ -35,4 +42,9 @@ __all__ = [
     "MigrationResult",
     "MigrationRecord",
     "CURRENT_SCHEMA_VERSION",
+    "ConsistencyIssueType",
+    "ConsistencyIssue",
+    "ConsistencyAuditReport",
+    "ConsistencyRepairResult",
+    "StorageConsistencyEngine",
 ]
