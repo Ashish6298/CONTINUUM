@@ -874,7 +874,15 @@ class ContinuumDashboardApp {
       if (this.el.resumeDetailEmptyState) this.el.resumeDetailEmptyState.style.display = 'none';
       if (this.el.resumeDetailContent) this.el.resumeDetailContent.style.display = 'flex';
 
-      if (this.el.detailActivityTitle) this.el.detailActivityTitle.textContent = act.title;
+      if (this.el.detailActivityTitle) {
+        if (act.metadata && act.metadata.branch_source_checkpoint_id) {
+          const branchLbl = escapeHtml(act.metadata.branch_name || 'branch');
+          const srcChk = escapeHtml(act.metadata.branch_source_checkpoint_id);
+          this.el.detailActivityTitle.innerHTML = `${escapeHtml(act.title)} <span class="badge" style="background:rgba(16,185,129,0.18); color:#34d399; font-size:0.75rem; margin-left:8px;" title="Branched from checkpoint ${srcChk}">🌿 Branch: ${branchLbl}</span>`;
+        } else {
+          this.el.detailActivityTitle.textContent = act.title;
+        }
+      }
       if (this.el.detailActivityType) this.el.detailActivityType.textContent = act.activity_type;
       if (this.el.detailActivityStatus) this.el.detailActivityStatus.textContent = act.status;
       if (this.el.detailActivityUpdated) {
@@ -1065,6 +1073,9 @@ class ContinuumDashboardApp {
       </div>
 
       <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.4rem;">
+        <button class="btn btn-secondary btn-xs" id="btnSnapshotBranch" style="padding:0.35rem 0.75rem;">
+          🌿 Branch from Checkpoint
+        </button>
         ${(chk.parent_checkpoint_id || chk.parent_id) ? `
           <button class="btn btn-primary btn-xs" id="btnSnapshotCompareWithParent" style="padding:0.35rem 0.75rem;">
             ⚖️ Compare with Parent (${chk.parent_checkpoint_id || chk.parent_id})
@@ -1072,6 +1083,13 @@ class ContinuumDashboardApp {
         ` : ''}
       </div>
     `;
+
+    const btnBranch = this.el.snapshotModalBody.querySelector('#btnSnapshotBranch');
+    if (btnBranch) {
+      btnBranch.addEventListener('click', () => {
+        this.promptBranchCheckpoint(chk.id);
+      });
+    }
 
     const btnCompareParent = this.el.snapshotModalBody.querySelector('#btnSnapshotCompareWithParent');
     if (btnCompareParent) {
@@ -1087,6 +1105,45 @@ class ContinuumDashboardApp {
   closeSnapshotModal() {
     if (this.el.modalSnapshotDetail) {
       this.el.modalSnapshotDetail.style.display = 'none';
+    }
+  }
+
+  async promptBranchCheckpoint(chkId) {
+    if (!chkId) return;
+    const branchName = prompt('Enter a name for the new branch continuation (e.g., experiment-a, refactor-tests):', 'branch');
+    if (branchName === null) return;
+    const cleanBranchName = branchName.trim() || 'branch';
+
+    const title = prompt('Enter a title for the new branched activity (optional, leave blank for default):', '');
+    if (title === null) return;
+
+    try {
+      this.showToast('🌿 Creating independent branch continuation...');
+      const res = await fetch('/api/v1/activities/branch', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          source_checkpoint_id: chkId,
+          branch_name: cleanBranchName,
+          title: title.trim() || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        this.showToast(`❌ Branching failed: ${err.error || res.statusText}`);
+        return;
+      }
+
+      const data = await res.json();
+      this.showToast(`🌿 Successfully branched activity: ${data.activity.title}`);
+      this.closeSnapshotModal();
+      await this.loadActivities();
+      if (data.activity && data.activity.id) {
+        this.selectActivity(data.activity.id);
+      }
+    } catch (e) {
+      this.showToast(`❌ Error branching checkpoint: ${e.message}`);
     }
   }
 

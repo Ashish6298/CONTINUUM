@@ -170,10 +170,12 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_diff()
                 elif path == "/api/checkpoints":
                     self.handle_get_checkpoints()
-                elif path in ("/api/v1/activities", "/api/activities"):
-                    self.handle_get_v1_activities(query)
+                elif path in ("/api/v1/activities/branch/ancestry", "/api/activities/branch/ancestry"):
+                    self.handle_get_v1_activity_branch_ancestry(query)
                 elif path in ("/api/v1/activities/detail", "/api/activities/detail"):
                     self.handle_get_v1_activity_detail(query)
+                elif path in ("/api/v1/activities", "/api/activities"):
+                    self.handle_get_v1_activities(query)
                 elif path in ("/api/v1/checkpoints/compare", "/api/checkpoints/compare"):
                     self.handle_get_v1_checkpoints_compare(query)
                 elif path in ("/api/v1/checkpoints", "/api/checkpoints/v1"):
@@ -371,6 +373,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_workspace_sync()
             elif path == "/api/checkpoints":
                 self.handle_post_checkpoint()
+            elif path in ("/api/v1/activities/branch", "/api/activities/branch"):
+                self.handle_post_v1_activity_branch()
             elif path in ("/api/v1/activities", "/api/activities"):
                 self.handle_post_v1_activity()
             elif path in ("/api/v1/checkpoints/compare", "/api/checkpoints/compare"):
@@ -844,6 +848,105 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "activity": created.to_dict(),
             "timestamp": datetime.now(timezone.utc).isoformat()
         }, status_code=201)
+
+    def handle_post_v1_activity_branch(self) -> None:
+        """
+        POST /api/v1/activities/branch (Phase 65)
+        Creates an independent continuation activity branching from an existing checkpoint.
+        Reuses artifact references without file duplication, records branch ancestry,
+        and leaves the source branch strictly unmutated.
+        """
+        from storage.activity_store import (
+            ActivityCheckpointStore,
+            ActivityNotFoundError,
+            CheckpointNotFoundError,
+            CheckpointValidationError,
+        )
+        from core.invariants import CommitFailedError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        source_chk_id = data.get("source_checkpoint_id") or data.get("checkpoint_id")
+        if not source_chk_id or not isinstance(source_chk_id, str) or not source_chk_id.strip():
+            self._send_error_response("Field 'source_checkpoint_id' is required.", status_code=400)
+            return
+
+        new_title = data.get("title") or data.get("new_title")
+        branch_name = data.get("branch_name") or "branch"
+        description = data.get("description")
+        tags = data.get("tags")
+        if tags is not None and not isinstance(tags, list):
+            tags = [str(tags)]
+
+        new_activity_id = data.get("new_activity_id") or data.get("activity_id")
+        new_checkpoint_id = data.get("new_checkpoint_id")
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            new_activity, new_checkpoint = store.branch_from_checkpoint(
+                source_checkpoint_id=source_chk_id.strip(),
+                new_title=new_title,
+                branch_name=branch_name,
+                description=description,
+                tags=tags,
+                new_activity_id=new_activity_id,
+                new_checkpoint_id=new_checkpoint_id,
+            )
+            self._send_json_response({
+                "status": "success",
+                "message": f"Successfully branched activity '{new_activity.title}' from checkpoint '{source_chk_id}'.",
+                "activity": new_activity.to_dict(),
+                "checkpoint": new_checkpoint.to_dict(),
+                "branch_origin": {
+                    "source_activity_id": new_activity.metadata.get("branch_source_activity_id"),
+                    "source_checkpoint_id": source_chk_id,
+                    "branch_name": branch_name,
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, status_code=201)
+        except (CheckpointNotFoundError, ActivityNotFoundError) as e:
+            self._send_error_response(str(e), status_code=404)
+        except (CheckpointValidationError, ValueError) as e:
+            self._send_error_response(str(e), status_code=400)
+        except CommitFailedError as e:
+            self._send_error_response(f"Branch commit failed: {e}", status_code=500, details=getattr(e, "internal_details", None))
+        except Exception as e:
+            self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
+
+    def handle_get_v1_activity_branch_ancestry(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/activities/branch/ancestry (Phase 65)
+        Returns the branch lineage and origin details for an activity.
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+
+        activity_id = query.get("activity_id", [None])[0] or query.get("id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            ancestry = store.get_branch_ancestry(activity_id)
+            self._send_json_response({
+                "status": "success",
+                "ancestry": ancestry,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+        except Exception as e:
+            self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
 
     def handle_post_v1_checkpoint_manual(self) -> None:
         """

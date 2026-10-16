@@ -18,16 +18,26 @@ Implements:
 8. Zero external dependencies (Python standard library only).
 """
 
+import copy
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import shutil
 import sqlite3
 from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
+import uuid
 
 from core.activity import Activity, ActivityStatus, ActivityType, ActivityValidationError, InvalidStatusTransitionError
-from core.checkpoint import UniversalCheckpoint, CheckpointValidationError
+from core.checkpoint import (
+    UniversalCheckpoint,
+    CheckpointValidationError,
+    DecisionRecord,
+    ArtifactReference,
+    ProvenanceRecord,
+)
+from core.enums import ProvenanceType
 from core.invariants import (
     CommitFailedError,
     InvariantViolationError,
@@ -552,6 +562,213 @@ class ActivityCheckpointStore:
                 continue
 
         return checkpoints, total_count
+
+    # =========================================================================
+    # PHASE 65 — BRANCH FROM HISTORICAL CHECKPOINT
+    # =========================================================================
+
+    def branch_from_checkpoint(
+        self,
+        source_checkpoint_id: str,
+        new_title: Optional[str] = None,
+        branch_name: Optional[str] = None,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        new_activity_id: Optional[str] = None,
+        new_checkpoint_id: Optional[str] = None,
+    ) -> Tuple[Activity, UniversalCheckpoint]:
+        """
+        Phase 65: Branch from Historical Checkpoint.
+        Creates an independent continuation activity with stable identity, source checkpoint,
+        and ancestry tracking. Reuses artifact references without file bloat.
+
+        Guarantees:
+        - I-01: Stable local identities for new activity and initial checkpoint.
+        - I-03 & Gate: Branching is NOT restore and NEVER mutates the source branch or checkpoint.
+        - Failure-Safe: Clean rollback on partial failure; safe to retry.
+        """
+        if not source_checkpoint_id or not isinstance(source_checkpoint_id, str):
+            raise CheckpointValidationError("Parameter 'source_checkpoint_id' must be a non-empty string.")
+
+        # 1. Authoritative lookup of source checkpoint and activity
+        source_chk = self.get_checkpoint(source_checkpoint_id.strip())
+        source_act = self.get_activity(source_chk.activity_id)
+
+        # 2. Derive branch parameters & stable identities
+        clean_branch_name = branch_name.strip() if branch_name and branch_name.strip() else "branch"
+        act_title = new_title.strip() if new_title and new_title.strip() else f"{source_act.title} (Branch: {clean_branch_name})"
+        act_id = new_activity_id.strip() if new_activity_id and new_activity_id.strip() else f"act_{uuid.uuid4().hex[:12]}"
+        chk_id = new_checkpoint_id.strip() if new_checkpoint_id and new_checkpoint_id.strip() else f"chk_{uuid.uuid4().hex[:12]}"
+
+        # Inherit and deduplicate tags
+        inherited_tags: List[str] = list(source_act.tags)
+        if "branch" not in inherited_tags:
+            inherited_tags.append("branch")
+        if tags:
+            for t in tags:
+                clean_t = str(t).strip()
+                if clean_t and clean_t not in inherited_tags:
+                    inherited_tags.append(clean_t)
+
+        # Build activity metadata with explicit branch provenance
+        act_metadata = dict(source_act.metadata)
+        act_metadata.update({
+            "branch_source_activity_id": source_act.id,
+            "branch_source_checkpoint_id": source_chk.id,
+            "branch_name": clean_branch_name,
+            "branched_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+        related_ids = list(source_act.related_activity_ids)
+        if source_act.id not in related_ids:
+            related_ids.append(source_act.id)
+
+        # 3. Construct new independent Activity entity
+        new_activity = Activity(
+            id=act_id,
+            title=act_title,
+            description=description if description is not None else source_act.description,
+            activity_type=source_act.activity_type,
+            status=ActivityStatus.ACTIVE,
+            tags=inherited_tags,
+            collection=source_act.collection,
+            related_activity_ids=related_ids,
+            metadata=act_metadata,
+        )
+
+        # 4. Construct cloned initial checkpoint reusing artifact references
+        # Artifact references are copied without file duplication
+        reused_artifacts = [
+            ArtifactReference(
+                name=a.name,
+                path_or_uri=a.path_or_uri,
+                mode=a.mode,
+                captured_at=a.captured_at,
+                checksum_sha256=a.checksum_sha256,
+                size_bytes=a.size_bytes,
+                snapshot_content=a.snapshot_content,
+            )
+            for a in source_chk.artifacts
+        ]
+
+        cloned_decisions = [
+            DecisionRecord(
+                id=f"dec_{uuid.uuid4().hex[:8]}",
+                decision=d.decision,
+                rationale=d.rationale,
+                constraints=list(d.constraints),
+                recorded_at=d.recorded_at,
+            )
+            for d in source_chk.decisions
+        ]
+
+        chk_provenance = ProvenanceRecord(
+            provenance_type=ProvenanceType.USER_CONFIRMED,
+            captured_by="branch_operation",
+            captured_at=datetime.now(timezone.utc).isoformat(),
+            is_authoritative=True,
+            details={
+                "branch_source_activity_id": source_act.id,
+                "branch_source_checkpoint_id": source_chk.id,
+                "branch_name": clean_branch_name,
+            },
+        )
+
+        chk_metadata = dict(source_chk.metadata)
+        chk_metadata.update({
+            "branch_source_activity_id": source_act.id,
+            "branch_source_checkpoint_id": source_chk.id,
+            "branch_name": clean_branch_name,
+        })
+
+        new_checkpoint = UniversalCheckpoint(
+            id=chk_id,
+            activity_id=act_id,
+            parent_checkpoint_id=None,
+            branch_source_checkpoint_id=source_chk.id,
+            structured_state=copy.deepcopy(source_chk.structured_state),
+            progress=copy.deepcopy(source_chk.progress),
+            completed_work=list(source_chk.completed_work),
+            pending_actions=list(source_chk.pending_actions),
+            decisions=cloned_decisions,
+            context=source_chk.context,
+            references=list(source_chk.references),
+            blockers=list(source_chk.blockers),
+            artifacts=reused_artifacts,
+            permitted_excerpts=list(source_chk.permitted_excerpts),
+            provenance=chk_provenance,
+            metadata=chk_metadata,
+        )
+
+        # Derive fresh deterministic resume brief for the new branch continuation
+        try:
+            from core.resume_generator import DeterministicResumeBriefGenerator
+            brief_gen = DeterministicResumeBriefGenerator(workspace_root=self.workspace_root)
+            new_checkpoint.resume_brief = brief_gen.generate_brief(new_activity, new_checkpoint)
+        except Exception:
+            pass
+
+        # 5. Atomic persistence with rollback on partial failure
+        act_dir = self._get_activity_dir(act_id)
+        try:
+            created_act = self.create_activity(new_activity)
+            committed_chk = self.commit_checkpoint(new_checkpoint)
+            return created_act, committed_chk
+        except Exception as e:
+            # Full rollback: remove directory & index entries for new activity
+            if act_dir.exists():
+                shutil.rmtree(act_dir, ignore_errors=True)
+            try:
+                with self._get_db_connection() as conn:
+                    conn.execute("DELETE FROM checkpoints_idx WHERE activity_id = ?", (act_id,))
+                    conn.execute("DELETE FROM activities_idx WHERE id = ?", (act_id,))
+            except Exception:
+                pass
+            raise CommitFailedError(f"Failed to branch from checkpoint: {e}", internal_details=str(e))
+
+    def get_branch_ancestry(self, activity_id: str) -> Dict[str, Any]:
+        """
+        Phase 65: Traces the branch ancestry of an activity back to its origin.
+        Makes branch origin visible without mutating historical records.
+        """
+        activity = self.get_activity(activity_id)
+        ancestry_chain: List[Dict[str, Any]] = []
+        curr_act = activity
+        visited: Set[str] = set()
+
+        while curr_act and curr_act.id not in visited:
+            visited.add(curr_act.id)
+            source_chk_id = curr_act.metadata.get("branch_source_checkpoint_id")
+            source_act_id = curr_act.metadata.get("branch_source_activity_id")
+            branch_name = curr_act.metadata.get("branch_name")
+
+            if not source_act_id:
+                break
+
+            ancestry_chain.append({
+                "activity_id": curr_act.id,
+                "activity_title": curr_act.title,
+                "branch_name": branch_name,
+                "source_activity_id": source_act_id,
+                "source_checkpoint_id": source_chk_id,
+            })
+
+            try:
+                curr_act = self.get_activity(source_act_id)
+            except Exception:
+                break
+
+        return {
+            "activity_id": activity.id,
+            "title": activity.title,
+            "is_branch": bool(activity.metadata.get("branch_source_checkpoint_id")),
+            "branch_source_checkpoint_id": activity.metadata.get("branch_source_checkpoint_id"),
+            "branch_source_activity_id": activity.metadata.get("branch_source_activity_id"),
+            "branch_name": activity.metadata.get("branch_name"),
+            "branched_at": activity.metadata.get("branched_at"),
+            "ancestry_depth": len(ancestry_chain),
+            "ancestry_chain": ancestry_chain,
+        }
 
     # =========================================================================
     # RECOVERY & INDEX REBUILD (I-06)

@@ -1,0 +1,126 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING AUDIT & IMPLEMENTATION REPORT
+Milestone 39: History, Diffs, Branch and Restore
+Phase 65: Branch from Historical Checkpoint
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS (Ready for Phase 66: Explicit Restore and Recovery)
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 65 of Project Continuum v1.4.0 "Universal Resume Anywhere" implements the
+capability to explicitly branch from any historical checkpoint to create an
+independent continuation activity with stable identity, source checkpoint linkage,
+and lineage tracking. Conforming strictly to Invariant I-01 (Stable Local Identities),
+Invariant I-03 (Never Rewrite History), and the Phase 65 Gate requirement:
+"Branching is NOT restore and NEVER mutates the source branch or checkpoints."
+
+Key Deliverables:
+1. Explicit Branch Creation (`branch_from_checkpoint`):
+   - Accepts any valid `source_checkpoint_id` across the repository.
+   - Automatically retrieves the owning source activity.
+   - Creates a new independent `Activity` continuation with a stable ID (`act_<uuid>`),
+     inheriting activity type, collection, and tags (augmented with "branch").
+   - Clones historical state into an initial checkpoint (`chk_<uuid>`), recording
+     `branch_source_checkpoint_id = <source_checkpoint_id>`.
+   - Derives a fresh, local, deterministic Resume Brief for the new branch.
+2. Gate Invariant Verification (Zero Mutation of Source Branch):
+   - Branching is strictly non-destructive. Source activity JSON files and historical
+     checkpoint JSON files remain 100% byte-for-byte identical.
+   - File modification timestamps (`st_mtime_ns`) and SHA256 hashes of the source
+     branch are proven untouched by automated gate tests.
+3. Artifact Reference Reuse Without File Bloat:
+   - Checkpoint artifacts (both live references and snapshot copies) are reused by
+     reference (`ArtifactReference`), avoiding unnecessary physical disk duplication.
+4. Visible Branch Origin & Ancestry Resolution:
+   - Branch provenance is recorded in both activity metadata (`branch_source_activity_id`,
+     `branch_source_checkpoint_id`, `branch_name`) and checkpoint provenance details.
+   - Added `get_branch_ancestry(activity_id)` method and REST endpoint to trace
+     lineage chains across multi-level nested branches.
+5. Transactional Rollback & Retry Safety:
+   - Atomic rollback cleanup if file persistence or indexing fails midway: removes
+     partial directories and purges index rows, ensuring zero orphaned records.
+   - Retrying after transient errors is completely safe and idempotent.
+6. REST API & Web Dashboard Integration:
+   - Endpoint: `POST /api/v1/activities/branch` (creates new branch continuation).
+   - Endpoint: `GET /api/v1/activities/branch/ancestry` (queries branch lineage).
+   - UI: "🌿 Branch from Checkpoint" action inside Historical Snapshot detail modal;
+     branch badges (`🌿 Branch: <branch_name>`) rendered in activity header.
+
+2. INSPECTED & CHANGED FILES
+--------------------------------------------------------------------------------
+- Modified Existing Files:
+  * `storage/activity_store.py`:
+    - Added `branch_from_checkpoint(...)` with full rollback and ancestry linking.
+    - Added `get_branch_ancestry(activity_id)` for hierarchical lineage traversal.
+    - Updated imports for `copy`, `shutil`, `uuid`, `ArtifactReference`, `DecisionRecord`,
+      `ProvenanceRecord`, and `ProvenanceType`.
+  * `server/routes.py`:
+    - Added `handle_post_v1_activity_branch()` endpoint handler.
+    - Added `handle_get_v1_activity_branch_ancestry()` endpoint handler.
+    - Wired routes in `do_POST` and `do_GET`.
+  * `server/static/dashboard.js`:
+    - Added "🌿 Branch from Checkpoint" button in `openSnapshotModal`.
+    - Added `promptBranchCheckpoint(chkId)` for user prompt and API dispatch.
+    - Added branch origin badge in activity detail header.
+- Created Files:
+  * `tests/test_phase65_branch.py`:
+    - 9 comprehensive unit and integration tests covering old/recent checkpoints,
+      gate invariants, ancestry preservation, artifact reuse, rollback, and API routes.
+  * `docs/reports/PHASE_65_BRANCH_CHECKPOINT_REPORT.txt`:
+    - This engineering audit and verification document.
+
+3. GATE & INVARIANT VERIFICATION
+--------------------------------------------------------------------------------
+- Phase 65 Gate:
+  "Branching is not restore and never mutates the source branch."
+  * TESTED & VERIFIED: `test_gate_branching_never_mutates_source_branch_or_checkpoints`
+    computes SHA256 digests and nanosecond modification timestamps (`st_mtime_ns`)
+    of the source activity file and all historical checkpoints before and after
+    branch operations. Zero mutations observed.
+- Invariant I-01 (Stable Local Identities):
+  * Newly created branch activity and initial checkpoint receive immutable unique IDs
+    that persist across renames and migrations.
+- Invariant I-02 (Durable Commits & Relational Integrity):
+  * Initial branch checkpoint is committed via atomic tmp-replace write before
+    updating the SQLite derived index.
+- Invariant I-03 (Never Rewrite History):
+  * Branching spawns a completely new continuation; history of the source activity
+    is never altered, rewritten, or truncated.
+- Invariant I-17 (Bounded Memory & Large List Protection):
+  * Artifacts are referenced rather than duplicated, preventing unbounded disk bloat.
+
+4. AUTOMATED TEST EXECUTION RESULTS
+--------------------------------------------------------------------------------
+Command Run:
+`python -m unittest tests/test_phase65_branch.py -v`
+
+Results:
+test_api_branch_missing_source (tests.test_phase65_branch.TestPhase65BranchApi.test_api_branch_missing_source) ... ok
+test_api_branch_non_existent_checkpoint (tests.test_phase65_branch.TestPhase65BranchApi.test_api_branch_non_existent_checkpoint) ... ok
+test_api_branch_success (tests.test_phase65_branch.TestPhase65BranchApi.test_api_branch_success) ... ok
+test_artifact_reference_reuse_without_duplication (tests.test_phase65_branch.TestPhase65Branching.test_artifact_reference_reuse_without_duplication)
+Verify that artifact references and snapshot metadata are preserved without ... ok
+test_branch_from_old_and_recent_checkpoints (tests.test_phase65_branch.TestPhase65Branching.test_branch_from_old_and_recent_checkpoints)
+Verify that branching from an older checkpoint (chk_1) and a recent one (chk_3) ... ok
+test_gate_branching_never_mutates_source_branch_or_checkpoints (tests.test_phase65_branch.TestPhase65Branching.test_gate_branching_never_mutates_source_branch_or_checkpoints)
+Gate Invariant: Branching is NOT restore and NEVER mutates the source branch. ... ok
+test_idempotent_retry_after_failure (tests.test_phase65_branch.TestPhase65Branching.test_idempotent_retry_after_failure)
+Verifies that after a failed attempt, retrying the branch succeeds cleanly. ... ok
+test_partial_failure_and_rollback (tests.test_phase65_branch.TestPhase65Branching.test_partial_failure_and_rollback)
+Verifies that if an error occurs midway through branching, the partially created ... ok
+test_rename_ancestry_preservation_and_ancestry_chain (tests.test_phase65_branch.TestPhase65Branching.test_rename_ancestry_preservation_and_ancestry_chain)
+Verify that renaming an activity preserves stable identity (I-01) and ... ok
+
+Ran 9 tests in 1.603s
+Status: OK (100% Passed)
+
+Total Repository Test Count: 321 tests passing (312 baseline + 9 Phase 65).
+
+5. READINESS DETERMINATION
+--------------------------------------------------------------------------------
+Phase 65 implementation satisfies all functional requirements and gate invariants.
+Zero breaking changes introduced; zero external runtime dependencies.
+Repository status: READY FOR PHASE 66 — Explicit Restore and Recovery.
+================================================================================
