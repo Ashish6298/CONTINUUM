@@ -48,6 +48,13 @@ from core.checkpoint_diff import (
     CheckpointDiffResult,
     IncompatibleCheckpointsError,
 )
+from core.privacy import (
+    PrivacyConfig,
+    PrivacyManager,
+    SecretDetectionEvidence,
+    SecretRedactionResult,
+    PrivacyConfigError,
+)
 from core.invariants import (
     InvariantId,
     InvariantCategory,
@@ -194,4 +201,9 @@ __all__ = [
     "CheckpointDiffEngine",
     "CheckpointDiffResult",
     "IncompatibleCheckpointsError",
+    "PrivacyConfig",
+    "PrivacyManager",
+    "SecretDetectionEvidence",
+    "SecretRedactionResult",
+    "PrivacyConfigError",
 ]

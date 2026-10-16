@@ -76,13 +76,17 @@ class DeterministicResumeBriefGenerator:
         self.ai_provider_callback = ai_provider_callback
 
     def _sanitize_string(self, text: str) -> str:
-        """Redacts inline secrets and strips credentials from a string."""
+        """Redacts inline secrets, credentials, and custom denied terms via PrivacyManager."""
         if not text:
             return ""
-        sanitized = text
-        for pattern, replacement in DaemonSanitizer.INLINE_SECRET_PATTERNS:
-            sanitized = pattern.sub(replacement, sanitized)
-        return sanitized
+        try:
+            from core.privacy import PrivacyManager
+            return PrivacyManager.get_instance().sanitize_text(text)
+        except Exception:
+            sanitized = text
+            for pattern, replacement in DaemonSanitizer.INLINE_SECRET_PATTERNS:
+                sanitized = pattern.sub(replacement, sanitized)
+            return sanitized
 
     def _sanitize_list(self, items: List[str]) -> List[str]:
         """Redacts secrets from each item in a list."""
@@ -198,8 +202,15 @@ class DeterministicResumeBriefGenerator:
             generator_id=self.GENERATOR_ID,
         )
 
-        # 7. Optional AI Enhancement (strictly gated by explicit user consent)
-        if ai_consent and ai_consent.consent_granted and self.ai_provider_callback:
+        # 7. Optional AI Enhancement (strictly gated by explicit user consent & privacy configuration)
+        ai_allowed_by_privacy = False
+        try:
+            from core.privacy import PrivacyManager
+            ai_allowed_by_privacy = PrivacyManager.get_instance().config.ai_enhancement_allowed
+        except Exception:
+            ai_allowed_by_privacy = False
+
+        if ai_allowed_by_privacy and ai_consent and ai_consent.consent_granted and self.ai_provider_callback:
             try:
                 enhanced_brief = self._attempt_ai_enhancement(brief, activity, checkpoint, ai_consent)
                 if enhanced_brief is not None:

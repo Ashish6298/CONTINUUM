@@ -1647,6 +1647,13 @@ class ActivityCheckpointStore:
                 for c_row in cur.fetchall():
                     head_checkpoint_ids[c_row["activity_id"]] = c_row["id"]
 
+        # Resolve PrivacyManager for privacy-safe snippets and excerpt bounds
+        try:
+            from core.privacy import PrivacyManager
+            privacy_mgr = PrivacyManager.get_instance(self.workspace_root)
+        except Exception:
+            privacy_mgr = None
+
         results: List[SearchResult] = []
         for r in rows:
             rec_id = r["record_id"]
@@ -1658,9 +1665,13 @@ class ActivityCheckpointStore:
             if not raw_snippet and r["description"]:
                 raw_snippet = r["description"]
 
-            snippet_sanitized = DaemonSanitizer.sanitize_text(raw_snippet)
-            bounded_snippet = bound_excerpt(snippet_sanitized, max_chars=280)
-            desc_sanitized = bound_excerpt(DaemonSanitizer.sanitize_text(r["description"] or ""), max_chars=280)
+            if privacy_mgr is not None:
+                bounded_snippet = privacy_mgr.bound_and_sanitize_excerpt(raw_snippet)
+                desc_sanitized = privacy_mgr.bound_and_sanitize_excerpt(r["description"] or "")
+            else:
+                snippet_sanitized = DaemonSanitizer.sanitize_text(raw_snippet)
+                bounded_snippet = bound_excerpt(snippet_sanitized, max_chars=280)
+                desc_sanitized = bound_excerpt(DaemonSanitizer.sanitize_text(r["description"] or ""), max_chars=280)
 
             owning_title = activity_titles.get(act_id, "")
             if rec_type == "activity":

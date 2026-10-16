@@ -194,6 +194,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_v1_triggers_status()
                 elif path in ("/api/v1/retention/preview", "/api/retention/preview"):
                     self.handle_get_v1_retention_preview(query)
+                elif path in ("/api/v1/privacy/config", "/api/privacy/config"):
+                    self.handle_get_v1_privacy_config()
                 else:
                     self._send_error_response(f"Endpoint not found: {path}", status_code=404)
             except Exception as e:
@@ -415,6 +417,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_v1_retention_prune()
             elif path in ("/api/v1/retention/undo", "/api/retention/undo"):
                 self.handle_post_v1_retention_undo()
+            elif path in ("/api/v1/privacy/config", "/api/privacy/config"):
+                self.handle_post_v1_privacy_config()
+            elif path in ("/api/v1/privacy/redact", "/api/privacy/redact"):
+                self.handle_post_v1_privacy_redact()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
@@ -2326,6 +2332,78 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._send_error_response(f"Retention undo failed: {str(e)}", status_code=400)
 
+    def handle_get_v1_privacy_config(self) -> None:
+        """
+        GET /api/v1/privacy/config (Phase 74)
+        Returns current PrivacyConfig settings.
+        """
+        from core.privacy import PrivacyManager
+        mgr = PrivacyManager.get_instance(self.workspace_root)
+        self._send_json_response({
+            "status": "success",
+            "config": mgr.config.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
 
+    def handle_post_v1_privacy_config(self) -> None:
+        """
+        POST /api/v1/privacy/config (Phase 74)
+        Updates privacy settings, saves to disk, and triggers index rebuild.
+        """
+        from core.privacy import PrivacyManager, PrivacyConfig
+        from storage.activity_store import ActivityCheckpointStore
 
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
 
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        rebuild_index = bool(body.get("rebuild_index", True))
+        try:
+            new_config = PrivacyConfig.from_dict(body)
+            mgr = PrivacyManager.get_instance(self.workspace_root)
+            store = ActivityCheckpointStore(self.workspace_root)
+            updated = mgr.update_config(new_config, store=store, rebuild_index=rebuild_index)
+            self._send_json_response({
+                "status": "success",
+                "config": updated.to_dict(),
+                "index_rebuilt": rebuild_index,
+                "message": "Privacy settings updated successfully.",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Failed to update privacy settings: {str(e)}", status_code=400)
+
+    def handle_post_v1_privacy_redact(self) -> None:
+        """
+        POST /api/v1/privacy/redact (Phase 74)
+        Evaluates input text against privacy rules and returns redaction result with evidence.
+        """
+        from core.privacy import PrivacyManager
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        text = body.get("text", "")
+        mgr = PrivacyManager.get_instance(self.workspace_root)
+        result = mgr.redact_text(text)
+        self._send_json_response({
+            "status": "success",
+            "result": result.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })

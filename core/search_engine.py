@@ -46,36 +46,42 @@ class SearchResult:
         return asdict(self)
 
 
-def bound_excerpt(text: Optional[str], max_chars: int = 280) -> str:
+def bound_excerpt(text: Optional[str], max_chars: Optional[int] = None) -> str:
     """
     Safely bounds excerpt text to max_chars characters while preserving balanced mark tags.
-    Phase 69 requirement: bounded excerpts.
+    Phase 69 / Phase 74 requirement: bounded excerpts & privacy policy enforcement.
     """
-    if not text:
-        return ""
-    clean = str(text).strip()
-    if len(clean) <= max_chars:
-        return clean
+    try:
+        from core.privacy import PrivacyManager
+        return PrivacyManager.get_instance().bound_and_sanitize_excerpt(text, max_chars)
+    except Exception:
+        if not text:
+            return ""
+        limit = max_chars or 280
+        clean = str(text).strip()
+        if len(clean) <= limit:
+            return clean
 
-    truncated = clean[:max_chars]
-    last_space = truncated.rfind(" ")
-    if last_space > max_chars // 2:
-        truncated = truncated[:last_space]
+        truncated = clean[:limit]
+        last_space = truncated.rfind(" ")
+        if last_space > limit // 2:
+            truncated = truncated[:last_space]
 
-    open_marks = truncated.count("<mark>")
-    close_marks = truncated.count("</mark>")
-    if open_marks > close_marks:
-        truncated += "</mark>"
+        open_marks = truncated.count("<mark>")
+        close_marks = truncated.count("</mark>")
+        if open_marks > close_marks:
+            truncated += "</mark>"
 
-    if not truncated.endswith("..."):
-        truncated += "..."
-    return truncated
+        if not truncated.endswith("..."):
+            truncated += "..."
+        return truncated
 
 
 class SearchDocumentBuilder:
     """
     Extracts, filters, and sanitizes searchable content from Activity and Checkpoint domain entities.
     Strictly excludes high-risk credential files and redacts inline secrets before indexing (I-10).
+    Enforces Phase 74 PrivacyManager rules across all indexed fields.
     """
 
     @staticmethod
@@ -83,10 +89,14 @@ class SearchDocumentBuilder:
         if not text or not isinstance(text, str):
             return ""
         try:
-            from server.sanitizer import DaemonSanitizer
-            return DaemonSanitizer.sanitize_text(text.strip())
+            from core.privacy import PrivacyManager
+            return PrivacyManager.get_instance().sanitize_text(text.strip())
         except Exception:
-            return text.strip()
+            try:
+                from server.sanitizer import DaemonSanitizer
+                return DaemonSanitizer.sanitize_text(text.strip())
+            except Exception:
+                return text.strip()
 
     @classmethod
     def build_activity_document(cls, activity: Activity) -> Dict[str, str]:
@@ -102,7 +112,7 @@ class SearchDocumentBuilder:
         collection_val = cls._clean_text(activity.collection or "")
         ts = activity.updated_at or activity.created_at or datetime.now(timezone.utc).isoformat()
 
-        return {
+        doc = {
             "record_id": f"act:{activity.id}",
             "record_type": "activity",
             "activity_id": activity.id,
@@ -119,6 +129,11 @@ class SearchDocumentBuilder:
             "collection": collection_val,
             "timestamp": ts,
         }
+        try:
+            from core.privacy import PrivacyManager
+            return PrivacyManager.get_instance().sanitize_search_document(doc)
+        except Exception:
+            return doc
 
     @classmethod
     def build_checkpoint_document(
@@ -189,10 +204,14 @@ class SearchDocumentBuilder:
 
         # Permitted artifact metadata (exclude high-risk sensitive files)
         try:
-            from server.sanitizer import DaemonSanitizer
-            is_high_risk = DaemonSanitizer.is_high_risk_file
+            from core.privacy import PrivacyManager
+            is_high_risk = PrivacyManager.get_instance().is_high_risk_file
         except Exception:
-            is_high_risk = lambda p: any(str(p).lower().endswith(ext) for ext in (".env", ".key", ".pem", ".pfx", "id_rsa"))
+            try:
+                from server.sanitizer import DaemonSanitizer
+                is_high_risk = DaemonSanitizer.is_high_risk_file
+            except Exception:
+                is_high_risk = lambda p: any(str(p).lower().endswith(ext) for ext in (".env", ".key", ".pem", ".pfx", "id_rsa"))
 
         artifact_parts: List[str] = []
         for a in checkpoint.artifacts:
@@ -212,7 +231,7 @@ class SearchDocumentBuilder:
         status_val = (activity.status.value if hasattr(activity.status, "value") else str(activity.status)) if activity else ""
         tags_val = " ".join(cls._clean_text(t) for t in activity.tags if t) if activity else ""
 
-        return {
+        doc = {
             "record_id": f"chk:{checkpoint.id}",
             "record_type": "checkpoint",
             "activity_id": checkpoint.activity_id,
@@ -229,6 +248,11 @@ class SearchDocumentBuilder:
             "collection": coll_val,
             "timestamp": checkpoint.timestamp or datetime.now(timezone.utc).isoformat(),
         }
+        try:
+            from core.privacy import PrivacyManager
+            return PrivacyManager.get_instance().sanitize_search_document(doc)
+        except Exception:
+            return doc
 
 
 class SearchQuerySanitizer:
