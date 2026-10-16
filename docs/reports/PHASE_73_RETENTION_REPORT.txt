@@ -1,0 +1,97 @@
+================================================================================
+PHASE 73 VERIFICATION AND AUDIT REPORT: SAFE HISTORY RETENTION & ANCESTRY PROTECTION
+================================================================================
+Date: 2026-10-17T01:30:10Z
+Workspace: D:\CONTINUUM
+Milestone: Milestone 42 — Retention, Privacy and Security
+Phase: Phase 73 — Safe Retention
+Status: VERIFIED & COMPLETED
+Total Regression Test Suite: 413/413 Passed (100%)
+Duration: 57.172s
+
+--------------------------------------------------------------------------------
+1. PHASE OVERVIEW & REQUIREMENTS IMPLEMENTATION
+--------------------------------------------------------------------------------
+Phase 73 implements policy-driven, non-destructive history retention and ancestry
+protection, preventing runaway disk storage while strictly enforcing that required
+checkpoints and branch ancestries are never silently deleted.
+
+Key Architectural Guarantees:
+1. Multi-Target Policies (`core.retention.RetentionPolicy`):
+   - `max_checkpoints`: Maximum checkpoint depth allowed per activity.
+   - `max_age_days`: Time-based expiration cutoff in days.
+   - `max_storage_bytes`: Cumulative checkpoint byte budget.
+   - Configurable safety switches: `protect_branch_origins`, `protect_explicitly_flagged`,
+     and `create_undo_backup`.
+
+2. Guarded Ancestry & Protected Checkpoints (I-11):
+   - Current active branch head is ALWAYS protected and cannot be deleted.
+   - Branch origins (checkpoints referenced by other activities via
+     `branch_source_checkpoint_id`) are STRICTLY protected.
+   - User-flagged checkpoints (`metadata.is_protected=True`) are preserved.
+   - Pruning walks candidates from oldest to newest, only touching non-protected nodes.
+
+3. Pre-Flight Preview & Impact Summary:
+   - `preview_retention()` executes a strictly read-only evaluation.
+   - Calculates exact breakdown: total, protected, candidates, reclaimable bytes.
+   - Accurately details protection reasons per checkpoint.
+   - Flags `limit_satisfied=False` if limits cannot be met safely due to protected ancestry.
+
+4. Safe Pruning & Zero-Data-Loss Undo:
+   - Atomic unlink of pruned records with synchronized deletion in `checkpoints_idx`
+     and `search_fts`.
+   - Pruned files automatically archived into `.continuum/retention_backup/<session>/`.
+   - Full undo capability: `restore_retention_backup()` reinstates files and re-indexes.
+   - Automatic rollback from backup if an unexpected exception occurs during pruning.
+
+5. Gate Invariant:
+   - Gate Condition: "No blind deletion loop."
+   - When requested limits cannot be achieved without violating protected checkpoints,
+     the engine stops, refuses to delete protected nodes, and explains clearly via
+     `RetentionPreviewReport.explanation`.
+
+--------------------------------------------------------------------------------
+2. REST API ENDPOINTS
+--------------------------------------------------------------------------------
+The following endpoints were added to `server/routes.py` and validated:
+- `GET /api/v1/retention/preview`: Read-only pre-flight inspection detailing candidates,
+  protected nodes, and reclaimable bytes.
+- `POST /api/v1/retention/prune`: Executes safe pruning with backup creation.
+- `POST /api/v1/retention/undo`: Restores pruned checkpoints from backup session folder.
+
+--------------------------------------------------------------------------------
+3. VERIFICATION TEST SUITE
+--------------------------------------------------------------------------------
+Unit and integration tests created in `tests/test_phase73_retention.py` (8 tests):
+- `test_preview_retention_read_only_and_accurate`: Verified preview computes impact without mutating storage.
+- `test_current_head_is_always_protected`: Verified latest head checkpoint is never pruned.
+- `test_explicitly_flagged_checkpoint_is_protected`: Verified metadata.is_protected=True preserves node.
+- `test_branch_origin_checkpoint_is_strictly_protected`: Verified branch source checkpoint cannot be pruned.
+- `test_prune_checkpoints_dry_run_does_not_mutate`: Verified dry run preview returns candidates with zero file mutation.
+- `test_prune_checkpoints_execution_and_undo_recovery`: Verified execution, backup creation, index update, and complete undo.
+- `test_gate_no_blind_deletion_loop_when_limits_unsatisfied`: Verified engine refuses to delete protected nodes
+  when limits are impossible, with clear explanation.
+- `test_retention_rest_api_endpoints`: Verified GET preview, POST prune, and POST undo REST routes.
+
+Full regression test suite execution:
+- Total tests run: 413
+- Passed: 413
+- Failures: 0
+- Errors: 0
+- Duration: 57.172s
+
+--------------------------------------------------------------------------------
+4. GATE VERIFICATION
+--------------------------------------------------------------------------------
+Gate Condition: "No blind deletion loop."
+Assessment: PASSED.
+- Protected checkpoints (branch heads, branch origins, flagged items) are immune to pruning.
+- When retention limits cannot be met safely, pruning halts without touching protected nodes.
+- Full backup creation guarantees 100% undo and recovery.
+
+--------------------------------------------------------------------------------
+5. READY FOR NEXT PHASE?
+--------------------------------------------------------------------------------
+READY FOR NEXT PHASE: YES.
+Continuum is ready to proceed to Phase 74 (Privacy Controls and Secret Redaction).
+================================================================================

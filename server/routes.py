@@ -192,6 +192,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_v1_artifacts_status(query)
                 elif path in ("/api/v1/triggers/status", "/api/triggers/status", "/api/v1/triggers/config", "/api/triggers/config"):
                     self.handle_get_v1_triggers_status()
+                elif path in ("/api/v1/retention/preview", "/api/retention/preview"):
+                    self.handle_get_v1_retention_preview(query)
                 else:
                     self._send_error_response(f"Endpoint not found: {path}", status_code=404)
             except Exception as e:
@@ -409,6 +411,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_v1_triggers_config()
             elif path in ("/api/v1/triggers/evaluate", "/api/triggers/evaluate"):
                 self.handle_post_v1_triggers_evaluate()
+            elif path in ("/api/v1/retention/prune", "/api/retention/prune"):
+                self.handle_post_v1_retention_prune()
+            elif path in ("/api/v1/retention/undo", "/api/retention/undo"):
+                self.handle_post_v1_retention_undo()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
@@ -2198,6 +2204,128 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "result": res.to_dict(),
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
+
+    def handle_get_v1_retention_preview(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/retention/preview (Phase 73)
+        Pre-flight inspection detailing which checkpoints will be preserved vs pruned.
+        Query params:
+        - activity_id: required
+        - max_checkpoints: optional int
+        - max_age_days: optional int
+        - max_storage_bytes: optional int
+        """
+        from core.retention import SafeRetentionEngine, RetentionPolicy
+        activity_id = query.get("activity_id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        max_chk_raw = query.get("max_checkpoints", [None])[0]
+        max_age_raw = query.get("max_age_days", [None])[0]
+        max_storage_raw = query.get("max_storage_bytes", [None])[0]
+
+        policy = RetentionPolicy(
+            max_checkpoints=int(max_chk_raw) if max_chk_raw and max_chk_raw.isdigit() else None,
+            max_age_days=int(max_age_raw) if max_age_raw and max_age_raw.isdigit() else None,
+            max_storage_bytes=int(max_storage_raw) if max_storage_raw and max_storage_raw.isdigit() else None,
+        )
+
+        engine = SafeRetentionEngine(self.workspace_root)
+        try:
+            preview = engine.preview_retention(activity_id, policy)
+            self._send_json_response({
+                "status": "success",
+                "preview": preview.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Retention preview failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_retention_prune(self) -> None:
+        """
+        POST /api/v1/retention/prune (Phase 73)
+        Executes safe retention pruning with backup creation.
+        Payload:
+        {
+            "activity_id": str,
+            "max_checkpoints": optional int,
+            "max_age_days": optional int,
+            "max_storage_bytes": optional int,
+            "dry_run": optional bool
+        }
+        """
+        from core.retention import SafeRetentionEngine, RetentionPolicy
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        activity_id = body.get("activity_id")
+        if not activity_id:
+            self._send_error_response("Field 'activity_id' is required.", status_code=400)
+            return
+
+        dry_run = bool(body.get("dry_run", False))
+        policy = RetentionPolicy.from_dict(body)
+
+        engine = SafeRetentionEngine(self.workspace_root)
+        try:
+            res = engine.prune_checkpoints(activity_id, policy=policy, dry_run=dry_run)
+            self._send_json_response({
+                "status": "success",
+                "result": res.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Retention prune failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_retention_undo(self) -> None:
+        """
+        POST /api/v1/retention/undo (Phase 73)
+        Restores pruned checkpoints from a backup session folder.
+        Payload:
+        {
+            "backup_path": str
+        }
+        """
+        from core.retention import SafeRetentionEngine
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        backup_path = body.get("backup_path")
+        if not backup_path:
+            self._send_error_response("Field 'backup_path' is required.", status_code=400)
+            return
+
+        engine = SafeRetentionEngine(self.workspace_root)
+        try:
+            count = engine.restore_retention_backup(backup_path)
+            self._send_json_response({
+                "status": "success",
+                "restored_count": count,
+                "message": f"Successfully restored {count} checkpoints from backup.",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Retention undo failed: {str(e)}", status_code=400)
+
 
 
 
