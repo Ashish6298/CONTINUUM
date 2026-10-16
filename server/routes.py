@@ -170,6 +170,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_diff()
                 elif path == "/api/checkpoints":
                     self.handle_get_checkpoints()
+                elif path in ("/api/v1/activities", "/api/activities"):
+                    self.handle_get_v1_activities(query)
+                elif path in ("/api/v1/checkpoints", "/api/checkpoints/v1"):
+                    self.handle_get_v1_checkpoints(query)
                 else:
                     self._send_error_response(f"Endpoint not found: {path}", status_code=404)
             except Exception as e:
@@ -359,6 +363,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_workspace_sync()
             elif path == "/api/checkpoints":
                 self.handle_post_checkpoint()
+            elif path in ("/api/v1/activities", "/api/activities"):
+                self.handle_post_v1_activity()
+            elif path in ("/api/v1/checkpoints/manual", "/api/checkpoints/manual"):
+                self.handle_post_v1_checkpoint_manual()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
@@ -413,6 +421,185 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "file": str(saved_path.name),
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
+
+    def handle_get_v1_activities(self, query: Dict[str, List[str]]) -> None:
+        """GET /api/v1/activities - List activities with bounded pagination (I-17)."""
+        from storage.activity_store import ActivityCheckpointStore
+        from core.activity import ActivityStatus, ActivityType
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        limit = int(query.get("limit", [50])[0])
+        offset = int(query.get("offset", [0])[0])
+        status_q = query.get("status", [None])[0]
+        status = None
+        if status_q:
+            try:
+                status = ActivityStatus(status_q.lower())
+            except ValueError:
+                pass
+
+        type_q = query.get("type", [None])[0]
+        act_type = None
+        if type_q:
+            try:
+                act_type = ActivityType(type_q.lower())
+            except ValueError:
+                pass
+
+        tag = query.get("tag", [None])[0]
+        activities, total = store.list_activities(status=status, activity_type=act_type, tag=tag, limit=limit, offset=offset)
+
+        self._send_json_response({
+            "status": "success",
+            "total": total,
+            "count": len(activities),
+            "limit": limit,
+            "offset": offset,
+            "activities": [a.to_dict() for a in activities],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_checkpoints(self, query: Dict[str, List[str]]) -> None:
+        """GET /api/v1/checkpoints - List checkpoints for an activity."""
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+
+        activity_id = query.get("activity_id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        limit = int(query.get("limit", [50])[0])
+        offset = int(query.get("offset", [0])[0])
+
+        try:
+            checkpoints, total = store.list_checkpoints(activity_id, limit=limit, offset=offset)
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "activity_id": activity_id,
+            "total": total,
+            "count": len(checkpoints),
+            "limit": limit,
+            "offset": offset,
+            "checkpoints": [c.to_dict() for c in checkpoints],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_activity(self) -> None:
+        """POST /api/v1/activities - Create a new Activity."""
+        from storage.activity_store import ActivityCheckpointStore
+        from core.activity import Activity, ActivityType, ActivityStatus, ActivityValidationError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        title = data.get("title")
+        if not title or not isinstance(title, str) or not title.strip():
+            self._send_error_response("Field 'title' is required.", status_code=400)
+            return
+
+        type_str = data.get("activity_type") or data.get("type", "coding")
+        try:
+            act_type = ActivityType(str(type_str).lower())
+        except (ValueError, AttributeError):
+            act_type = ActivityType.CUSTOM
+
+        status_str = data.get("status", "active")
+        try:
+            act_status = ActivityStatus(str(status_str).lower())
+        except (ValueError, AttributeError):
+            act_status = ActivityStatus.ACTIVE
+
+        activity = Activity(
+            id=data.get("id") or f"act_{uuid.uuid4().hex[:12]}",
+            title=title.strip(),
+            activity_type=act_type,
+            status=act_status,
+            description=data.get("description", ""),
+            tags=list(data.get("tags", [])),
+            collection=data.get("collection"),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            created = store.create_activity(activity)
+        except Exception as e:
+            self._send_error_response(f"Failed to create activity: {e}", status_code=500)
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "message": f"Activity '{created.title}' created successfully.",
+            "activity": created.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }, status_code=201)
+
+    def handle_post_v1_checkpoint_manual(self) -> None:
+        """
+        POST /api/v1/checkpoints/manual (Phase 59)
+        Manual checkpoint capture endpoint with privacy sanitization and double-submit defense.
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError, DanglingReferenceError
+        from core.manual_capture import (
+            ManualCaptureEngine,
+            ManualCaptureRequest,
+            DuplicateSubmissionError,
+            CaptureStorageError,
+        )
+        from core.checkpoint import CheckpointValidationError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        try:
+            capture_req = ManualCaptureRequest.from_dict(data)
+        except CheckpointValidationError as e:
+            self._send_error_response(f"Validation error: {e}", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        engine = ManualCaptureEngine(store, workspace_root=self.workspace_root)
+
+        try:
+            response = engine.capture_checkpoint(capture_req)
+            self._send_json_response({
+                "status": "success",
+                "message": f"Checkpoint {response.checkpoint_id} committed successfully.",
+                "data": response.to_dict(),
+            }, status_code=201)
+        except DuplicateSubmissionError as e:
+            self._send_error_response(str(e), status_code=409)
+        except ActivityNotFoundError as e:
+            self._send_error_response(str(e), status_code=404)
+        except DanglingReferenceError as e:
+            self._send_error_response(str(e), status_code=400)
+        except CaptureStorageError as e:
+            self._send_error_response(f"Persistence error: {e}", status_code=500)
+        except Exception as e:
+            self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
 
     def handle_post_workspace_sync(self) -> None:
         """

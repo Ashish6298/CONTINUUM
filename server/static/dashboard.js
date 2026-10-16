@@ -105,7 +105,21 @@ class ContinuumDashboardApp {
       btnRefresh: document.getElementById('btnRefresh'),
       btnCopyPrompt: document.getElementById('btnCopyPrompt'),
       btnExport: document.getElementById('btnExport'),
-      toastContainer: document.getElementById('toastContainer')
+      toastContainer: document.getElementById('toastContainer'),
+      // Manual Capture Elements (Phase 59)
+      btnOpenManualCapture: document.getElementById('btnOpenManualCapture'),
+      modalManualCapture: document.getElementById('modalManualCapture'),
+      btnCloseCaptureModal: document.getElementById('btnCloseCaptureModal'),
+      btnCancelCapture: document.getElementById('btnCancelCapture'),
+      btnSubmitCapture: document.getElementById('btnSubmitCapture'),
+      captureActivitySelect: document.getElementById('captureActivitySelect'),
+      btnQuickNewActivity: document.getElementById('btnQuickNewActivity'),
+      groupNewActivityTitle: document.getElementById('groupNewActivityTitle'),
+      newActivityTitle: document.getElementById('newActivityTitle'),
+      captureContext: document.getElementById('captureContext'),
+      captureCompletedWork: document.getElementById('captureCompletedWork'),
+      capturePendingActions: document.getElementById('capturePendingActions'),
+      captureBlockers: document.getElementById('captureBlockers')
     };
   }
 
@@ -175,6 +189,13 @@ class ContinuumDashboardApp {
     this.el.btnExport?.addEventListener('click', () => this.exportHandoffFile('md'));
     this.el.btnExportTxt = document.getElementById('btnExportTxt');
     this.el.btnExportTxt?.addEventListener('click', () => this.exportHandoffFile('txt'));
+
+    // Manual Capture Modal Events (Phase 59)
+    this.el.btnOpenManualCapture?.addEventListener('click', () => this.openManualCaptureModal());
+    this.el.btnCloseCaptureModal?.addEventListener('click', () => this.closeManualCaptureModal());
+    this.el.btnCancelCapture?.addEventListener('click', () => this.closeManualCaptureModal());
+    this.el.btnQuickNewActivity?.addEventListener('click', () => this.toggleQuickNewActivity());
+    this.el.btnSubmitCapture?.addEventListener('click', () => this.submitManualCapture());
   }
 
   debounce(func, wait) {
@@ -486,6 +507,160 @@ class ContinuumDashboardApp {
       setTimeout(() => toast.remove(), 200);
     }, 2800);
   }
+
+  // ==========================================================================
+  // Manual Checkpoint Capture Logic (Phase 59)
+  // ==========================================================================
+  async openManualCaptureModal() {
+    if (!this.el.modalManualCapture) return;
+    this.el.modalManualCapture.style.display = 'flex';
+    if (this.el.groupNewActivityTitle) this.el.groupNewActivityTitle.style.display = 'none';
+    if (this.el.newActivityTitle) this.el.newActivityTitle.value = '';
+    
+    // Auto-populate context with current task directive if available
+    if (this.el.captureContext && this.state.taskDescription) {
+      if (!this.el.captureContext.value.trim()) {
+        this.el.captureContext.value = this.state.taskDescription;
+      }
+    }
+
+    await this.loadActivitiesForSelect();
+  }
+
+  closeManualCaptureModal() {
+    if (!this.el.modalManualCapture) return;
+    this.el.modalManualCapture.style.display = 'none';
+  }
+
+  toggleQuickNewActivity() {
+    if (!this.el.groupNewActivityTitle) return;
+    const isHidden = this.el.groupNewActivityTitle.style.display === 'none';
+    this.el.groupNewActivityTitle.style.display = isHidden ? 'block' : 'none';
+    if (isHidden && this.el.newActivityTitle) {
+      this.el.newActivityTitle.focus();
+    }
+  }
+
+  async loadActivitiesForSelect() {
+    if (!this.el.captureActivitySelect) return;
+    try {
+      const res = await fetch('/api/v1/activities?limit=100', { headers: this.getHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        const activities = data.activities || [];
+        this.el.captureActivitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
+        activities.forEach(act => {
+          const opt = document.createElement('option');
+          opt.value = act.id;
+          opt.textContent = `${act.title} [${act.status}]`;
+          this.el.captureActivitySelect.appendChild(opt);
+        });
+        if (activities.length > 0) {
+          this.el.captureActivitySelect.value = activities[0].id;
+        } else {
+          // If no activities exist yet, show new activity input automatically
+          if (this.el.groupNewActivityTitle) this.el.groupNewActivityTitle.style.display = 'block';
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load activities for select:', err);
+    }
+  }
+
+  async submitManualCapture() {
+    let activityId = this.el.captureActivitySelect?.value?.trim() || '';
+
+    // Handle Quick New Activity creation
+    const isCreatingNew = this.el.groupNewActivityTitle && this.el.groupNewActivityTitle.style.display !== 'none';
+    const newTitle = this.el.newActivityTitle?.value?.trim() || '';
+
+    if (isCreatingNew && newTitle) {
+      try {
+        const createRes = await fetch('/api/v1/activities', {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: json_str_safe({
+            title: newTitle,
+            activity_type: 'coding',
+            status: 'active'
+          })
+        });
+        if (createRes.ok) {
+          const createData = await createRes.json();
+          activityId = createData.activity.id;
+          this.showToast(`✨ Created activity: ${newTitle}`);
+        } else {
+          this.showToast('❌ Failed to create new activity');
+          return;
+        }
+      } catch (err) {
+        this.showToast(`❌ Network error creating activity: ${err}`);
+        return;
+      }
+    }
+
+    if (!activityId) {
+      this.showToast('⚠️ Please select or create an activity first.');
+      return;
+    }
+
+    // Parse multiline lists
+    const parseLines = (text) => (text || '').split('\n').map(l => l.replace(/^[•\-\*]\s*/, '').trim()).filter(Boolean);
+
+    const completedWork = parseLines(this.el.captureCompletedWork?.value);
+    const pendingActions = parseLines(this.el.capturePendingActions?.value);
+    const blockers = parseLines(this.el.captureBlockers?.value);
+    const context = this.el.captureContext?.value?.trim() || '';
+
+    const payload = {
+      activity_id: activityId,
+      context: context,
+      completed_work: completedWork,
+      pending_actions: pendingActions,
+      blockers: blockers,
+      idempotency_key: 'ui_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8)
+    };
+
+    // Button loading & double-submit protection
+    if (this.el.btnSubmitCapture) {
+      this.el.btnSubmitCapture.disabled = true;
+      this.el.btnSubmitCapture.textContent = 'Committing...';
+    }
+
+    try {
+      const res = await fetch('/api/v1/checkpoints/manual', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const chkId = data.data?.checkpoint_id || 'new';
+        this.showToast(`✅ Checkpoint ${chkId} committed durably!`);
+        this.closeManualCaptureModal();
+
+        // Clear modal form fields
+        if (this.el.captureCompletedWork) this.el.captureCompletedWork.value = '';
+        if (this.el.capturePendingActions) this.el.capturePendingActions.value = '';
+        if (this.el.captureBlockers) this.el.captureBlockers.value = '';
+      } else {
+        const err = await res.json().catch(() => ({}));
+        this.showToast(`❌ Commit failed: ${err.error || res.statusText}`);
+      }
+    } catch (err) {
+      this.showToast(`❌ Error persisting checkpoint: ${err}`);
+    } finally {
+      if (this.el.btnSubmitCapture) {
+        this.el.btnSubmitCapture.disabled = false;
+        this.el.btnSubmitCapture.innerHTML = '<span class="btn-icon">💾</span> Commit Checkpoint';
+      }
+    }
+  }
+}
+
+function json_str_safe(obj) {
+  return JSON.stringify(obj);
 }
 
 // Bootstrap Application on DOM Ready or immediately if document is already ready

@@ -32,6 +32,9 @@
       <button class="btn btn-outline btn-sm" id="btnRefresh" title="Refresh State">
         <span class="btn-icon">🔄</span> Refresh
       </button>
+      <button class="btn btn-outline btn-sm" id="btnOpenManualCapture" title="Capture Activity Checkpoint">
+        <span class="btn-icon">📸</span> Capture Checkpoint
+      </button>
       <a class="btn btn-outline btn-sm" id="btnInstallCompanion" href="/continuum.user.js" target="_blank" title="Install Browser Companion Userscript (Tampermonkey / Violentmonkey)">
         <span class="btn-icon">🧩</span> Install Companion
       </a>
@@ -212,6 +215,57 @@
 
   <!-- Toast Notification Container -->
   <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Manual Checkpoint Capture Modal (Phase 59) -->
+  <div id="modalManualCapture" class="modal-backdrop" style="display: none;">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="captureModalTitle">
+      <div class="modal-header">
+        <h3 id="captureModalTitle">📸 Capture Activity Checkpoint</h3>
+        <button class="btn-close" id="btnCloseCaptureModal" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="captureActivitySelect">Target Activity <span class="required">*</span></label>
+          <div class="input-row">
+            <select id="captureActivitySelect" class="form-control">
+              <option value="">-- Select or create an activity --</option>
+            </select>
+            <button class="btn btn-outline btn-sm" id="btnQuickNewActivity" title="Create New Activity">+ New</button>
+          </div>
+        </div>
+        <div class="form-group" id="groupNewActivityTitle" style="display: none;">
+          <label for="newActivityTitle">New Activity Title <span class="required">*</span></label>
+          <input type="text" id="newActivityTitle" class="form-control" placeholder="e.g. Implement Universal Resume Anywhere">
+        </div>
+        <div class="form-group">
+          <label for="captureContext">Context & Notes</label>
+          <textarea id="captureContext" class="form-control" rows="2" placeholder="Brief description of current working state..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="captureCompletedWork">Completed Work (one per line)</label>
+          <textarea id="captureCompletedWork" class="form-control" rows="2" placeholder="• Implemented authentication handlers&#10;• Verified unit test coverage"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="capturePendingActions">Pending Actions (one per line)</label>
+          <textarea id="capturePendingActions" class="form-control" rows="2" placeholder="• Connect REST routes to UI&#10;• Write comprehensive end-to-end tests"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="captureBlockers">Blockers / Constraints (optional, one per line)</label>
+          <textarea id="captureBlockers" class="form-control" rows="2" placeholder="• Awaiting upstream schema review"></textarea>
+        </div>
+        <div class="privacy-notice">
+          <span class="privacy-icon">🛡️</span>
+          <span class="privacy-text">Client-side & engine privacy sanitization active: API keys, tokens, and secrets are automatically redacted before commit.</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" id="btnCancelCapture">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btnSubmitCapture">
+          <span class="btn-icon">💾</span> Commit Checkpoint
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Scripts -->
   <script src="/dashboard.js"></script>

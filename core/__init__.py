@@ -31,6 +31,14 @@ from core.checkpoint import (
     ArtifactReference,
     ResumeBrief,
 )
+from core.manual_capture import (
+    ManualCaptureEngine,
+    ManualCaptureRequest,
+    ManualCaptureResponse,
+    PrivacySettings,
+    DuplicateSubmissionError,
+    CaptureStorageError,
+)
 from core.invariants import (
     InvariantId,
     InvariantCategory,
@@ -166,4 +174,10 @@ __all__ = [
     "ADR_001",
     "get_invariant",
     "get_all_invariants",
+    "ManualCaptureEngine",
+    "ManualCaptureRequest",
+    "ManualCaptureResponse",
+    "PrivacySettings",
+    "DuplicateSubmissionError",
+    "CaptureStorageError",
 ]
