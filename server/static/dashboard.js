@@ -119,7 +119,27 @@ class ContinuumDashboardApp {
       captureContext: document.getElementById('captureContext'),
       captureCompletedWork: document.getElementById('captureCompletedWork'),
       capturePendingActions: document.getElementById('capturePendingActions'),
-      captureBlockers: document.getElementById('captureBlockers')
+      captureBlockers: document.getElementById('captureBlockers'),
+      // Resume Center Elements (Phase 61)
+      btnToggleResumeCenter: document.getElementById('btnToggleResumeCenter'),
+      resumeCenterView: document.getElementById('resumeCenterView'),
+      workspaceComposerView: document.getElementById('workspaceComposerView'),
+      btnCloseResumeCenter: document.getElementById('btnCloseResumeCenter'),
+      btnResumeNewActivity: document.getElementById('btnResumeNewActivity'),
+      activitiesListContainer: document.getElementById('activitiesListContainer'),
+      activityCountBadge: document.getElementById('activityCountBadge'),
+      resumeDetailEmptyState: document.getElementById('resumeDetailEmptyState'),
+      resumeDetailContent: document.getElementById('resumeDetailContent'),
+      detailActivityTitle: document.getElementById('detailActivityTitle'),
+      detailActivityType: document.getElementById('detailActivityType'),
+      detailActivityStatus: document.getElementById('detailActivityStatus'),
+      detailActivityUpdated: document.getElementById('detailActivityUpdated'),
+      btnDetailCaptureCheckpoint: document.getElementById('btnDetailCaptureCheckpoint'),
+      btnDetailCopyBrief: document.getElementById('btnDetailCopyBrief'),
+      detailBriefGenId: document.getElementById('detailBriefGenId'),
+      detailBriefMarkdown: document.getElementById('detailBriefMarkdown'),
+      detailTimelineCount: document.getElementById('detailTimelineCount'),
+      detailTimelineList: document.getElementById('detailTimelineList')
     };
   }
 
@@ -196,6 +216,22 @@ class ContinuumDashboardApp {
     this.el.btnCancelCapture?.addEventListener('click', () => this.closeManualCaptureModal());
     this.el.btnQuickNewActivity?.addEventListener('click', () => this.toggleQuickNewActivity());
     this.el.btnSubmitCapture?.addEventListener('click', () => this.submitManualCapture());
+
+    // Resume Center Events (Phase 61)
+    this.el.btnToggleResumeCenter?.addEventListener('click', () => this.toggleResumeCenter());
+    this.el.btnCloseResumeCenter?.addEventListener('click', () => this.toggleResumeCenter(false));
+    this.el.btnResumeNewActivity?.addEventListener('click', () => {
+      this.openManualCaptureModal();
+      if (this.el.groupNewActivityTitle) this.el.groupNewActivityTitle.style.display = 'block';
+      if (this.el.newActivityTitle) this.el.newActivityTitle.focus();
+    });
+    this.el.btnDetailCaptureCheckpoint?.addEventListener('click', () => {
+      this.openManualCaptureModal();
+      if (this.state.selectedActivityId && this.el.captureActivitySelect) {
+        this.el.captureActivitySelect.value = this.state.selectedActivityId;
+      }
+    });
+    this.el.btnDetailCopyBrief?.addEventListener('click', () => this.copyResumeBriefToClipboard());
   }
 
   debounce(func, wait) {
@@ -657,6 +693,198 @@ class ContinuumDashboardApp {
       }
     }
   }
+
+  // ==========================================================================
+  // Resume Center Controller Logic (Phase 61)
+  // ==========================================================================
+  async toggleResumeCenter(forceOpen = null) {
+    if (!this.el.resumeCenterView || !this.el.workspaceComposerView) return;
+    const currentlyOpen = this.el.resumeCenterView.style.display !== 'none';
+    const shouldOpen = forceOpen !== null ? forceOpen : !currentlyOpen;
+
+    if (shouldOpen) {
+      this.el.resumeCenterView.style.display = 'block';
+      this.el.workspaceComposerView.style.display = 'none';
+      if (this.el.btnToggleResumeCenter) {
+        this.el.btnToggleResumeCenter.classList.add('active');
+        this.el.btnToggleResumeCenter.innerHTML = '<span class="btn-icon">✍️</span> Prompt Composer';
+      }
+      await this.loadResumeCenterActivities();
+    } else {
+      this.el.resumeCenterView.style.display = 'none';
+      this.el.workspaceComposerView.style.display = 'grid';
+      if (this.el.btnToggleResumeCenter) {
+        this.el.btnToggleResumeCenter.classList.remove('active');
+        this.el.btnToggleResumeCenter.innerHTML = '<span class="btn-icon">⚡</span> Resume Center';
+      }
+    }
+  }
+
+  async loadResumeCenterActivities() {
+    if (!this.el.activitiesListContainer) return;
+    this.el.activitiesListContainer.innerHTML = '<div class="loading-state">Loading activities...</div>';
+
+    try {
+      const res = await fetch('/api/v1/activities?limit=100', { headers: this.getHeaders() });
+      if (!res.ok) {
+        this.el.activitiesListContainer.innerHTML = '<div class="error-state">Error loading activities</div>';
+        return;
+      }
+
+      const data = await res.json();
+      const activities = data.activities || [];
+      if (this.el.activityCountBadge) {
+        this.el.activityCountBadge.textContent = `${activities.length} activities`;
+      }
+
+      if (activities.length === 0) {
+        this.el.activitiesListContainer.innerHTML = '<div class="empty-state">No activities recorded yet.<br><small>Click "+ New Activity" above to begin.</small></div>';
+        if (this.el.resumeDetailEmptyState) this.el.resumeDetailEmptyState.style.display = 'block';
+        if (this.el.resumeDetailContent) this.el.resumeDetailContent.style.display = 'none';
+        return;
+      }
+
+      this.el.activitiesListContainer.innerHTML = '';
+      activities.forEach((act, idx) => {
+        const item = document.createElement('div');
+        item.className = 'activity-item';
+        item.setAttribute('role', 'option');
+        item.setAttribute('tabindex', '0');
+        item.dataset.id = act.id;
+
+        const dateStr = act.updated_at ? new Date(act.updated_at).toLocaleTimeString() : 'Recent';
+        item.innerHTML = `
+          <div class="activity-item-title">${escapeHtml(act.title)}</div>
+          <div class="activity-item-meta">
+            <span class="badge">${act.activity_type || 'task'}</span>
+            <span>${act.status || 'active'}</span>
+            <span>•</span>
+            <span>${dateStr}</span>
+          </div>
+        `;
+
+        item.addEventListener('click', () => this.selectResumeActivity(act.id));
+        item.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            this.selectResumeActivity(act.id);
+          }
+        });
+
+        this.el.activitiesListContainer.appendChild(item);
+
+        // Auto-select first activity if none selected
+        if (idx === 0 && !this.state.selectedActivityId) {
+          this.selectResumeActivity(act.id);
+        }
+      });
+    } catch (err) {
+      console.error('Failed to load activities for Resume Center:', err);
+      this.el.activitiesListContainer.innerHTML = '<div class="error-state">Network failure loading activities</div>';
+    }
+  }
+
+  async selectResumeActivity(activityId) {
+    this.state.selectedActivityId = activityId;
+
+    // Highlight selected item in list
+    const items = this.el.activitiesListContainer?.querySelectorAll('.activity-item');
+    items?.forEach(el => {
+      el.classList.toggle('active', el.dataset.id === activityId);
+    });
+
+    try {
+      const res = await fetch(`/api/v1/activities/detail?activity_id=${encodeURIComponent(activityId)}`, {
+        headers: this.getHeaders()
+      });
+
+      if (!res.ok) {
+        this.showToast('Error loading activity detail');
+        return;
+      }
+
+      const data = await res.json();
+      const act = data.activity;
+      const brief = data.resume_brief;
+      const timeline = data.timeline || [];
+
+      if (this.el.resumeDetailEmptyState) this.el.resumeDetailEmptyState.style.display = 'none';
+      if (this.el.resumeDetailContent) this.el.resumeDetailContent.style.display = 'flex';
+
+      if (this.el.detailActivityTitle) this.el.detailActivityTitle.textContent = act.title;
+      if (this.el.detailActivityType) this.el.detailActivityType.textContent = act.activity_type;
+      if (this.el.detailActivityStatus) this.el.detailActivityStatus.textContent = act.status;
+      if (this.el.detailActivityUpdated) {
+        this.el.detailActivityUpdated.textContent = 'Updated: ' + (act.updated_at ? new Date(act.updated_at).toLocaleString() : 'Recent');
+      }
+
+      if (this.el.detailBriefGenId) {
+        this.el.detailBriefGenId.textContent = brief?.generator_id || 'deterministic_local';
+      }
+
+      if (this.el.detailBriefMarkdown) {
+        this.el.detailBriefMarkdown.textContent = data.resume_brief_markdown || '';
+      }
+
+      // Render Checkpoint Timeline
+      if (this.el.detailTimelineCount) {
+        this.el.detailTimelineCount.textContent = `${timeline.length} checkpoint(s)`;
+      }
+
+      if (this.el.detailTimelineList) {
+        if (timeline.length === 0) {
+          this.el.detailTimelineList.innerHTML = '<div class="empty-state" style="padding:1rem;">No checkpoints captured yet. Click "Capture" above to save state.</div>';
+        } else {
+          this.el.detailTimelineList.innerHTML = '';
+          timeline.forEach(chk => {
+            const chkRow = document.createElement('div');
+            chkRow.className = 'timeline-item';
+            const dateStr = chk.timestamp ? new Date(chk.timestamp).toLocaleString() : '';
+            const prov = chk.provenance?.provenance_type || 'user_confirmed';
+            chkRow.innerHTML = `
+              <div>
+                <span class="timeline-item-id">${chk.id}</span>
+                <span style="color:var(--text-secondary); margin-left:8px;">${escapeHtml(chk.context || 'State Snapshot')}</span>
+              </div>
+              <div class="activity-item-meta">
+                <span class="badge">${prov}</span>
+                <span class="timeline-item-date">${dateStr}</span>
+              </div>
+            `;
+            this.el.detailTimelineList.appendChild(chkRow);
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to select resume activity:', err);
+      this.showToast('Failed to load activity details');
+    }
+  }
+
+  async copyResumeBriefToClipboard() {
+    const text = this.el.detailBriefMarkdown?.textContent || '';
+    if (!text) {
+      this.showToast('⚠️ No resume brief available to copy');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      this.showToast('📋 Copied Continuity Resume Brief to clipboard!');
+    } catch (err) {
+      this.showToast('❌ Failed to copy to clipboard');
+    }
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>'"]/g, tag => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[tag] || tag));
 }
 
 function json_str_safe(obj) {

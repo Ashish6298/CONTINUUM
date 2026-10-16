@@ -172,6 +172,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_checkpoints()
                 elif path in ("/api/v1/activities", "/api/activities"):
                     self.handle_get_v1_activities(query)
+                elif path in ("/api/v1/activities/detail", "/api/activities/detail"):
+                    self.handle_get_v1_activity_detail(query)
                 elif path in ("/api/v1/checkpoints", "/api/checkpoints/v1"):
                     self.handle_get_v1_checkpoints(query)
                 elif path in ("/api/v1/resume/brief", "/api/resume/brief"):
@@ -458,6 +460,48 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "limit": limit,
             "offset": offset,
             "activities": [a.to_dict() for a in activities],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_activity_detail(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/activities/detail (Phase 61)
+        Retrieves complete activity detail including metadata, latest checkpoint,
+        timeline summary, and prominent deterministic resume brief.
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+        from core.resume_generator import DeterministicResumeBriefGenerator
+        from core.checkpoint import UniversalCheckpoint
+
+        activity_id = query.get("activity_id", [None])[0] or query.get("id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            activity = store.get_activity(activity_id)
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+
+        checkpoints, total_chk = store.list_checkpoints(activity_id, limit=50, offset=0)
+        latest_chk = checkpoints[0] if checkpoints else None
+
+        if not latest_chk:
+            latest_chk = UniversalCheckpoint.create_minimal(activity_id=activity.id, context=activity.description)
+
+        generator = DeterministicResumeBriefGenerator()
+        brief = generator.generate_brief(activity, latest_chk)
+
+        self._send_json_response({
+            "status": "success",
+            "activity": activity.to_dict(),
+            "total_checkpoints": total_chk,
+            "latest_checkpoint": latest_chk.to_dict(),
+            "timeline": [c.to_dict() for c in checkpoints],
+            "resume_brief": brief.to_dict(),
+            "resume_brief_markdown": generator.format_brief_as_markdown(brief, activity_title=activity.title),
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
 

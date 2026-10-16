@@ -32,6 +32,9 @@
       <button class="btn btn-outline btn-sm" id="btnRefresh" title="Refresh State">
         <span class="btn-icon">🔄</span> Refresh
       </button>
+      <button class="btn btn-outline btn-sm" id="btnToggleResumeCenter" title="Open Resume Center (Activities & Timeline)">
+        <span class="btn-icon">⚡</span> Resume Center
+      </button>
       <button class="btn btn-outline btn-sm" id="btnOpenManualCapture" title="Capture Activity Checkpoint">
         <span class="btn-icon">📸</span> Capture Checkpoint
       </button>
@@ -85,8 +88,89 @@
       </div>
     </section>
 
+    <!-- Resume Center View (Phase 61: Universal Resume Anywhere) -->
+    <section class="resume-center-view glass-panel" id="resumeCenterView" style="display: none;">
+      <div class="resume-center-header">
+        <div class="resume-title-group">
+          <h2>⚡ Universal Resume Center</h2>
+          <span class="badge" id="activityCountBadge">0 activities</span>
+        </div>
+        <div class="resume-actions-group">
+          <button class="btn btn-primary btn-sm" id="btnResumeNewActivity">
+            <span class="btn-icon">+</span> New Activity
+          </button>
+          <button class="btn btn-outline btn-sm" id="btnCloseResumeCenter">
+            <span class="btn-icon">✕</span> Back to Composer
+          </button>
+        </div>
+      </div>
+
+      <div class="resume-center-grid">
+        <!-- Left: Activities List -->
+        <div class="activities-list-card">
+          <div class="card-subtitle">Recent & Active Activities</div>
+          <div class="activities-list-container" id="activitiesListContainer" role="listbox" aria-label="Activities">
+            <div class="loading-state">Loading activities...</div>
+          </div>
+        </div>
+
+        <!-- Right: Prominent Resume Brief & Timeline -->
+        <div class="activity-detail-card" id="activityDetailCard">
+          <div class="empty-state" id="resumeDetailEmptyState">
+            <span class="empty-icon">📂</span>
+            <h3>No Activity Selected</h3>
+            <p>Select an activity from the left list to view its latest continuity brief, metrics, and timeline.</p>
+          </div>
+
+          <div class="detail-content" id="resumeDetailContent" style="display: none;">
+            <!-- Activity Header Details -->
+            <div class="detail-header-row">
+              <div>
+                <h3 id="detailActivityTitle">Activity Title</h3>
+                <div class="detail-meta">
+                  <span class="badge" id="detailActivityType">coding</span>
+                  <span class="status-pill" id="detailActivityStatus">active</span>
+                  <span class="meta-date" id="detailActivityUpdated">Updated: Just now</span>
+                </div>
+              </div>
+              <div class="detail-actions">
+                <button class="btn btn-outline btn-sm" id="btnDetailCaptureCheckpoint">
+                  <span class="btn-icon">📸</span> Capture
+                </button>
+                <button class="btn btn-primary btn-sm" id="btnDetailCopyBrief">
+                  <span class="btn-icon">📋</span> Copy Brief
+                </button>
+              </div>
+            </div>
+
+            <!-- Prominent Deterministic Resume Brief Panel -->
+            <div class="prominent-brief-panel">
+              <div class="brief-header">
+                <h4>🚀 Actionable Continuity Brief</h4>
+                <span class="brief-gen-id" id="detailBriefGenId">deterministic_local</span>
+              </div>
+              <div class="brief-body" id="detailBriefMarkdown">
+                <!-- Formatted brief markdown -->
+              </div>
+            </div>
+
+            <!-- Checkpoint Timeline -->
+            <div class="timeline-panel">
+              <div class="timeline-header">
+                <h4>📜 Checkpoint Evolution Timeline</h4>
+                <span class="timeline-count" id="detailTimelineCount">0 checkpoints</span>
+              </div>
+              <div class="timeline-list" id="detailTimelineList">
+                <!-- Checkpoints list -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Workspace Explorer & Token Budget -->
-    <div class="workspace-layout">
+    <div class="workspace-layout" id="workspaceComposerView">
       <!-- Left: Interactive File Tree & Quick Context Toggles -->
       <aside class="sidebar-panel glass-panel">
         <div class="panel-header">
