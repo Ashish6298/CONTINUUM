@@ -190,6 +190,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_v1_search(query)
                 elif path in ("/api/v1/artifacts/status", "/api/artifacts/status"):
                     self.handle_get_v1_artifacts_status(query)
+                elif path in ("/api/v1/triggers/status", "/api/triggers/status", "/api/v1/triggers/config", "/api/triggers/config"):
+                    self.handle_get_v1_triggers_status()
                 else:
                     self._send_error_response(f"Endpoint not found: {path}", status_code=404)
             except Exception as e:
@@ -403,6 +405,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_v1_search()
             elif path in ("/api/v1/artifacts/inspect", "/api/artifacts/inspect"):
                 self.handle_post_v1_artifacts_inspect()
+            elif path in ("/api/v1/triggers/config", "/api/triggers/config"):
+                self.handle_post_v1_triggers_config()
+            elif path in ("/api/v1/triggers/evaluate", "/api/triggers/evaluate"):
+                self.handle_post_v1_triggers_evaluate()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
@@ -2079,5 +2085,119 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "artifacts": resolved_artifacts,
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
+
+    def handle_get_v1_triggers_status(self) -> None:
+        """
+        GET /api/v1/triggers/status (Phase 71)
+        Returns current trigger configuration and recent trigger evaluation history.
+        """
+        from core.trigger_engine import TriggerEngine
+        engine = TriggerEngine(self.workspace_root)
+        status = engine.get_status()
+        self._send_json_response({
+            "status": "success",
+            **status,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_triggers_config(self) -> None:
+        """
+        POST /api/v1/triggers/config (Phase 71)
+        Updates trigger configuration (opt-in flags, thresholds, cooldowns).
+        """
+        from core.trigger_engine import TriggerEngine, TriggerConfig
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        engine = TriggerEngine(self.workspace_root)
+        current_cfg = engine.config.to_dict()
+        current_cfg.update(body)
+
+        updated_cfg = TriggerConfig.from_dict(current_cfg)
+        engine.save_config(updated_cfg)
+
+        self._send_json_response({
+            "status": "success",
+            "message": "Trigger configuration updated.",
+            "config": updated_cfg.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_triggers_evaluate(self) -> None:
+        """
+        POST /api/v1/triggers/evaluate (Phase 71)
+        Safely evaluates an automatic trigger event.
+        Payload:
+        {
+            "trigger_type": "git_commit" | "meaningful_change" | "scheduled",
+            "activity_id": optional str,
+            "payload": { ... }
+        }
+        """
+        from core.trigger_engine import TriggerEngine, TriggerType
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        trigger_type_str = body.get("trigger_type")
+        if not trigger_type_str:
+            self._send_error_response("Field 'trigger_type' is required.", status_code=400)
+            return
+
+        activity_id = body.get("activity_id")
+        event_payload = body.get("payload", {})
+        force = bool(body.get("force", False))
+
+        engine = TriggerEngine(self.workspace_root)
+
+        if trigger_type_str == TriggerType.GIT_COMMIT.value:
+            res = engine.evaluate_git_commit_trigger(
+                commit_hash=event_payload.get("commit_hash", ""),
+                commit_message=event_payload.get("commit_message", ""),
+                changed_files=event_payload.get("changed_files", []),
+                branch=event_payload.get("branch"),
+                activity_id=activity_id,
+            )
+        elif trigger_type_str == TriggerType.MEANINGFUL_CHANGE.value:
+            res = engine.evaluate_meaningful_change_trigger(
+                changed_files=event_payload.get("changed_files", []),
+                change_summary=event_payload.get("change_summary"),
+                activity_id=activity_id,
+            )
+        elif trigger_type_str == TriggerType.SCHEDULED.value:
+            res = engine.evaluate_scheduled_trigger(
+                activity_id=activity_id,
+                force=force,
+            )
+        else:
+            self._send_error_response(
+                f"Unsupported trigger_type '{trigger_type_str}'. Supported types: {[t.value for t in TriggerType]}",
+                status_code=400,
+            )
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "result": res.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
 
 
