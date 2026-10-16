@@ -176,6 +176,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_v1_activity_detail(query)
                 elif path in ("/api/v1/activities", "/api/activities"):
                     self.handle_get_v1_activities(query)
+                elif path in ("/api/v1/collections", "/api/collections"):
+                    self.handle_get_v1_collections()
+                elif path in ("/api/v1/tags", "/api/tags"):
+                    self.handle_get_v1_tags()
                 elif path in ("/api/v1/checkpoints/compare", "/api/checkpoints/compare"):
                     self.handle_get_v1_checkpoints_compare(query)
                 elif path in ("/api/v1/checkpoints", "/api/checkpoints/v1"):
@@ -373,6 +377,12 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_workspace_sync()
             elif path == "/api/checkpoints":
                 self.handle_post_checkpoint()
+            elif path in ("/api/v1/activities/transition", "/api/activities/transition"):
+                self.handle_post_v1_activity_transition()
+            elif path in ("/api/v1/activities/update", "/api/activities/update"):
+                self.handle_post_v1_activity_update()
+            elif path in ("/api/v1/activities/links", "/api/activities/links"):
+                self.handle_post_v1_activity_links()
             elif path in ("/api/v1/activities/branch", "/api/activities/branch"):
                 self.handle_post_v1_activity_branch()
             elif path in ("/api/v1/activities", "/api/activities"):
@@ -441,31 +451,42 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         })
 
     def handle_get_v1_activities(self, query: Dict[str, List[str]]) -> None:
-        """GET /api/v1/activities - List activities with bounded pagination (I-17)."""
+        """GET /api/v1/activities - List activities with filtering, sorting, and bounded pagination (I-17, Phase 67)."""
         from storage.activity_store import ActivityCheckpointStore
-        from core.activity import ActivityStatus, ActivityType
 
         store = ActivityCheckpointStore(self.workspace_root)
         limit = int(query.get("limit", [50])[0])
         offset = int(query.get("offset", [0])[0])
+
         status_q = query.get("status", [None])[0]
         status = None
         if status_q:
-            try:
-                status = ActivityStatus(status_q.lower())
-            except ValueError:
-                pass
+            parts = [s.strip().lower() for s in status_q.split(",") if s.strip()]
+            status = parts if len(parts) > 1 else (parts[0] if parts else None)
 
-        type_q = query.get("type", [None])[0]
-        act_type = None
-        if type_q:
-            try:
-                act_type = ActivityType(type_q.lower())
-            except ValueError:
-                pass
+        type_q = query.get("type", [None])[0] or query.get("activity_type", [None])[0]
+        act_type = type_q.strip().lower() if type_q else None
 
         tag = query.get("tag", [None])[0]
-        activities, total = store.list_activities(status=status, activity_type=act_type, tag=tag, limit=limit, offset=offset)
+        collection = query.get("collection", [None])[0]
+
+        include_archived_param = str(query.get("include_archived", ["false"])[0]).lower()
+        include_archived = include_archived_param in ("true", "1", "yes")
+
+        sort_by = str(query.get("sort_by", ["recent"])[0]).lower()
+        order = str(query.get("order", ["desc"])[0]).lower()
+
+        activities, total = store.list_activities(
+            status=status,
+            activity_type=act_type,
+            tag=tag,
+            collection=collection,
+            include_archived=include_archived,
+            sort_by=sort_by,
+            order=order,
+            limit=limit,
+            offset=offset
+        )
 
         self._send_json_response({
             "status": "success",
@@ -473,7 +494,33 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "count": len(activities),
             "limit": limit,
             "offset": offset,
+            "sort_by": sort_by,
+            "order": order,
             "activities": [a.to_dict() for a in activities],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_collections(self) -> None:
+        """GET /api/v1/collections - Aggregated collections and counts (Phase 67)."""
+        from storage.activity_store import ActivityCheckpointStore
+        store = ActivityCheckpointStore(self.workspace_root)
+        collections = store.list_collections()
+        self._send_json_response({
+            "status": "success",
+            "count": len(collections),
+            "collections": collections,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_tags(self) -> None:
+        """GET /api/v1/tags - Aggregated tags and usage counts (Phase 67)."""
+        from storage.activity_store import ActivityCheckpointStore
+        store = ActivityCheckpointStore(self.workspace_root)
+        tags = store.list_tags()
+        self._send_json_response({
+            "status": "success",
+            "count": len(tags),
+            "tags": tags,
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
@@ -817,10 +864,13 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             return
 
         type_str = data.get("activity_type") or data.get("type", "coding")
-        try:
-            act_type = ActivityType(str(type_str).lower())
-        except (ValueError, AttributeError):
-            act_type = ActivityType.CUSTOM
+        if isinstance(type_str, str) and type_str.strip():
+            try:
+                act_type = ActivityType(type_str.strip().lower()).value
+            except ValueError:
+                act_type = type_str.strip().lower()
+        else:
+            act_type = ActivityType.CODING.value
 
         status_str = data.get("status", "active")
         try:
@@ -852,6 +902,168 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "activity": created.to_dict(),
             "timestamp": datetime.now(timezone.utc).isoformat()
         }, status_code=201)
+
+    def handle_post_v1_activity_transition(self) -> None:
+        """
+        POST /api/v1/activities/transition (Phase 67)
+        Validates and applies a status transition (active, paused, completed, archived).
+        Completed can reopen to active; archived remains recoverable and can be restored.
+        Status changes never delete or rewrite history.
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+        from core.activity import InvalidStatusTransitionError, ActivityValidationError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        activity_id = data.get("activity_id") or data.get("id")
+        if not activity_id:
+            self._send_error_response("Field 'activity_id' is required.", status_code=400)
+            return
+
+        target_status = data.get("target_status") or data.get("status")
+        action = data.get("action")
+        if action == "archive":
+            target_status = "archived"
+        elif action in ("restore", "reopen"):
+            target_status = target_status or "active"
+
+        if not target_status:
+            self._send_error_response("Field 'target_status' or 'status' is required.", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            updated = store.transition_activity_status(activity_id, target_status)
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+        except InvalidStatusTransitionError as e:
+            self._send_error_response(f"Invalid status transition: {e}", status_code=422)
+            return
+        except ActivityValidationError as e:
+            self._send_error_response(f"Activity validation error: {e}", status_code=400)
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "message": f"Activity '{activity_id}' transitioned to '{updated.status.value}'.",
+            "activity": updated.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_activity_update(self) -> None:
+        """
+        POST /api/v1/activities/update (Phase 67)
+        Updates activity title, description, tags, collection, and custom activity_type.
+        Preserves stable activity ID (I-01) and historical checkpoints.
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+        from core.activity import ActivityValidationError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        activity_id = data.get("activity_id") or data.get("id")
+        if not activity_id:
+            self._send_error_response("Field 'activity_id' is required.", status_code=400)
+            return
+
+        title = data.get("title")
+        description = data.get("description")
+        tags = data.get("tags")
+        collection = data.get("collection")
+        activity_type = data.get("activity_type") or data.get("type")
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            updated = store.update_activity_details(
+                activity_id=activity_id,
+                title=title,
+                description=description,
+                tags=tags,
+                collection=collection,
+                activity_type=activity_type
+            )
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+        except ActivityValidationError as e:
+            self._send_error_response(f"Validation error: {e}", status_code=400)
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "message": f"Activity '{activity_id}' updated successfully.",
+            "activity": updated.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_activity_links(self) -> None:
+        """
+        POST /api/v1/activities/links (Phase 67)
+        Manages related-activity links (link / unlink, bidirectional).
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        source_id = data.get("source_activity_id") or data.get("source_id") or data.get("activity_id")
+        target_id = data.get("target_activity_id") or data.get("target_id") or data.get("related_id")
+        if not source_id or not target_id:
+            self._send_error_response("Fields 'source_activity_id' and 'target_activity_id' are required.", status_code=400)
+            return
+
+        action = str(data.get("action", "link")).lower()
+        bidirectional = bool(data.get("bidirectional", True))
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            if action in ("unlink", "remove", "delete"):
+                source_act, target_act = store.unlink_activities(source_id, target_id, bidirectional=bidirectional)
+                msg = f"Successfully unlinked '{source_id}' and '{target_id}'."
+            else:
+                source_act, target_act = store.link_activities(source_id, target_id, bidirectional=bidirectional)
+                msg = f"Successfully linked '{source_id}' and '{target_id}'."
+        except ActivityNotFoundError as e:
+            self._send_error_response(str(e), status_code=404)
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "message": msg,
+            "source_activity": source_act.to_dict(),
+            "target_activity": target_act.to_dict() if target_act else None,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
 
     def handle_post_v1_activity_branch(self) -> None:
         """

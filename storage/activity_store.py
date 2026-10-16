@@ -26,7 +26,7 @@ import os
 from pathlib import Path
 import shutil
 import sqlite3
-from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Set, Tuple, Union
 import uuid
 
 from core.activity import Activity, ActivityStatus, ActivityType, ActivityValidationError, InvalidStatusTransitionError
@@ -165,6 +165,8 @@ class ActivityCheckpointStore:
                 CREATE INDEX IF NOT EXISTS idx_act_status ON activities_idx(status);
                 CREATE INDEX IF NOT EXISTS idx_act_type ON activities_idx(type);
                 CREATE INDEX IF NOT EXISTS idx_act_created ON activities_idx(created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_act_updated ON activities_idx(updated_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_act_collection ON activities_idx(collection);
 
                 CREATE INDEX IF NOT EXISTS idx_chk_act_ts ON checkpoints_idx(activity_id, timestamp DESC);
                 CREATE INDEX IF NOT EXISTS idx_chk_parent ON checkpoints_idx(parent_checkpoint_id);
@@ -325,14 +327,26 @@ class ActivityCheckpointStore:
 
     def list_activities(
         self,
-        status: Optional[ActivityStatus] = None,
-        activity_type: Optional[ActivityType] = None,
+        status: Optional[Union[ActivityStatus, str]] = None,
+        activity_type: Optional[Union[ActivityType, str]] = None,
         tag: Optional[str] = None,
+        collection: Optional[str] = None,
+        include_archived: bool = True,
+        sort_by: str = "recent",
+        order: str = "desc",
         limit: int = DEFAULT_PAGE_LIMIT,
         offset: int = 0,
     ) -> Tuple[List[Activity], int]:
         """
-        Lists activities with bounded pagination (I-17) and optional filtering.
+        Lists activities with bounded pagination (I-17), filtering, and sorting (Phase 67).
+        Supports:
+        - status: active, paused, completed, archived (or None for all)
+        - include_archived: if False and status is None, excludes archived
+        - activity_type: built-in enum or custom string types
+        - tag: tag containment search
+        - collection: filter by collection name
+        - sort_by: 'recent' / 'updated', 'created', 'title'
+        - order: 'desc' or 'asc'
         Returns a tuple of (items_page, total_matching_count).
         """
         clamped_limit = max(1, min(limit, self.MAX_PAGE_LIMIT))
@@ -343,26 +357,53 @@ class ActivityCheckpointStore:
         params: List[Any] = []
 
         if status:
+            status_val = status.value if hasattr(status, "value") else str(status).lower()
             query += " AND status = ?"
             count_query += " AND status = ?"
-            params.append(status.value)
+            params.append(status_val)
+        elif not include_archived:
+            query += " AND status != 'archived'"
+            count_query += " AND status != 'archived'"
 
         if activity_type:
+            type_val = activity_type.value if hasattr(activity_type, "value") else str(activity_type).lower()
             query += " AND type = ?"
             count_query += " AND type = ?"
-            params.append(activity_type.value)
+            params.append(type_val)
 
         if tag:
+            clean_tag = str(tag).strip().lower()
             query += " AND tags_json LIKE ?"
             count_query += " AND tags_json LIKE ?"
-            params.append(f'%"{tag}"%')
+            params.append(f'%"{clean_tag}"%')
+
+        if collection is not None:
+            clean_col = str(collection).strip()
+            if clean_col == "":
+                query += " AND (collection IS NULL OR collection = '')"
+                count_query += " AND (collection IS NULL OR collection = '')"
+            else:
+                query += " AND collection = ?"
+                count_query += " AND collection = ?"
+                params.append(clean_col)
+
+        # Sorting resolution
+        sort_key = str(sort_by).lower()
+        if sort_key in ("created", "created_at"):
+            sort_col = "created_at"
+        elif sort_key == "title":
+            sort_col = "title COLLATE NOCASE"
+        else:
+            sort_col = "updated_at"
+
+        sort_dir = "ASC" if str(order).lower() == "asc" else "DESC"
 
         with self._get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(count_query, params)
             total_count = cursor.fetchone()[0]
 
-            query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
+            query += f" ORDER BY {sort_col} {sort_dir} LIMIT ? OFFSET ?"
             query_params = list(params) + [clamped_limit, clamped_offset]
             cursor.execute(query, query_params)
             rows = cursor.fetchall()
@@ -376,6 +417,160 @@ class ActivityCheckpointStore:
                 continue
 
         return activities, total_count
+
+    # =========================================================================
+    # PHASE 67 — LIFECYCLE, TAGS, COLLECTIONS & RELATED ACTIVITIES
+    # =========================================================================
+
+    def transition_activity_status(
+        self,
+        activity_id: str,
+        target_status: Union[ActivityStatus, str],
+    ) -> Activity:
+        """
+        Phase 67: Executes a validated lifecycle status transition for an activity.
+        Enforces state machine invariants:
+        - active -> paused, completed, archived
+        - paused -> active, completed, archived
+        - completed -> active (reopen), archived
+        - archived -> active (restore), paused (restore)
+        Preserves all historical checkpoints without rewriting history (I-16, Gate).
+        """
+        activity = self.get_activity(activity_id)
+        activity.transition_to(target_status)
+        return self.update_activity(activity)
+
+    def archive_activity(self, activity_id: str) -> Activity:
+        """
+        Phase 67: Archives an activity. All historical checkpoints remain fully preserved and recoverable.
+        """
+        return self.transition_activity_status(activity_id, ActivityStatus.ARCHIVED)
+
+    def restore_archived_activity(
+        self,
+        activity_id: str,
+        target_status: ActivityStatus = ActivityStatus.ACTIVE,
+    ) -> Activity:
+        """
+        Phase 67: Recovers an archived activity back to active or paused.
+        Checkpoint history and stable ID (I-01) remain 100% intact.
+        """
+        activity = self.get_activity(activity_id)
+        activity.restore_from_archive(target_status)
+        return self.update_activity(activity)
+
+    def update_activity_details(
+        self,
+        activity_id: str,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        collection: Optional[str] = None,
+        activity_type: Optional[str] = None,
+    ) -> Activity:
+        """
+        Phase 67: Updates editable activity attributes (title, description, tags, collection, custom type)
+        while strictly preserving the stable ID (I-01) and checkpoint history.
+        """
+        activity = self.get_activity(activity_id)
+        activity.update_details(
+            title=title,
+            description=description,
+            tags=tags,
+            collection=collection,
+            activity_type=activity_type,
+        )
+        return self.update_activity(activity)
+
+    def link_activities(
+        self,
+        source_activity_id: str,
+        target_activity_id: str,
+        bidirectional: bool = True,
+    ) -> Tuple[Activity, Optional[Activity]]:
+        """
+        Phase 67: Links related activities without mutating checkpoint history.
+        """
+        if source_activity_id == target_activity_id:
+            raise ActivityValidationError("An activity cannot link to itself.")
+
+        source_act = self.get_activity(source_activity_id)
+        target_act = self.get_activity(target_activity_id)
+
+        source_act.link_related_activity(target_act.id)
+        updated_source = self.update_activity(source_act)
+
+        updated_target = None
+        if bidirectional:
+            target_act.link_related_activity(source_act.id)
+            updated_target = self.update_activity(target_act)
+
+        return updated_source, updated_target
+
+    def unlink_activities(
+        self,
+        source_activity_id: str,
+        target_activity_id: str,
+        bidirectional: bool = True,
+    ) -> Tuple[Activity, Optional[Activity]]:
+        """
+        Phase 67: Removes link between activities without mutating checkpoint history.
+        """
+        source_act = self.get_activity(source_activity_id)
+        source_act.unlink_related_activity(target_activity_id)
+        updated_source = self.update_activity(source_act)
+
+        updated_target = None
+        if bidirectional:
+            try:
+                target_act = self.get_activity(target_activity_id)
+                target_act.unlink_related_activity(source_activity_id)
+                updated_target = self.update_activity(target_act)
+            except Exception:
+                pass
+
+        return updated_source, updated_target
+
+    def list_collections(self) -> List[Dict[str, Any]]:
+        """
+        Phase 67: Aggregates all collections with activity counts.
+        """
+        with self._get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT collection, COUNT(*) as count
+                FROM activities_idx
+                WHERE collection IS NOT NULL AND TRIM(collection) != ''
+                GROUP BY collection
+                ORDER BY collection COLLATE NOCASE ASC
+                """
+            )
+            rows = cur.fetchall()
+            return [{"collection": row["collection"], "count": row["count"]} for row in rows]
+
+    def list_tags(self) -> List[Dict[str, Any]]:
+        """
+        Phase 67: Aggregates distinct tags across activities with frequency counts.
+        """
+        with self._get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT tags_json FROM activities_idx")
+            rows = cur.fetchall()
+
+        tag_counts: Dict[str, int] = {}
+        for row in rows:
+            try:
+                tags = json.loads(row["tags_json"])
+                for t in tags:
+                    clean_t = str(t).strip().lower()
+                    if clean_t:
+                        tag_counts[clean_t] = tag_counts.get(clean_t, 0) + 1
+            except Exception:
+                continue
+
+        sorted_tags = sorted(tag_counts.items(), key=lambda x: (-x[1], x[0]))
+        return [{"tag": t, "count": c} for t, c in sorted_tags]
 
     # =========================================================================
     # CHECKPOINT CRUD & COMMITS
