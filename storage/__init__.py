@@ -14,6 +14,12 @@ from storage.activity_store import (
     CheckpointNotFoundError,
     DanglingReferenceError,
 )
+from storage.migration import (
+    ContinuumMigrator,
+    MigrationResult,
+    MigrationRecord,
+    CURRENT_SCHEMA_VERSION,
+)
 
 __all__ = [
     "StorageMetadata",
@@ -25,4 +31,8 @@ __all__ = [
     "ActivityNotFoundError",
     "CheckpointNotFoundError",
     "DanglingReferenceError",
+    "ContinuumMigrator",
+    "MigrationResult",
+    "MigrationRecord",
+    "CURRENT_SCHEMA_VERSION",
 ]
