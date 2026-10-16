@@ -75,6 +75,15 @@ class DanglingReferenceError(CommitFailedError):
         self.reference_id = reference_id
 
 
+class IncompatibleRestoreError(CommitFailedError):
+    """Raised when an attempted restore operation targets an incompatible activity or corrupted checkpoint."""
+    def __init__(self, message: str, internal_details: Optional[str] = None):
+        super().__init__(
+            message=f"Restore incompatibility: {message}",
+            internal_details=internal_details or message,
+        )
+
+
 class ActivityCheckpointStore:
     """
     Durable, crash-safe storage engine for Continuum Activities and Checkpoints.
@@ -769,6 +778,253 @@ class ActivityCheckpointStore:
             "ancestry_depth": len(ancestry_chain),
             "ancestry_chain": ancestry_chain,
         }
+
+    # =========================================================================
+    # PHASE 66 — EXPLICIT RESTORE AND RECOVERY
+    # =========================================================================
+
+    def preview_restore(
+        self,
+        target_checkpoint_id: str,
+        activity_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Phase 66: Generates a pre-flight explanation of working state changes
+        if the activity were restored to target_checkpoint_id.
+        Pure read-only pre-flight inspection; does NOT mutate history or files (I-03).
+        """
+        if not target_checkpoint_id or not isinstance(target_checkpoint_id, str) or not target_checkpoint_id.strip():
+            raise CheckpointValidationError("Parameter 'target_checkpoint_id' must be a non-empty string.")
+
+        target_chk = self.get_checkpoint(target_checkpoint_id.strip())
+        act_id = activity_id.strip() if activity_id and activity_id.strip() else target_chk.activity_id
+
+        # 1. Compatibility verification
+        if activity_id and target_chk.activity_id != act_id:
+            raise IncompatibleRestoreError(
+                f"Target checkpoint '{target_checkpoint_id}' belongs to activity '{target_chk.activity_id}', not '{act_id}'."
+            )
+
+        activity = self.get_activity(act_id)
+        target_chk.validate()
+
+        # 2. Get current head checkpoint
+        head_list, total_count = self.list_checkpoints(act_id, limit=1, offset=0, order="desc")
+        if not head_list:
+            raise IncompatibleRestoreError(f"Activity '{act_id}' has no existing checkpoints.")
+
+        current_head = head_list[0]
+        is_current_head = (current_head.id == target_chk.id)
+
+        # 3. Count newer checkpoints that will remain preserved
+        newer_count = 0
+        with self._get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT COUNT(*) FROM checkpoints_idx WHERE activity_id = ? AND timestamp > ?",
+                (act_id, target_chk.timestamp),
+            )
+            newer_count = cur.fetchone()[0]
+
+        # 4. Use CheckpointDiffEngine to calculate exact working state delta
+        from core.checkpoint_diff import CheckpointDiffEngine
+        diff_engine = CheckpointDiffEngine(allow_cross_activity=False)
+        diff_result = diff_engine.compare(current_head, target_chk)
+
+        # 5. Build clear human-readable explanation points
+        explanation_points = []
+        if is_current_head:
+            explanation_points.append("Target checkpoint is already the current active head. No working state changes needed.")
+        else:
+            # Progress delta
+            if diff_result.progress.percentage_delta is not None and abs(diff_result.progress.percentage_delta) > 0.001:
+                direction = "roll back" if diff_result.progress.percentage_delta < 0 else "advance"
+                explanation_points.append(
+                    f"Progress will {direction} from {diff_result.progress.percentage_before}% to {diff_result.progress.percentage_after}% ({diff_result.progress.percentage_delta:+0.1f}%)."
+                )
+
+            # Completed work changes
+            if diff_result.completed_work.removed:
+                explanation_points.append(
+                    f"{len(diff_result.completed_work.removed)} completed work item(s) from newer checkpoints will be rolled back."
+                )
+            if diff_result.completed_work.added:
+                explanation_points.append(
+                    f"{len(diff_result.completed_work.added)} historical work item(s) will be reinstated."
+                )
+
+            # Pending actions changes
+            if diff_result.pending_actions.added:
+                explanation_points.append(
+                    f"{len(diff_result.pending_actions.added)} earlier pending action(s) will be reinstated."
+                )
+            if diff_result.pending_actions.removed:
+                explanation_points.append(
+                    f"{len(diff_result.pending_actions.removed)} newer pending action(s) will be removed."
+                )
+
+            # Decisions changes
+            if diff_result.decisions.removed:
+                explanation_points.append(
+                    f"{len(diff_result.decisions.removed)} newer decision(s) will be superseded."
+                )
+            if diff_result.decisions.added:
+                explanation_points.append(
+                    f"{len(diff_result.decisions.added)} earlier decision(s) will be reinstated."
+                )
+
+            # Blockers changes
+            if diff_result.blockers.added:
+                explanation_points.append(
+                    f"{len(diff_result.blockers.added)} earlier blocker(s) will be reinstated."
+                )
+            if diff_result.blockers.removed:
+                explanation_points.append(
+                    f"{len(diff_result.blockers.removed)} current blocker(s) will be cleared."
+                )
+
+        state_summary = " ".join(explanation_points) if explanation_points else "No significant state deltas detected."
+
+        return {
+            "activity_id": activity.id,
+            "activity_title": activity.title,
+            "current_head_checkpoint_id": current_head.id,
+            "current_head_timestamp": current_head.timestamp,
+            "target_checkpoint_id": target_chk.id,
+            "target_timestamp": target_chk.timestamp,
+            "is_current_head": is_current_head,
+            "newer_checkpoints_preserved_count": newer_count,
+            "state_change_summary": state_summary,
+            "explanation_points": explanation_points,
+            "diff": diff_result.to_dict(),
+            "preservation_guarantee": "All newer checkpoints remain 100% preserved. Restore appends a new checkpoint representing reinstated state without rewriting or deleting history (I-03).",
+        }
+
+    def confirm_restore(
+        self,
+        target_checkpoint_id: str,
+        activity_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        expected_head_checkpoint_id: Optional[str] = None,
+        new_checkpoint_id: Optional[str] = None,
+    ) -> Tuple[Activity, UniversalCheckpoint]:
+        """
+        Phase 66: Executes confirmed restore operation.
+        Appends a new checkpoint to the activity representing the reinstated historical state.
+        Preserves all newer checkpoints in place without silent deletion (I-03 Gate).
+        Uses atomic commit with clean rollback on failure.
+        """
+        if not target_checkpoint_id or not isinstance(target_checkpoint_id, str) or not target_checkpoint_id.strip():
+            raise CheckpointValidationError("Parameter 'target_checkpoint_id' must be a non-empty string.")
+
+        target_chk = self.get_checkpoint(target_checkpoint_id.strip())
+        act_id = activity_id.strip() if activity_id and activity_id.strip() else target_chk.activity_id
+
+        # 1. Compatibility & Integrity Validations
+        if activity_id and target_chk.activity_id != act_id:
+            raise IncompatibleRestoreError(
+                f"Target checkpoint '{target_checkpoint_id}' belongs to activity '{target_chk.activity_id}', not '{act_id}'."
+            )
+
+        activity = self.get_activity(act_id)
+        target_chk.validate()
+
+        # 2. Concurrency verification against head
+        head_list, _ = self.list_checkpoints(act_id, limit=1, offset=0, order="desc")
+        current_head = head_list[0] if head_list else None
+
+        if expected_head_checkpoint_id and current_head:
+            if current_head.id != expected_head_checkpoint_id.strip():
+                raise CommitFailedError(
+                    f"Concurrency conflict: expected head checkpoint '{expected_head_checkpoint_id}' but current head is '{current_head.id}'."
+                )
+
+        # 3. Construct reinstated checkpoint entities
+        chk_id = new_checkpoint_id.strip() if new_checkpoint_id and new_checkpoint_id.strip() else f"chk_{uuid.uuid4().hex[:12]}"
+
+        # Copy artifact references without duplicating physical files
+        reused_artifacts = [
+            ArtifactReference(
+                name=a.name,
+                path_or_uri=a.path_or_uri,
+                mode=a.mode,
+                captured_at=a.captured_at,
+                checksum_sha256=a.checksum_sha256,
+                size_bytes=a.size_bytes,
+                snapshot_content=a.snapshot_content,
+            )
+            for a in target_chk.artifacts
+        ]
+
+        # Clone decisions
+        cloned_decisions = [
+            DecisionRecord(
+                id=f"dec_{uuid.uuid4().hex[:8]}",
+                decision=d.decision,
+                rationale=d.rationale,
+                constraints=list(d.constraints),
+                recorded_at=d.recorded_at,
+            )
+            for d in target_chk.decisions
+        ]
+
+        # Restore provenance
+        restore_reason_str = reason.strip() if reason and reason.strip() else "User confirmed restore to historical checkpoint"
+        prov = ProvenanceRecord(
+            provenance_type=ProvenanceType.USER_CONFIRMED,
+            captured_by="restore_operation",
+            captured_at=datetime.now(timezone.utc).isoformat(),
+            is_authoritative=True,
+            details={
+                "restored_from_checkpoint_id": target_chk.id,
+                "prior_head_checkpoint_id": current_head.id if current_head else None,
+                "reason": restore_reason_str,
+            },
+        )
+
+        chk_metadata = dict(target_chk.metadata)
+        chk_metadata.update({
+            "restored_from_checkpoint_id": target_chk.id,
+            "prior_head_checkpoint_id": current_head.id if current_head else None,
+            "restore_reason": restore_reason_str,
+            "restored_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+        restored_checkpoint = UniversalCheckpoint(
+            id=chk_id,
+            activity_id=act_id,
+            parent_checkpoint_id=current_head.id if current_head else None,
+            branch_source_checkpoint_id=target_chk.branch_source_checkpoint_id,
+            structured_state=copy.deepcopy(target_chk.structured_state),
+            progress=copy.deepcopy(target_chk.progress),
+            completed_work=list(target_chk.completed_work),
+            pending_actions=list(target_chk.pending_actions),
+            decisions=cloned_decisions,
+            context=f"[Restored from {target_chk.id}] " + (target_chk.context or ""),
+            references=list(target_chk.references),
+            blockers=list(target_chk.blockers),
+            artifacts=reused_artifacts,
+            permitted_excerpts=list(target_chk.permitted_excerpts),
+            provenance=prov,
+            metadata=chk_metadata,
+        )
+
+        # Derive fresh resume brief
+        try:
+            from core.resume_generator import DeterministicResumeBriefGenerator
+            brief_gen = DeterministicResumeBriefGenerator(workspace_root=self.workspace_root)
+            restored_checkpoint.resume_brief = brief_gen.generate_brief(activity, restored_checkpoint)
+        except Exception:
+            pass
+
+        # 4. Atomic Commit
+        try:
+            committed_chk = self.commit_checkpoint(restored_checkpoint)
+            activity.updated_at = datetime.now(timezone.utc).isoformat()
+            updated_act = self.update_activity(activity)
+            return updated_act, committed_chk
+        except Exception as e:
+            raise CommitFailedError(f"Restore confirmation failed: {e}", internal_details=str(e))
 
     # =========================================================================
     # RECOVERY & INDEX REBUILD (I-06)

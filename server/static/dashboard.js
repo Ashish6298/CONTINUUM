@@ -1076,6 +1076,11 @@ class ContinuumDashboardApp {
         <button class="btn btn-secondary btn-xs" id="btnSnapshotBranch" style="padding:0.35rem 0.75rem;">
           🌿 Branch from Checkpoint
         </button>
+        ${!isCurrentState ? `
+          <button class="btn btn-warning btn-xs" id="btnSnapshotRestore" style="padding:0.35rem 0.75rem;">
+            ⏪ Restore to this Checkpoint
+          </button>
+        ` : ''}
         ${(chk.parent_checkpoint_id || chk.parent_id) ? `
           <button class="btn btn-primary btn-xs" id="btnSnapshotCompareWithParent" style="padding:0.35rem 0.75rem;">
             ⚖️ Compare with Parent (${chk.parent_checkpoint_id || chk.parent_id})
@@ -1088,6 +1093,13 @@ class ContinuumDashboardApp {
     if (btnBranch) {
       btnBranch.addEventListener('click', () => {
         this.promptBranchCheckpoint(chk.id);
+      });
+    }
+
+    const btnRestore = this.el.snapshotModalBody.querySelector('#btnSnapshotRestore');
+    if (btnRestore) {
+      btnRestore.addEventListener('click', () => {
+        this.promptRestoreCheckpoint(chk.id, chk.activity_id);
       });
     }
 
@@ -1144,6 +1156,71 @@ class ContinuumDashboardApp {
       }
     } catch (e) {
       this.showToast(`❌ Error branching checkpoint: ${e.message}`);
+    }
+  }
+
+  async promptRestoreCheckpoint(chkId, activityId) {
+    if (!chkId) return;
+
+    try {
+      this.showToast('Fetching restore pre-flight preview...');
+      const prevRes = await fetch('/api/v1/checkpoints/restore/preview', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          target_checkpoint_id: chkId,
+          activity_id: activityId,
+        }),
+      });
+
+      if (!prevRes.ok) {
+        const err = await prevRes.json().catch(() => ({}));
+        this.showToast(`❌ Restore preview failed: ${err.error || prevRes.statusText}`);
+        return;
+      }
+
+      const prevData = await prevRes.json();
+      const preview = prevData.preview;
+
+      let msg = `⚠️ CONFIRM RESTORE TO CHECKPOINT ${chkId}?\n\n`;
+      msg += `Working State Changes:\n${preview.state_change_summary}\n\n`;
+      msg += `Preservation Guarantee:\n${preview.preservation_guarantee}\n\n`;
+      msg += `Note: This will NOT delete intermediate or newer checkpoints. A new restored checkpoint will be committed.\n\nProceed with confirmed restore?`;
+
+      if (!confirm(msg)) {
+        this.showToast('Restore operation cancelled');
+        return;
+      }
+
+      const reason = prompt('Enter a reason for this restore (optional):', 'Reverting to historical checkpoint');
+
+      this.showToast('⏪ Committing restored checkpoint...');
+      const confRes = await fetch('/api/v1/checkpoints/restore/confirm', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          target_checkpoint_id: chkId,
+          activity_id: activityId,
+          reason: reason || undefined,
+          expected_head_checkpoint_id: preview.current_head_checkpoint_id,
+        }),
+      });
+
+      if (!confRes.ok) {
+        const err = await confRes.json().catch(() => ({}));
+        this.showToast(`❌ Restore failed: ${err.error || confRes.statusText}`);
+        return;
+      }
+
+      const confData = await confRes.json();
+      this.showToast(`✨ Restored state from ${chkId}! All history preserved.`);
+      this.closeSnapshotModal();
+      await this.loadActivities();
+      if (activityId) {
+        this.selectActivity(activityId);
+      }
+    } catch (e) {
+      this.showToast(`❌ Restore error: ${e.message}`);
     }
   }
 

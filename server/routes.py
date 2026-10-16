@@ -377,6 +377,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_v1_activity_branch()
             elif path in ("/api/v1/activities", "/api/activities"):
                 self.handle_post_v1_activity()
+            elif path in ("/api/v1/checkpoints/restore/preview", "/api/checkpoints/restore/preview"):
+                self.handle_post_v1_checkpoint_restore_preview()
+            elif path in ("/api/v1/checkpoints/restore/confirm", "/api/checkpoints/restore/confirm"):
+                self.handle_post_v1_checkpoint_restore_confirm()
             elif path in ("/api/v1/checkpoints/compare", "/api/checkpoints/compare"):
                 self.handle_post_v1_checkpoints_compare()
             elif path in ("/api/v1/checkpoints/manual", "/api/checkpoints/manual"):
@@ -945,6 +949,117 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             })
         except ActivityNotFoundError:
             self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+        except Exception as e:
+            self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
+
+    def handle_post_v1_checkpoint_restore_preview(self) -> None:
+        """
+        POST /api/v1/checkpoints/restore/preview (Phase 66)
+        Pre-flight explanation endpoint for restore operations.
+        Analyzes delta between current active state and historical target checkpoint.
+        """
+        from storage.activity_store import (
+            ActivityCheckpointStore,
+            ActivityNotFoundError,
+            CheckpointNotFoundError,
+            IncompatibleRestoreError,
+            CheckpointValidationError,
+        )
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        target_chk_id = data.get("target_checkpoint_id") or data.get("checkpoint_id")
+        if not target_chk_id or not isinstance(target_chk_id, str) or not target_chk_id.strip():
+            self._send_error_response("Field 'target_checkpoint_id' is required.", status_code=400)
+            return
+
+        activity_id = data.get("activity_id")
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            preview = store.preview_restore(
+                target_checkpoint_id=target_chk_id.strip(),
+                activity_id=activity_id.strip() if activity_id else None,
+            )
+            self._send_json_response({
+                "status": "success",
+                "preview": preview,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+        except (CheckpointNotFoundError, ActivityNotFoundError) as e:
+            self._send_error_response(str(e), status_code=404)
+        except (IncompatibleRestoreError, CheckpointValidationError, ValueError) as e:
+            self._send_error_response(str(e), status_code=400)
+        except Exception as e:
+            self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
+
+    def handle_post_v1_checkpoint_restore_confirm(self) -> None:
+        """
+        POST /api/v1/checkpoints/restore/confirm (Phase 66)
+        Executes a confirmed restore operation to a historical checkpoint.
+        Appends a restored state checkpoint, preserving all intermediate/newer history (I-03).
+        """
+        from storage.activity_store import (
+            ActivityCheckpointStore,
+            ActivityNotFoundError,
+            CheckpointNotFoundError,
+            IncompatibleRestoreError,
+            CheckpointValidationError,
+        )
+        from core.invariants import CommitFailedError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        target_chk_id = data.get("target_checkpoint_id") or data.get("checkpoint_id")
+        if not target_chk_id or not isinstance(target_chk_id, str) or not target_chk_id.strip():
+            self._send_error_response("Field 'target_checkpoint_id' is required.", status_code=400)
+            return
+
+        activity_id = data.get("activity_id")
+        reason = data.get("reason")
+        expected_head = data.get("expected_head_checkpoint_id") or data.get("expected_head")
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            act, restored_chk = store.confirm_restore(
+                target_checkpoint_id=target_chk_id.strip(),
+                activity_id=activity_id.strip() if activity_id else None,
+                reason=reason,
+                expected_head_checkpoint_id=expected_head,
+            )
+            self._send_json_response({
+                "status": "success",
+                "message": f"Successfully restored state from checkpoint '{target_chk_id}'. Newer history preserved.",
+                "activity": act.to_dict(),
+                "restored_checkpoint": restored_chk.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, status_code=201)
+        except (CheckpointNotFoundError, ActivityNotFoundError) as e:
+            self._send_error_response(str(e), status_code=404)
+        except (IncompatibleRestoreError, CheckpointValidationError, ValueError) as e:
+            self._send_error_response(str(e), status_code=400)
+        except CommitFailedError as e:
+            self._send_error_response(f"Restore failed: {e}", status_code=409 if "Concurrency" in str(e) else 500, details=getattr(e, "internal_details", None))
         except Exception as e:
             self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
 
