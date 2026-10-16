@@ -1,0 +1,128 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING AUDIT & IMPLEMENTATION REPORT
+Milestone 39: History, Diffs, Branch and Restore
+Phase 64: Checkpoint Comparison/Diffs
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS (Ready for Phase 65: Branch from Historical Checkpoint)
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 64 of Project Continuum v1.4.0 "Universal Resume Anywhere" implements the
+deterministic, bounded Checkpoint Comparison and Diff Engine. Conforming strictly
+to Invariant I-03 (Never Rewrite History / Read-Only History) and Invariant I-17
+(Bounded Queries, Diffs & Search Bounds), this phase delivers:
+1. Multi-Faceted Checkpoint Comparison:
+   - Evaluates compatible UniversalCheckpoints for:
+     * Progress transitions (numerical value, percentage deltas, and direction).
+     * Completed work evolution (newly finished items, retracted items, persisting).
+     * Pending actions evolution (newly scheduled actions, resolved/cleared actions).
+     * Architectural decisions & rationale (new decisions, modified decisions with
+       rationale/constraint evolution, removed decisions).
+     * Blockers & unresolved issues (newly detected, resolved blockers, persisting).
+     * Notes and context text diffs (unified diff format with line-by-line attribution).
+     * Structured state differences (added, removed, and changed state keys/values).
+     * Artifact metadata evolution (added, removed, modified size/checksum without
+       loading large file payloads).
+2. Pure Non-Destructive Invariant (I-03):
+   - Comparison is a strictly pure functional operation that never modifies disk files,
+     never touches database indices, and never mutates source checkpoints or timestamps.
+3. Strict Output Bounding & Memory Protection (I-17):
+   - Large list diffs are clamped to `max_list_items` (default 100, max 500) with
+     `is_truncated=True` flags.
+   - Long context diffs are clamped to `max_text_diff_chars` (default 4000) with explicit
+     truncation notices.
+   - Raw artifact content (`snapshot_content`) and large file payloads on disk are
+     strictly NEVER loaded into memory or serialized into diff output; only metadata
+     (path, size, checksum, change type) is inspected.
+4. Deterministic & Understandable Output Gate:
+   - Set differences are sorted deterministically so repeated runs produce exact
+     byte-for-byte identical JSON and Markdown payloads.
+   - Generates human-understandable Markdown diffs with clear visual headers and
+     change symbols (`[+] Added`, `[-] Retracted`, `[✓] Resolved`, `[Δ] Modified`).
+5. REST API & Web Dashboard Integration:
+   - `GET /api/v1/checkpoints/compare`: Query parameters for base_id, target_id,
+     activity_id, format (json/markdown), max_items, and max_chars.
+   - `POST /api/v1/checkpoints/compare`: Programmatic JSON endpoint.
+   - Interactive UI: "Compare with Parent" action in snapshot inspection drawer and
+     dedicated Checkpoint Comparison Modal in the Web Control Dashboard.
+
+2. INSPECTED & CHANGED FILES
+--------------------------------------------------------------------------------
+- Inspected Existing Files:
+  * `phasev1.4.0.txt`: Phase 64 specifications and gate requirements.
+  * `core/checkpoint.py`: UniversalCheckpoint, DecisionRecord, and ArtifactReference models.
+  * `storage/activity_store.py`: ActivityCheckpointStore and retrieval APIs.
+  * `server/routes.py`: REST request handlers and routing table.
+  * `server/static/index.html`, `dashboard.js`, `dashboard.css`: Dashboard SPA.
+- Created Files:
+  * `core/checkpoint_diff.py`: Comprehensive, bounded CheckpointDiffEngine and data models.
+  * `tests/test_phase64_diff.py`: 6 automated unit, boundary, invariant, and integration tests.
+  * `docs/reports/PHASE_64_CHECKPOINT_DIFFS_REPORT.txt`: This engineering report.
+- Changed Files:
+  * `core/__init__.py`: Exported CheckpointDiffEngine, CheckpointDiffResult, and IncompatibleCheckpointsError.
+  * `server/routes.py`: Added `handle_get_v1_checkpoints_compare` and `handle_post_v1_checkpoints_compare`.
+  * `server/static/index.html`: Added Checkpoint Comparison modal and copy action.
+  * `server/static/dashboard.css`: Added styles for diff sections, items, and preformatted blocks.
+  * `server/static/dashboard.js`: Added compareCheckpoints, closeDiffModal, and copyMarkdownDiffToClipboard.
+  * `README.md`: Updated badge and verification counts to 312 / 312 passed.
+
+3. ARCHITECTURAL CONTRACTS & INVARIANTS ENFORCED
+--------------------------------------------------------------------------------
+A. Non-Destructive Invariant (I-03):
+   - Verified that running multiple comparisons across disk-persisted checkpoints leaves
+     file sizes, modification times (`st_mtime_ns`), and SHA-256 content hashes 100%
+     bit-for-bit unchanged.
+   - History is never rewritten.
+
+B. Bounded Query & Memory Invariant (I-17):
+   - Checkpoint diffs clamp output to prevent unbounded JSON/Markdown payloads.
+   - Large artifacts are guarded: only metadata attributes (checksum, size_bytes, path)
+     are compared; artifact bodies are never read into memory.
+
+C. Compatibility & Error Guarding:
+   - Cross-activity comparisons are rejected with clear explanation by default.
+   - Missing or corrupted checkpoint references safely return HTTP 404 / 400 errors
+     instead of unhandled crashes.
+
+4. AUTOMATED TEST SUITE & RESULTS
+--------------------------------------------------------------------------------
+Command: python -m unittest tests/test_phase64_diff.py -v
+Output:
+- test_additions_removals_and_changes: OK
+- test_api_checkpoints_compare_endpoints: OK
+- test_deterministic_and_understandable_diff_gate: OK
+- test_empty_and_incompatible_snapshots: OK
+- test_size_bounds_and_artifact_loading_prevention: OK
+- test_unchanged_source_checkpoints_invariant: OK
+Result: 6 / 6 tests passed (100%).
+
+Full Suite Command: python tests/run_all_tests.py
+Output:
+================================================================================
+CONTINUUM TEST EXECUTION SUMMARY
+================================================================================
+Total Tests Run: 312
+Passed:         312
+Failures:       0
+Errors:         0
+Duration:       39.413s
+Overall Status: SUCCESS (100% Passed)
+================================================================================
+
+5. GATE VERIFICATION & READINESS ASSESSMENT
+--------------------------------------------------------------------------------
+Gate Requirement:
+- Diff is deterministic and understandable.
+Gate Assessment: PASS.
+- Verified byte-for-byte identical output across repeated runs.
+- Human-understandable markdown and JSON structures clearly articulate work, progress,
+  decisions, blockers, and notes differences.
+- Size bounding (I-17) and non-destructive read-only safety (I-03) certified.
+
+Readiness for Next Phase:
+- The system is fully verified and READY for:
+  MILESTONE 39: HISTORY, DIFFS, BRANCH AND RESTORE
+  PHASE 65 — Branch from Historical Checkpoint.
+================================================================================

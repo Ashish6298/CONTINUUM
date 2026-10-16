@@ -43,6 +43,11 @@ from core.resume_generator import (
     DeterministicResumeBriefGenerator,
     AiEnhancementConsent,
 )
+from core.checkpoint_diff import (
+    CheckpointDiffEngine,
+    CheckpointDiffResult,
+    IncompatibleCheckpointsError,
+)
 from core.invariants import (
     InvariantId,
     InvariantCategory,
@@ -186,4 +191,7 @@ __all__ = [
     "CaptureStorageError",
     "DeterministicResumeBriefGenerator",
     "AiEnhancementConsent",
+    "CheckpointDiffEngine",
+    "CheckpointDiffResult",
+    "IncompatibleCheckpointsError",
 ]

@@ -155,6 +155,12 @@ class ContinuumDashboardApp {
       btnCloseSnapshotModal: document.getElementById('btnCloseSnapshotModal'),
       btnCloseSnapshotFooter: document.getElementById('btnCloseSnapshotFooter'),
       snapshotModalBody: document.getElementById('snapshotModalBody'),
+      // Checkpoint Diff Elements (Phase 64)
+      modalCheckpointDiff: document.getElementById('modalCheckpointDiff'),
+      btnCloseDiffModal: document.getElementById('btnCloseDiffModal'),
+      btnCloseDiffFooter: document.getElementById('btnCloseDiffFooter'),
+      btnCopyMarkdownDiff: document.getElementById('btnCopyMarkdownDiff'),
+      diffModalBody: document.getElementById('diffModalBody'),
       // Onboarding & Template Elements (Phase 62)
       modalOnboarding: document.getElementById('modalOnboarding'),
       btnCloseOnboardingModal: document.getElementById('btnCloseOnboardingModal'),
@@ -277,6 +283,14 @@ class ContinuumDashboardApp {
     this.el.btnCloseSnapshotFooter?.addEventListener('click', () => this.closeSnapshotModal());
     this.el.modalSnapshotDetail?.addEventListener('click', (e) => {
       if (e.target === this.el.modalSnapshotDetail) this.closeSnapshotModal();
+    });
+
+    // Checkpoint Diff Events (Phase 64)
+    this.el.btnCloseDiffModal?.addEventListener('click', () => this.closeDiffModal());
+    this.el.btnCloseDiffFooter?.addEventListener('click', () => this.closeDiffModal());
+    this.el.btnCopyMarkdownDiff?.addEventListener('click', () => this.copyMarkdownDiffToClipboard());
+    this.el.modalCheckpointDiff?.addEventListener('click', (e) => {
+      if (e.target === this.el.modalCheckpointDiff) this.closeDiffModal();
     });
   }
 
@@ -1049,7 +1063,23 @@ class ContinuumDashboardApp {
         <span class="snapshot-detail-title">Artifacts Referenced</span>
         ${artifactsList}
       </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.4rem;">
+        ${(chk.parent_checkpoint_id || chk.parent_id) ? `
+          <button class="btn btn-primary btn-xs" id="btnSnapshotCompareWithParent" style="padding:0.35rem 0.75rem;">
+            ⚖️ Compare with Parent (${chk.parent_checkpoint_id || chk.parent_id})
+          </button>
+        ` : ''}
+      </div>
     `;
+
+    const btnCompareParent = this.el.snapshotModalBody.querySelector('#btnSnapshotCompareWithParent');
+    if (btnCompareParent) {
+      btnCompareParent.addEventListener('click', () => {
+        const parentId = chk.parent_checkpoint_id || chk.parent_id;
+        this.compareCheckpoints(parentId, chk.id, chk.activity_id);
+      });
+    }
 
     this.el.modalSnapshotDetail.style.display = 'flex';
   }
@@ -1057,6 +1087,180 @@ class ContinuumDashboardApp {
   closeSnapshotModal() {
     if (this.el.modalSnapshotDetail) {
       this.el.modalSnapshotDetail.style.display = 'none';
+    }
+  }
+
+  // ==========================================================================
+  // Checkpoint Comparison / Diff Logic (Phase 64)
+  // ==========================================================================
+  async compareCheckpoints(baseId, targetId, activityId) {
+    if (!baseId || !targetId) {
+      this.showToast('⚠️ Missing checkpoint ID for comparison');
+      return;
+    }
+
+    try {
+      this.showToast('Computing checkpoint diff...');
+      let url = `/api/v1/checkpoints/compare?base_id=${encodeURIComponent(baseId)}&target_id=${encodeURIComponent(targetId)}`;
+      if (activityId) url += `&activity_id=${encodeURIComponent(activityId)}`;
+
+      const res = await fetch(url, { headers: this.getHeaders() });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        this.showToast(`❌ Comparison failed: ${errData.error || res.statusText}`);
+        return;
+      }
+
+      const data = await res.json();
+      const diff = data.diff;
+      this.state.currentMarkdownDiff = diff.markdown_diff || '';
+
+      if (!this.el.diffModalBody) return;
+
+      if (!diff.is_compatible) {
+        this.el.diffModalBody.innerHTML = `
+          <div class="diff-section" style="border-color:var(--accent-warning);">
+            <span class="diff-section-title" style="color:var(--accent-warning);">Incompatible Checkpoints</span>
+            <p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">${escapeHtml(diff.incompatibility_reason || 'Incompatible snapshots')}</p>
+          </div>
+        `;
+        if (this.el.modalCheckpointDiff) this.el.modalCheckpointDiff.style.display = 'flex';
+        return;
+      }
+
+      let html = `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:0.65rem 0.85rem; border-radius:6px;">
+          <div>
+            <span style="font-family:var(--font-mono); color:var(--text-muted); font-size:0.8rem;">${escapeHtml(diff.base_checkpoint_id)}</span>
+            <span style="color:var(--accent-info); margin:0 8px; font-weight:700;">➔</span>
+            <span style="font-family:var(--font-mono); color:var(--accent-primary); font-weight:600; font-size:0.85rem;">${escapeHtml(diff.target_checkpoint_id)}</span>
+          </div>
+          <span class="badge" style="background:rgba(99,102,241,0.2);">${escapeHtml(diff.high_level_summary)}</span>
+        </div>
+      `;
+
+      // Progress Evolution
+      if (diff.progress && (diff.progress.percentage_before !== null || diff.progress.percentage_after !== null)) {
+        html += `
+          <div class="diff-section">
+            <span class="diff-section-title">Progress Evolution</span>
+            <div style="font-size:0.85rem; color:var(--text-primary);">${escapeHtml(diff.progress.summary)}</div>
+          </div>
+        `;
+      }
+
+      // Completed Work
+      const workAdded = diff.completed_work?.added || [];
+      const workRemoved = diff.completed_work?.removed || [];
+      if (workAdded.length > 0 || workRemoved.length > 0) {
+        html += `
+          <div class="diff-section">
+            <span class="diff-section-title">Completed Work (+${workAdded.length} / -${workRemoved.length})</span>
+            ${workAdded.map(w => `<div class="diff-item added"><span>+</span> <span>${escapeHtml(w)}</span></div>`).join('')}
+            ${workRemoved.map(w => `<div class="diff-item removed"><span>-</span> <span>${escapeHtml(w)}</span></div>`).join('')}
+          </div>
+        `;
+      }
+
+      // Pending Actions
+      const actionsAdded = diff.pending_actions?.added || [];
+      const actionsRemoved = diff.pending_actions?.removed || [];
+      if (actionsAdded.length > 0 || actionsRemoved.length > 0) {
+        html += `
+          <div class="diff-section">
+            <span class="diff-section-title">Pending Actions (+${actionsAdded.length} new / ${actionsRemoved.length} resolved)</span>
+            ${actionsAdded.map(a => `<div class="diff-item added"><span>+ New:</span> <span>${escapeHtml(a)}</span></div>`).join('')}
+            ${actionsRemoved.map(a => `<div class="diff-item removed"><span>✓ Cleared:</span> <span>${escapeHtml(a)}</span></div>`).join('')}
+          </div>
+        `;
+      }
+
+      // Decisions
+      const decAdded = diff.decisions?.added || [];
+      const decMod = diff.decisions?.modified || [];
+      const decRem = diff.decisions?.removed || [];
+      if (decAdded.length > 0 || decMod.length > 0 || decRem.length > 0) {
+        html += `
+          <div class="diff-section">
+            <span class="diff-section-title">Architectural Decisions</span>
+            ${decAdded.map(d => `<div class="diff-item added"><span>+ Added:</span> <strong>${escapeHtml(d.decision)}</strong> (${escapeHtml(d.id)})</div>`).join('')}
+            ${decMod.map(d => `<div class="diff-item modified"><span>Δ Modified:</span> <strong>${escapeHtml(d.decision)}</strong> (${escapeHtml(d.id)})</div>`).join('')}
+            ${decRem.map(d => `<div class="diff-item removed"><span>- Removed:</span> <strong>${escapeHtml(d.decision)}</strong> (${escapeHtml(d.id)})</div>`).join('')}
+          </div>
+        `;
+      }
+
+      // Blockers
+      const blockersAdded = diff.blockers?.added || [];
+      const blockersRemoved = diff.blockers?.removed || [];
+      if (blockersAdded.length > 0 || blockersRemoved.length > 0) {
+        html += `
+          <div class="diff-section">
+            <span class="diff-section-title">Blockers & Issues (${blockersRemoved.length} resolved / ${blockersAdded.length} new)</span>
+            ${blockersRemoved.map(b => `<div class="diff-item added"><span>✓ Resolved:</span> <span>${escapeHtml(b)}</span></div>`).join('')}
+            ${blockersAdded.map(b => `<div class="diff-item removed"><span>! Blocker:</span> <span>${escapeHtml(b)}</span></div>`).join('')}
+          </div>
+        `;
+      }
+
+      // Context Notes Unified Diff
+      if (diff.context_notes && diff.context_notes.has_changed) {
+        html += `
+          <div class="diff-section">
+            <span class="diff-section-title">Context & Notes Diff</span>
+            <pre class="diff-pre">${escapeHtml(diff.context_notes.unified_diff || 'Context modified')}</pre>
+          </div>
+        `;
+      }
+
+      // Artifacts
+      const artAdded = diff.artifacts?.added || [];
+      const artMod = diff.artifacts?.modified || [];
+      const artRem = diff.artifacts?.removed || [];
+      if (artAdded.length > 0 || artMod.length > 0 || artRem.length > 0) {
+        html += `
+          <div class="diff-section">
+            <span class="diff-section-title">Artifacts</span>
+            ${artAdded.map(a => `<div class="diff-item added"><span>+</span> <span>${escapeHtml(a.path_or_uri || a.name)}</span></div>`).join('')}
+            ${artMod.map(a => `<div class="diff-item modified"><span>Δ</span> <span>${escapeHtml(a.path_or_uri || a.name)} (size delta: ${a.size_delta_bytes || 0} bytes)</span></div>`).join('')}
+            ${artRem.map(a => `<div class="diff-item removed"><span>-</span> <span>${escapeHtml(a.path_or_uri || a.name)}</span></div>`).join('')}
+          </div>
+        `;
+      }
+
+      if (!diff.has_changes) {
+        html += `
+          <div class="empty-state" style="padding:1.5rem;">
+            No substantive changes recorded between these two checkpoints.
+          </div>
+        `;
+      }
+
+      this.el.diffModalBody.innerHTML = html;
+      if (this.el.modalCheckpointDiff) this.el.modalCheckpointDiff.style.display = 'flex';
+    } catch (err) {
+      console.error('Error comparing checkpoints:', err);
+      this.showToast(`❌ Error: ${err}`);
+    }
+  }
+
+  closeDiffModal() {
+    if (this.el.modalCheckpointDiff) {
+      this.el.modalCheckpointDiff.style.display = 'none';
+    }
+  }
+
+  async copyMarkdownDiffToClipboard() {
+    const text = this.state.currentMarkdownDiff || '';
+    if (!text) {
+      this.showToast('⚠️ No markdown diff to copy');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      this.showToast('📋 Copied Markdown Diff to clipboard!');
+    } catch (err) {
+      this.showToast('❌ Failed to copy to clipboard');
     }
   }
 

@@ -174,6 +174,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_v1_activities(query)
                 elif path in ("/api/v1/activities/detail", "/api/activities/detail"):
                     self.handle_get_v1_activity_detail(query)
+                elif path in ("/api/v1/checkpoints/compare", "/api/checkpoints/compare"):
+                    self.handle_get_v1_checkpoints_compare(query)
                 elif path in ("/api/v1/checkpoints", "/api/checkpoints/v1"):
                     self.handle_get_v1_checkpoints(query)
                 elif path in ("/api/v1/resume/brief", "/api/resume/brief"):
@@ -371,6 +373,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_checkpoint()
             elif path in ("/api/v1/activities", "/api/activities"):
                 self.handle_post_v1_activity()
+            elif path in ("/api/v1/checkpoints/compare", "/api/checkpoints/compare"):
+                self.handle_post_v1_checkpoints_compare()
             elif path in ("/api/v1/checkpoints/manual", "/api/checkpoints/manual"):
                 self.handle_post_v1_checkpoint_manual()
             else:
@@ -550,6 +554,139 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "has_more": (offset + len(checkpoints)) < total,
             "is_read_only_history": True,
             "checkpoints": [c.to_dict() for c in checkpoints],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_checkpoints_compare(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/checkpoints/compare (Phase 64)
+        Compares two compatible checkpoints for changes, progress, work, actions, decisions, and notes.
+        Query params:
+        - base_checkpoint_id / base_id / from_id (required)
+        - target_checkpoint_id / target_id / to_id (required)
+        - activity_id (optional)
+        - format: 'json' (default) or 'markdown' / 'md'
+        - max_items: optional int (defaults to 100, clamped to 500)
+        - max_chars: optional int (defaults to 4000, clamped to 50000)
+        """
+        from storage.activity_store import ActivityCheckpointStore, CheckpointNotFoundError, ActivityNotFoundError
+        from core.checkpoint_diff import CheckpointDiffEngine
+
+        base_id = query.get("base_checkpoint_id", [None])[0] or query.get("base_id", [None])[0] or query.get("from_id", [None])[0] or query.get("base", [None])[0]
+        target_id = query.get("target_checkpoint_id", [None])[0] or query.get("target_id", [None])[0] or query.get("to_id", [None])[0] or query.get("target", [None])[0]
+
+        if not base_id or not target_id:
+            self._send_error_response("Query parameters 'base_checkpoint_id' and 'target_checkpoint_id' are required.", status_code=400)
+            return
+
+        activity_id = query.get("activity_id", [None])[0]
+        try:
+            max_items = max(1, min(int(query.get("max_items", [100])[0]), 500))
+        except (ValueError, TypeError):
+            max_items = 100
+        try:
+            max_chars = max(100, min(int(query.get("max_chars", [4000])[0]), 50000))
+        except (ValueError, TypeError):
+            max_chars = 4000
+        fmt = str(query.get("format", ["json"])[0]).lower()
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            base_chk = store.get_checkpoint(base_id, activity_id=activity_id)
+        except (CheckpointNotFoundError, ActivityNotFoundError):
+            self._send_error_response(f"Base checkpoint '{base_id}' not found.", status_code=404)
+            return
+
+        try:
+            target_chk = store.get_checkpoint(target_id, activity_id=activity_id)
+        except (CheckpointNotFoundError, ActivityNotFoundError):
+            self._send_error_response(f"Target checkpoint '{target_id}' not found.", status_code=404)
+            return
+
+        engine = CheckpointDiffEngine(
+            max_list_items=max_items,
+            max_text_diff_chars=max_chars,
+            allow_cross_activity=False,
+        )
+        diff_result = engine.compare(base_chk, target_chk)
+
+        if fmt in ("md", "markdown", "text"):
+            self._set_headers(200, "text/markdown; charset=utf-8")
+            self.wfile.write(diff_result.markdown_diff.encode("utf-8"))
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "diff": diff_result.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_checkpoints_compare(self) -> None:
+        """
+        POST /api/v1/checkpoints/compare (Phase 64)
+        Programmatic endpoint comparing two checkpoints supplied by ID or body.
+        """
+        from storage.activity_store import ActivityCheckpointStore, CheckpointNotFoundError, ActivityNotFoundError
+        from core.checkpoint_diff import CheckpointDiffEngine
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        base_id = data.get("base_checkpoint_id") or data.get("base_id") or data.get("from_id") or data.get("base")
+        target_id = data.get("target_checkpoint_id") or data.get("target_id") or data.get("to_id") or data.get("target")
+
+        if not base_id or not target_id:
+            self._send_error_response("Fields 'base_checkpoint_id' and 'target_checkpoint_id' are required.", status_code=400)
+            return
+
+        activity_id = data.get("activity_id")
+        try:
+            max_items = max(1, min(int(data.get("max_items", 100)), 500))
+        except (ValueError, TypeError):
+            max_items = 100
+        try:
+            max_chars = max(100, min(int(data.get("max_chars", 4000)), 50000))
+        except (ValueError, TypeError):
+            max_chars = 4000
+        fmt = str(data.get("format", "json")).lower()
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            base_chk = store.get_checkpoint(base_id, activity_id=activity_id)
+        except (CheckpointNotFoundError, ActivityNotFoundError):
+            self._send_error_response(f"Base checkpoint '{base_id}' not found.", status_code=404)
+            return
+
+        try:
+            target_chk = store.get_checkpoint(target_id, activity_id=activity_id)
+        except (CheckpointNotFoundError, ActivityNotFoundError):
+            self._send_error_response(f"Target checkpoint '{target_id}' not found.", status_code=404)
+            return
+
+        engine = CheckpointDiffEngine(
+            max_list_items=max_items,
+            max_text_diff_chars=max_chars,
+            allow_cross_activity=False,
+        )
+        diff_result = engine.compare(base_chk, target_chk)
+
+        if fmt in ("md", "markdown", "text"):
+            self._set_headers(200, "text/markdown; charset=utf-8")
+            self.wfile.write(diff_result.markdown_diff.encode("utf-8"))
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "diff": diff_result.to_dict(),
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
 

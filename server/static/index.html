@@ -447,6 +447,31 @@
     </div>
   </div>
 
+  <!-- Checkpoint Comparison / Diff Modal (Phase 64) -->
+  <div class="modal" id="modalCheckpointDiff" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="diffModalTitle">
+    <div class="modal-dialog glass-panel" style="max-width: 750px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <h3 id="diffModalTitle" style="margin:0;">⚖️ Checkpoint Comparison</h3>
+          <span class="badge" style="background: rgba(99,102,241,0.2); color: var(--accent-primary);">Deterministic Diff</span>
+        </div>
+        <button class="btn-close" id="btnCloseDiffModal" aria-label="Close comparison">&times;</button>
+      </div>
+      <div class="modal-body" id="diffModalBody" style="max-height: 68vh; overflow-y: auto; display:flex; flex-direction:column; gap:0.85rem;">
+        <!-- Populated dynamically by dashboard.js -->
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">
+          🛡️ Non-destructive comparison (I-03): Checkpoint diffs never mutate historical snapshots.
+        </span>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-outline btn-sm" id="btnCopyMarkdownDiff">📋 Copy Markdown</button>
+          <button class="btn btn-secondary btn-sm" id="btnCloseDiffFooter">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="/dashboard.js"></script>
 </body>
