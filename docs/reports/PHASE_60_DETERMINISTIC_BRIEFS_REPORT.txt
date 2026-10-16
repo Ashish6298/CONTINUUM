@@ -1,0 +1,115 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING AUDIT & IMPLEMENTATION REPORT
+Milestone 38: Capture and Resume
+Phase 60: Deterministic Resume Briefs
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS (Ready for Phase 61: Resume Center and Activity Detail)
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 60 continues Milestone 38 (Capture and Resume) of Project Continuum v1.4.0
+"Universal Resume Anywhere". Conforming to invariants I-06 (Derived Briefs & Indexes
+are Non-Authoritative), I-09 (Explicit Disclosure for External AI Services), and I-10
+(Comprehensive Secret Redaction), this phase implements:
+1. `DeterministicResumeBriefGenerator`:
+   - Pure local, deterministic generation answering the 6 core continuity questions:
+     1. Purpose & Working Goal: Derived from checkpoint context or activity definition.
+     2. Last Completed Work: Ordered authoritative accomplishments with provenance.
+     3. Key Decisions & Constraints: Structured design decisions and rationale.
+     4. Blockers: Explicit blockers or standardized '[None reported]' indicator.
+     5. Unresolved Questions: Open issues and provenance notices for non-user data.
+     6. Next Concrete Actions: Prioritized next actions or safe activity resumption.
+2. Ground Truth & Zero-Invention Rule (I-06):
+   - Generates derived content without ever hallucinating missing facts.
+   - When inputs are sparse, emits explicit placeholders (e.g. '[No explicit architectural decisions recorded]').
+3. Comprehensive Secret Redaction (I-10):
+   - Automatically sanitizes generated briefs against DaemonSanitizer regex matchers
+     (OpenAI, Anthropic, AWS, GitHub tokens, passwords).
+4. Optional AI Enhancement Gate (I-09):
+   - AI enhancement strictly requires explicit user consent (`consent_granted=True`).
+   - Discloses provider, model, and transmitted fields.
+   - Safely and silently falls back to local deterministic generation on any failure,
+     timeout, or when AI is disabled/declined.
+   - Zero external network transfer without consent.
+5. REST API & Markdown Formatter:
+   - `GET /api/v1/resume/brief?activity_id=<id>&format=json|markdown`
+   - Formatter generating standard GitHub Flavored Markdown continuity briefs.
+
+2. INSPECTED & CHANGED FILES
+--------------------------------------------------------------------------------
+- Inspected Existing Files:
+  * `phasev1.4.0.txt`: Phase 60 specifications and gate criteria.
+  * `projectv1.4.0.txt`: Continuity brief model and non-authoritative constraints.
+  * `core/checkpoint.py`: `ResumeBrief`, `UniversalCheckpoint`, `DecisionRecord`.
+  * `core/invariants.py`: Invariants I-06, I-09, I-10.
+  * `server/routes.py`: REST dispatch and response serialization.
+- Changed / Created Files:
+  * `core/resume_generator.py`: Implemented `DeterministicResumeBriefGenerator` and
+    `AiEnhancementConsent`.
+  * `core/__init__.py`: Exported Phase 60 symbols.
+  * `server/routes.py`: Added `GET /api/v1/resume/brief` endpoint.
+  * `tests/test_phase60_briefs.py`: 8 comprehensive unit tests.
+  * `docs/reports/PHASE_60_DETERMINISTIC_BRIEFS_REPORT.txt`: This engineering report.
+
+3. ARCHITECTURAL CONTRACTS & INVARIANTS ENFORCED
+--------------------------------------------------------------------------------
+A. Non-Authoritative Derivation (I-06):
+   - Briefs declare `is_ai_enhanced=False` and `generator_id="continuum_deterministic_v1"`.
+   - Authoritative ground truth remains solely in structured checkpoint files.
+
+B. Zero External Transfer Without Consent (I-09):
+   - External callbacks are blocked unless `AiEnhancementConsent.consent_granted=True`.
+   - If AI provider throws an exception or network drops, execution cleanly falls back
+     to local deterministic generation without failing the user operation.
+
+C. Secret Redaction (I-10):
+   - All text generated for purpose, completed work, decisions, blockers, questions,
+     and next actions is sanitized via DaemonSanitizer before serialization.
+
+4. AUTOMATED TESTS & VERIFICATION
+--------------------------------------------------------------------------------
+- Test Suite: `tests/test_phase60_briefs.py`
+  * `test_deterministic_repeat`: PASSED
+  * `test_sparse_data_handling`: PASSED
+  * `test_provenance_and_uncertainty_labelling`: PASSED
+  * `test_comprehensive_secret_redaction`: PASSED
+  * `test_ai_disabled_or_declined_path`: PASSED
+  * `test_ai_consent_configured_path`: PASSED
+  * `test_ai_failure_safe_fallback`: PASSED
+  * `test_format_brief_as_markdown`: PASSED
+  * Outcomes: 8 passed in 0.24s (100% success).
+
+- Full Milestone 35–38 Checkpoint Verification:
+  * Phases 50–60 tests: 82 passed in 3.90s (100% success).
+
+- Full Repository Test Execution:
+  * `python tests/run_all_tests.py`
+  * Total Tests Run: 292
+  * Total Passed: 292
+  * Failures: 0
+  * Errors: 0
+  * Overall Status: SUCCESS (100% Passed in 35.353s)
+
+5. COMPATIBILITY & LIMITATIONS
+--------------------------------------------------------------------------------
+- Backward Compatibility:
+  * Seamlessly operates on both minimal and fully populated checkpoints.
+  * Preserves all existing REST routes and UI workflows.
+- Limitations:
+  * AI enhancement is strictly an opt-in hook; out of the box, Continuum operates
+    100% locally and deterministically.
+
+6. ACCEPTANCE CHECKLIST & GATE EVALUATION
+--------------------------------------------------------------------------------
+[x] Generate locally from authoritative data: purpose, last completed work, decisions, blockers, questions, next actions.
+[x] Do not invent missing facts; label uncertainty/provenance explicitly.
+[x] Redact secrets across all brief fields.
+[x] Regenerate/rebuild when relevant data changes.
+[x] Add optional AI only if safely supported; disclose provider/content and require consent; fall back locally.
+[x] Gate verification: offline brief works without AI; no external transfer without consent.
+
+FINAL STATUS: PASS
+READY FOR NEXT PHASE: YES (Proceed to Phase 61 — Resume Center and Activity Detail)
+================================================================================

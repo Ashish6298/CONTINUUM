@@ -39,6 +39,10 @@ from core.manual_capture import (
     DuplicateSubmissionError,
     CaptureStorageError,
 )
+from core.resume_generator import (
+    DeterministicResumeBriefGenerator,
+    AiEnhancementConsent,
+)
 from core.invariants import (
     InvariantId,
     InvariantCategory,
@@ -180,4 +184,6 @@ __all__ = [
     "PrivacySettings",
     "DuplicateSubmissionError",
     "CaptureStorageError",
+    "DeterministicResumeBriefGenerator",
+    "AiEnhancementConsent",
 ]
