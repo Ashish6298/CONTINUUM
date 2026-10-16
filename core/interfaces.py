@@ -207,3 +207,120 @@ class IModelAdapter(Protocol):
         - "project-state.json": machine-readable payload
         """
         ...
+
+
+# ==============================================================================
+# 8. CONTINUITY CORE INTERFACES (v1.4.0 — Milestone 41 / Phase 72)
+# ==============================================================================
+
+@runtime_checkable
+class ILifecycleManager(Protocol):
+    """Contract for Activity lifecycle operations and valid transitions."""
+    def create_activity(self, activity: Any) -> Any:
+        ...
+
+    def get_activity(self, activity_id: str) -> Any:
+        ...
+
+    def update_activity(self, activity: Any) -> Any:
+        ...
+
+    def transition_activity_status(self, activity_id: str, new_status: Any, reason: Optional[str] = None) -> Any:
+        ...
+
+    def list_activities(
+        self,
+        status: Optional[Any] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[List[Any], int]:
+        ...
+
+
+@runtime_checkable
+class ICheckpointManager(Protocol):
+    """Contract for durable checkpoint CRUD and atomic commit confirmation."""
+    def commit_checkpoint(self, checkpoint: Any) -> Any:
+        ...
+
+    def get_checkpoint(self, checkpoint_id: str, activity_id: Optional[str] = None) -> Any:
+        ...
+
+    def list_checkpoints(
+        self,
+        activity_id: str,
+        limit: int = 50,
+        offset: int = 0,
+        order: str = "desc",
+    ) -> Tuple[List[Any], int]:
+        ...
+
+
+@runtime_checkable
+class IResumeEngine(Protocol):
+    """Contract for generating actionable continuity briefs and status answers."""
+    def generate_brief(self, activity: Any, checkpoint: Any) -> Any:
+        ...
+
+
+@runtime_checkable
+class IHistoryManager(Protocol):
+    """Contract for read-only chronological timeline inspection and checkpoint comparison."""
+    def get_timeline(self, activity_id: str, limit: int = 50, offset: int = 0) -> List[Any]:
+        ...
+
+    def compare_checkpoints(self, source_checkpoint: Any, target_checkpoint: Any) -> Any:
+        ...
+
+
+@runtime_checkable
+class IBranchManager(Protocol):
+    """Contract for creating isolated branch activities from historical checkpoints."""
+    def branch_from_checkpoint(
+        self,
+        source_checkpoint_id: str,
+        new_activity_title: str,
+        branch_name: Optional[str] = None,
+        source_activity_id: Optional[str] = None,
+    ) -> Tuple[Any, Any]:
+        ...
+
+    def get_branch_ancestry(self, activity_id: str) -> Dict[str, Any]:
+        ...
+
+
+@runtime_checkable
+class IRestoreManager(Protocol):
+    """Contract for pre-flight restore inspection and safe history-preserving recovery."""
+    def preview_restore(self, target_checkpoint_id: str, activity_id: Optional[str] = None) -> Dict[str, Any]:
+        ...
+
+    def confirm_restore(
+        self,
+        target_checkpoint_id: str,
+        activity_id: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> Tuple[Any, Any]:
+        ...
+
+
+@runtime_checkable
+class IRetentionManager(Protocol):
+    """Contract for safe history retention, pruning policy enforcement, and ancestry protection."""
+    def evaluate_retention(self, activity_id: str, max_checkpoints: int = 100) -> Dict[str, Any]:
+        ...
+
+    def prune_checkpoints(self, activity_id: str, max_checkpoints: int = 100, dry_run: bool = True) -> Dict[str, Any]:
+        ...
+
+
+@runtime_checkable
+class IIntegrityManager(Protocol):
+    """Contract for storage consistency verification, orphan detection, and safe repair."""
+    def audit(self) -> Any:
+        ...
+
+    def repair(self, dry_run: bool = False) -> Any:
+        ...
+
+

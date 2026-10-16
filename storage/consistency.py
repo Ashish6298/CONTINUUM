@@ -537,3 +537,7 @@ class StorageConsistencyEngine:
             is_clean_post_repair=post_audit.is_clean,
             details=f"Repaired {repaired_count} of {len(audit_report.issues_found)} issues. Post-repair clean: {post_audit.is_clean}.",
         )
+
+
+# Backward-compatible and interface alias
+StorageConsistencyAuditor = StorageConsistencyEngine
