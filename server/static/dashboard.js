@@ -141,6 +141,7 @@ class ContinuumDashboardApp {
       captureCompletedWork: document.getElementById('captureCompletedWork'),
       capturePendingActions: document.getElementById('capturePendingActions'),
       captureBlockers: document.getElementById('captureBlockers'),
+      captureArtifacts: document.getElementById('captureArtifacts'),
       // Resume Center Elements (Phase 61)
       btnToggleResumeCenter: document.getElementById('btnToggleResumeCenter'),
       resumeCenterView: document.getElementById('resumeCenterView'),
@@ -808,7 +809,16 @@ class ContinuumDashboardApp {
     const completedWork = parseLines(this.el.captureCompletedWork?.value);
     const pendingActions = parseLines(this.el.capturePendingActions?.value);
     const blockers = parseLines(this.el.captureBlockers?.value);
+    const rawArtifacts = parseLines(this.el.captureArtifacts?.value);
+    const isSnapshot = document.getElementById('radioArtSnapshot')?.checked || false;
     const context = this.el.captureContext?.value?.trim() || '';
+
+    // Convert artifact entries to structured objects with user-selected mode
+    const artifacts = rawArtifacts.map(artPath => ({
+      path_or_uri: artPath,
+      name: artPath.split(/[/\\]/).pop() || artPath,
+      mode: isSnapshot ? 'snapshot' : 'reference'
+    }));
 
     const payload = {
       activity_id: activityId,
@@ -816,6 +826,7 @@ class ContinuumDashboardApp {
       completed_work: completedWork,
       pending_actions: pendingActions,
       blockers: blockers,
+      artifacts: artifacts,
       idempotency_key: 'ui_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8)
     };
 
@@ -1455,9 +1466,57 @@ class ContinuumDashboardApp {
       ? `<ul class="snapshot-list">${chk.blockers.map(b => `<li style="color:var(--accent-danger);">${escapeHtml(b)}</li>`).join('')}</ul>`
       : '<span style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">None recorded</span>';
 
-    const artifactsList = (chk.artifacts && chk.artifacts.length > 0)
-      ? `<ul class="snapshot-list">${chk.artifacts.map(art => `<li><code>${escapeHtml(art.path || art)}</code></li>`).join('')}</ul>`
-      : '<span style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">None referenced</span>';
+    const renderArtifactsSection = (artifacts) => {
+      if (!artifacts || artifacts.length === 0) {
+        return '<span style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">None referenced</span>';
+      }
+      return `
+        <div class="artifact-list-container">
+          ${artifacts.map((art, idx) => {
+            const isSnap = (art.mode === 'snapshot' || !!art.snapshot_content);
+            const pathOrUri = art.path_or_uri || art.path || String(art);
+            const name = art.name || pathOrUri.split(/[/\\]/).pop() || pathOrUri;
+            const capturedAt = art.captured_at ? new Date(art.captured_at).toLocaleString() : 'Captured with checkpoint';
+            const sizeBytes = art.size_bytes != null ? `${(art.size_bytes / 1024).toFixed(1)} KB` : null;
+            const visibility = art.storage_visibility || (pathOrUri.includes('://') ? 'external_uri' : (isSnap ? 'embedded_snapshot' : 'workspace_local'));
+            
+            const badgeMode = isSnap
+              ? '<span class="badge-art-snapshot">📸 Snapshot Copy</span>'
+              : '<span class="badge-art-reference">🔗 Live Reference</span>';
+              
+            const badgeVis = visibility === 'missing'
+              ? '<span class="badge-art-missing">⚠️ Missing</span>'
+              : (visibility === 'external_uri' ? '<span class="badge-art-external">🌐 External URI</span>' : '');
+
+            return `
+              <div class="artifact-card">
+                <div class="artifact-header">
+                  <span class="artifact-name">${escapeHtml(name)}</span>
+                  <div class="artifact-badges">
+                    ${badgeMode}
+                    ${badgeVis}
+                  </div>
+                </div>
+                <div class="artifact-meta-row">
+                  <span>Path: <code>${escapeHtml(pathOrUri)}</code></span>
+                  <span>Timestamp: ${escapeHtml(capturedAt)}</span>
+                  ${sizeBytes ? `<span>Size: ${sizeBytes}</span>` : ''}
+                  <span>Storage: <em>${escapeHtml(visibility)}</em></span>
+                </div>
+                ${isSnap && art.snapshot_content ? `
+                  <details style="margin-top:0.25rem;">
+                    <summary style="font-size:0.75rem; color:var(--accent-primary); cursor:pointer;">View Snapshot Content (${art.snapshot_content.length} chars)</summary>
+                    <pre class="artifact-content-preview">${escapeHtml(art.snapshot_content)}</pre>
+                  </details>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    };
+
+    const artifactsList = renderArtifactsSection(chk.artifacts);
 
     const statePill = isCurrentState
       ? '<span class="status-pill">🟢 Current Active State</span>'

@@ -21,7 +21,6 @@ from extractors.git_extractor import GitEvidenceExtractor
 from extractors.workspace_extractor import WorkspaceEvidenceExtractor
 from handoff.packager import UniversalHandoffPackager
 from handoff.adapters import get_adapter_for_model
-from pipeline.orchestrator import ContinuumPipeline
 
 
 from server.auth import CorsOriginGuard, SessionAuthManager
@@ -189,6 +188,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_v1_templates()
                 elif path in ("/api/v1/search", "/api/search"):
                     self.handle_get_v1_search(query)
+                elif path in ("/api/v1/artifacts/status", "/api/artifacts/status"):
+                    self.handle_get_v1_artifacts_status(query)
                 else:
                     self._send_error_response(f"Endpoint not found: {path}", status_code=404)
             except Exception as e:
@@ -400,6 +401,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_v1_search_rebuild()
             elif path in ("/api/v1/search", "/api/search"):
                 self.handle_post_v1_search()
+            elif path in ("/api/v1/artifacts/inspect", "/api/artifacts/inspect"):
+                self.handle_post_v1_artifacts_inspect()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
@@ -1549,6 +1552,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 pass  # Fall through to full pipeline scan on error
 
         # Full pipeline scan (slow, ~25s) - used on first load or ?refresh=1
+        from pipeline.orchestrator import ContinuumPipeline
         pipeline = ContinuumPipeline(self.workspace_root)
         state, summary, _ = pipeline.run_full_analysis()
 
@@ -1760,6 +1764,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 state = storage.load_state(validate=False)
             except Exception:
                 # Fall back to pipeline scan if state is corrupted
+                from pipeline.orchestrator import ContinuumPipeline
                 pipeline = ContinuumPipeline(self.workspace_root)
                 state, _, _ = pipeline.run_full_analysis(
                     task_description=task_description,
@@ -1767,6 +1772,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 )
         else:
             # No cached state - run pipeline and persist it
+            from pipeline.orchestrator import ContinuumPipeline
             pipeline = ContinuumPipeline(self.workspace_root)
             state, _, _ = pipeline.run_full_analysis(
                 task_description=task_description,
@@ -1981,4 +1987,97 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "indexed_count": indexed_count,
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
+
+    def handle_post_v1_artifacts_inspect(self) -> None:
+        """
+        POST /api/v1/artifacts/inspect (Phase 70)
+        Inspects one or more workspace file paths or URIs to classify whether they
+        can be linked as references or captured as snapshots.
+        Enforces size bounds, privacy exclusions (I-10), and directory guards.
+        """
+        from core.artifact_manager import ArtifactManager
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        data = {}
+        if content_len > 0:
+            body_raw = self.rfile.read(content_len).decode("utf-8")
+            try:
+                data = json.loads(body_raw)
+            except Exception:
+                self._send_error_response("Malformed JSON body.", status_code=400)
+                return
+
+        path = data.get("path") or data.get("path_or_uri")
+        paths = data.get("paths", [])
+        if path and path not in paths:
+            paths = [path] + list(paths)
+
+        if not paths:
+            self._send_error_response("Missing 'path' or 'paths' in request body.", status_code=400)
+            return
+
+        results = []
+        for p in paths:
+            if not isinstance(p, str) or not p.strip():
+                continue
+            inspection = ArtifactManager.inspect_resource(p.strip(), self.workspace_root)
+            results.append(inspection)
+
+        self._send_json_response({
+            "status": "success",
+            "count": len(results),
+            "artifacts": results,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_artifacts_status(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/artifacts/status (Phase 70)
+        Resolves the current status of artifacts in a checkpoint or activity.
+        Determines whether references exist or are missing, and whether snapshots
+        remain valid or have diverged.
+        Query params:
+        - activity_id: required
+        - checkpoint_id: optional (if omitted, uses latest checkpoint)
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError, CheckpointNotFoundError
+        from core.artifact_manager import ArtifactManager
+
+        activity_id = query.get("activity_id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        checkpoint_id = query.get("checkpoint_id", [None])[0]
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            if checkpoint_id:
+                chk = store.get_checkpoint(activity_id, checkpoint_id)
+            else:
+                chk = store.get_latest_checkpoint(activity_id)
+                if not chk:
+                    self._send_error_response(f"No checkpoints found for activity '{activity_id}'.", status_code=404)
+                    return
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+        except CheckpointNotFoundError:
+            self._send_error_response(f"Checkpoint '{checkpoint_id}' not found in activity '{activity_id}'.", status_code=404)
+            return
+
+        resolved_artifacts = []
+        for art in (chk.artifacts or []):
+            status_info = ArtifactManager.resolve_artifact_status(art, self.workspace_root)
+            resolved_artifacts.append(status_info)
+
+        self._send_json_response({
+            "status": "success",
+            "activity_id": activity_id,
+            "checkpoint_id": chk.id,
+            "count": len(resolved_artifacts),
+            "artifacts": resolved_artifacts,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
 

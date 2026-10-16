@@ -17,6 +17,7 @@ Invariants:
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 import hashlib
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import uuid
 
@@ -101,7 +102,8 @@ class DecisionRecord:
 class ArtifactReference:
     """
     Represents an artifact linked to a checkpoint.
-    References live files/URIs by default; optional user-selected snapshot copies.
+    Phase 70: References by default; optional user-selected snapshot copies.
+    Labels live reference vs snapshot with capture timestamp and storage visibility.
     """
     name: str
     path_or_uri: str
@@ -110,6 +112,19 @@ class ArtifactReference:
     checksum_sha256: Optional[str] = None
     size_bytes: Optional[int] = None
     snapshot_content: Optional[str] = None
+    storage_visibility: str = "workspace_local"  # "workspace_local", "external_uri", "embedded_snapshot", "missing"
+    is_present: Optional[bool] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def is_snapshot(self) -> bool:
+        mode_val = self.mode.value if isinstance(self.mode, ArtifactMode) else str(self.mode)
+        return mode_val.lower() == ArtifactMode.SNAPSHOT.value
+
+    @property
+    def is_reference(self) -> bool:
+        mode_val = self.mode.value if isinstance(self.mode, ArtifactMode) else str(self.mode)
+        return mode_val.lower() == ArtifactMode.REFERENCE.value
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -120,6 +135,9 @@ class ArtifactReference:
             "checksum_sha256": self.checksum_sha256,
             "size_bytes": self.size_bytes,
             "snapshot_content": self.snapshot_content,
+            "storage_visibility": self.storage_visibility,
+            "is_present": self.is_present,
+            "metadata": dict(self.metadata) if self.metadata else {},
         }
 
     @classmethod
@@ -130,14 +148,20 @@ class ArtifactReference:
         except (ValueError, AttributeError):
             mode_enum = ArtifactMode.REFERENCE
 
+        raw_path = data.get("path_or_uri") or data.get("path", "")
+        fallback_name = Path(raw_path).name or raw_path or "unnamed_artifact"
+
         return cls(
-            name=data["name"],
-            path_or_uri=data["path_or_uri"],
+            name=data.get("name") or fallback_name,
+            path_or_uri=raw_path,
             mode=mode_enum,
             captured_at=data.get("captured_at", datetime.now(timezone.utc).isoformat()),
             checksum_sha256=data.get("checksum_sha256"),
             size_bytes=data.get("size_bytes"),
             snapshot_content=data.get("snapshot_content"),
+            storage_visibility=data.get("storage_visibility", "workspace_local"),
+            is_present=data.get("is_present"),
+            metadata=dict(data.get("metadata", {})),
         )
 
 

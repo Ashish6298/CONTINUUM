@@ -1,0 +1,145 @@
+================================================================================
+CONTINUUM VERIFICATION AND TEST AUDIT REPORT
+================================================================================
+PHASE:         Phase 70 — Artifact References and Snapshots
+MILESTONE:     Milestone 41 — Artifacts, Automation and Adapters
+DATE:          2026-10-17
+BRANCH:        ashish (Local only; zero unconfirmed pushes)
+ENVIRONMENT:   Windows (PowerShell), Python 3.11.9 Standard Library
+STATUS:        PASSED / READY FOR NEXT PHASE
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 70 delivers explicit distinction, lifecycle tracking, and strict security
+guards for checkpoint artifacts in Project Continuum:
+  - References by default: 0-byte snapshot copy, live file pointer preserved.
+  - Optional user-selected snapshots: safe text files (<=512 KB per file, 2 MB
+    total checkpoint budget) captured as immutable history with timestamps.
+  - Explicit labeling: live reference vs snapshot copy, capture timestamp, and
+    storage visibility (workspace_local, external_uri, embedded_snapshot, missing).
+  - Resilient missing resources: references degrade gracefully to 'missing'
+    without crashing or mutating state; snapshots survive live file deletion.
+  - Strict directory guard: folders/directories are NEVER snapshot-copied.
+  - Strict privacy protections (Invariant I-10): high-risk credential files
+    (.env, id_rsa, *.pem, secrets.json, etc.) are excluded from snapshot capture;
+    inline secrets are redacted via DaemonSanitizer.
+  - Seamless UI integration: manual capture modal includes artifact mode toggle;
+    read-only snapshot modal renders rich artifact cards and expandable previews.
+
+GATE REQUIREMENT:
+  "Users understand what is linked vs copied."
+  -> Fully verified: UI and API explicitly display distinct badges, storage
+     visibilities, and clear warning messages for live references vs snapshots.
+
+================================================================================
+2. COMPONENT ARCHITECTURE & IMPLEMENTATION
+================================================================================
+A. Core Artifact Management Engine (core/artifact_manager.py):
+   - ArtifactError, ArtifactSnapshotError, ArtifactPrivacyError, ArtifactSizeLimitError
+   - ArtifactManager constants:
+     * MAX_SNAPSHOT_FILE_BYTES = 512 * 1024 (512 KB)
+     * MAX_TOTAL_SNAPSHOT_BYTES = 2 * 1024 * 1024 (2 MB)
+     * SAFE_TEXT_EXTENSIONS (code, markup, structured data)
+   - normalize_path(path_or_uri, workspace_root):
+     Converts absolute filesystem paths within workspace to relative POSIX paths.
+   - resolve_local_path(path_or_uri, workspace_root):
+     Safely resolves relative POSIX paths and file:// URIs without traversal escape.
+   - inspect_resource(path_or_uri, workspace_root):
+     Classifies files into references/snapshots, detects directories, high-risk
+     credentials, file sizes, and computes SHA-256 digests.
+   - create_reference(path_or_uri, ...):
+     Default mode; creates a live link with 0 bytes content copied.
+   - create_snapshot(path_or_uri, ...):
+     Explicit consent mode; reads text, sanitizes secrets, checks budgets.
+   - resolve_artifact_status(artifact, workspace_root):
+     Detects missing files, diverged files, deleted workspace files.
+   - validate_and_process_artifacts(raw_artifacts, ...):
+     Batch validation and normalization pipeline.
+
+B. Data Model Enhancements (core/checkpoint.py):
+   - ArtifactReference:
+     * Added storage_visibility: 'workspace_local' | 'external_uri' | 'embedded_snapshot' | 'missing'
+     * Added is_present: Optional[bool]
+     * Added metadata: Dict[str, Any]
+     * Properties: is_snapshot, is_reference
+     * Resilient from_dict() and to_dict() serialization
+
+C. Manual Capture Pipeline Integration (core/manual_capture.py):
+   - ManualCaptureEngine now validates artifacts through ArtifactManager:
+     * Defaults to ArtifactMode.REFERENCE.
+     * Enforces directory snapshot prohibition (downgrades or excludes).
+     * Enforces per-file (512 KB) and total checkpoint (2 MB) budgets.
+     * Enforces privacy exclusions for credential files and redaction of inline secrets.
+
+D. HTTP Endpoints & REST Layer (server/routes.py):
+   - POST /api/v1/artifacts/inspect:
+     Inspects one or multiple candidate paths or URIs to classify safe snapshot eligibility.
+   - GET /api/v1/artifacts/status:
+     Resolves real-time status of artifacts belonging to a checkpoint or activity.
+   - Fixed circular import between server.routes and pipeline.orchestrator via lazy imports.
+
+E. Web Dashboard SPA (server/static/):
+   - index.html:
+     * Added #captureArtifacts textarea in #modalManualCapture.
+     * Added radioArtReference ("🔗 Link as References") vs radioArtSnapshot ("📸 Copy as Snapshots").
+   - dashboard.css:
+     * .artifact-card, .artifact-header, .artifact-name, .artifact-badges
+     * .badge-art-reference, .badge-art-snapshot, .badge-art-missing, .badge-art-external
+     * .artifact-meta-row, .artifact-content-preview
+   - dashboard.js:
+     * Parsed multiline artifacts and mode toggle in submitManualCapture().
+     * Rendered rich artifact cards with badges, storage visibilities, timestamps,
+       and expandable snapshot preview in openSnapshotModal().
+
+================================================================================
+3. TEST VERIFICATION MATRIX
+================================================================================
+Suite: tests/test_phase70_artifacts.py (19 Tests, 100% Passed)
+  [OK] test_reference_by_default
+  [OK] test_external_uri_reference
+  [OK] test_safe_text_snapshot_capture
+  [OK] test_missing_reference_degrades_gracefully
+  [OK] test_snapshot_survives_live_file_deletion
+  [OK] test_snapshot_detects_live_divergence
+  [OK] test_directory_snapshot_rejected
+  [OK] test_directory_reference_allowed
+  [OK] test_high_risk_credential_file_snapshot_blocked
+  [OK] test_inspect_resource_flags_high_risk
+  [OK] test_inline_secret_redaction_in_snapshot
+  [OK] test_file_exceeding_max_snapshot_size_rejected
+  [OK] test_total_snapshot_budget_enforced
+  [OK] test_path_normalization
+  [OK] test_manual_capture_with_mixed_artifacts
+  [OK] test_gate_linked_vs_copied_distinction
+  [OK] test_inspect_api_logic
+  [OK] test_ui_contains_phase70_elements
+  [OK] test_dashboard_css_contains_artifact_classes
+
+Suite: Full Regression Suite (python tests/run_all_tests.py)
+  Total Tests Run: 382
+  Passed:         382
+  Failures:       0
+  Errors:         0
+  Duration:       52.256s
+  Overall Status: SUCCESS (100% Passed)
+
+================================================================================
+4. INVARIANT & SECURITY COMPLIANCE (projectv1.4.0.txt)
+================================================================================
+- Invariant I-01 (Stable Identity): Checkpoints and artifacts preserve stable IDs and POSIX paths.
+- Invariant I-02 (Durable Commits): No false positive success before disk write completes.
+- Invariant I-03 (History Immutability): Snapshots and references are immutable read-only records.
+- Invariant I-06 (Filesystem Truth): Search and artifact status resolve directly from files.
+- Invariant I-10 (Privacy Protection): High-risk files (.env, id_rsa, keys) strictly excluded.
+- Invariant I-14 (Safe Idempotence): Retrying capture or artifact resolution causes no duplicate side effects.
+- Invariant I-17 (Bounded Overhead): Per-file (512 KB) and total budget (2 MB) strictly bounded.
+
+================================================================================
+5. READINESS DETERMINATION FOR NEXT PHASE
+================================================================================
+- Phase 70 implementation complete, fully verified, and zero regressions found.
+- All 382 automated tests passing cleanly.
+- README.md updated with 382/382 test badge.
+- READY FOR NEXT PHASE: Phase 71 — Automation Triggers and Rules.
+================================================================================

@@ -346,40 +346,95 @@ class ManualCaptureEngine:
                 )
             )
 
-        # Filter & sanitize artifacts
+        # Phase 70: Filter, sanitize, and validate artifacts via ArtifactManager
+        from core.artifact_manager import ArtifactManager
+
         sanitized_artifacts: List[ArtifactReference] = []
         excluded_artifacts_count = 0
+        total_snapshot_bytes = 0
+
         for art in request.artifacts:
             if not isinstance(art, dict):
                 continue
-            path_or_uri = str(art.get("path_or_uri") or "")
-            name = str(art.get("name") or "unnamed_artifact")
+            raw_path = str(art.get("path_or_uri") or "")
+            name = str(art.get("name") or Path(raw_path).name or raw_path or "unnamed_artifact")
 
             # Privacy rule: Exclude high-risk credential files (.env, *.pem, *.key, etc.)
-            if request.privacy_settings.exclude_high_risk_files and DaemonSanitizer.is_high_risk_file(path_or_uri):
+            if request.privacy_settings.exclude_high_risk_files and DaemonSanitizer.is_high_risk_file(raw_path):
                 excluded_artifacts_count += 1
                 continue
 
-            snapshot_content = art.get("snapshot_content")
-            if snapshot_content is not None and request.privacy_settings.redact_secrets:
-                snapshot_content, r_art = self.sanitize_text(str(snapshot_content), request.privacy_settings)
-                total_redactions += r_art
-
-            mode_str = art.get("mode", ArtifactMode.REFERENCE.value)
+            norm_path = ArtifactManager.normalize_path(raw_path, self.workspace_root)
+            mode_str = str(art.get("mode") or ArtifactMode.REFERENCE.value).lower()
             try:
-                mode_enum = ArtifactMode(str(mode_str).lower())
+                mode_enum = ArtifactMode(mode_str)
             except (ValueError, AttributeError):
                 mode_enum = ArtifactMode.REFERENCE
+
+            captured_ts = str(art.get("captured_at") or datetime.now(timezone.utc).isoformat())
+
+            if mode_enum == ArtifactMode.SNAPSHOT:
+                inspection = ArtifactManager.inspect_resource(norm_path, self.workspace_root)
+                if inspection.get("is_directory"):
+                    # Directories can NEVER be snapshot-copied (Phase 70 guard)
+                    mode_enum = ArtifactMode.REFERENCE
+                    snapshot_content = None
+                    storage_visibility = "workspace_local"
+                elif inspection.get("is_high_risk"):
+                    excluded_artifacts_count += 1
+                    continue
+                else:
+                    raw_snap = art.get("snapshot_content")
+                    if raw_snap is None and inspection["exists"]:
+                        local_p = ArtifactManager.resolve_local_path(norm_path, self.workspace_root)
+                        try:
+                            raw_snap = local_p.read_text(encoding="utf-8")
+                        except Exception:
+                            raw_snap = None
+
+                    if raw_snap is not None:
+                        if request.privacy_settings.redact_secrets:
+                            raw_snap, r_art = self.sanitize_text(str(raw_snap), request.privacy_settings)
+                            total_redactions += r_art
+
+                        snap_bytes = len(raw_snap.encode("utf-8"))
+                        if (snap_bytes <= ArtifactManager.MAX_SNAPSHOT_FILE_BYTES and
+                                (total_snapshot_bytes + snap_bytes) <= ArtifactManager.MAX_TOTAL_SNAPSHOT_BYTES):
+                            snapshot_content = raw_snap
+                            storage_visibility = "embedded_snapshot"
+                            total_snapshot_bytes += snap_bytes
+                        else:
+                            # Size limit reached - downgrade to reference
+                            mode_enum = ArtifactMode.REFERENCE
+                            snapshot_content = None
+                            storage_visibility = "workspace_local"
+                    else:
+                        mode_enum = ArtifactMode.REFERENCE
+                        snapshot_content = None
+                        storage_visibility = inspection["storage_visibility"]
+            else:
+                # Default: REFERENCE
+                mode_enum = ArtifactMode.REFERENCE
+                snapshot_content = None
+                inspection = ArtifactManager.inspect_resource(norm_path, self.workspace_root)
+                storage_visibility = inspection["storage_visibility"]
+
+            insp = ArtifactManager.inspect_resource(norm_path, self.workspace_root)
+            checksum = art.get("checksum_sha256") or insp.get("checksum_sha256")
+            size_b = len(snapshot_content.encode("utf-8")) if snapshot_content is not None else (art.get("size_bytes") or insp.get("size_bytes"))
 
             sanitized_artifacts.append(
                 ArtifactReference(
                     name=name,
-                    path_or_uri=path_or_uri,
+                    path_or_uri=norm_path,
                     mode=mode_enum,
-                    captured_at=str(art.get("captured_at") or datetime.now(timezone.utc).isoformat()),
-                    checksum_sha256=art.get("checksum_sha256"),
-                    size_bytes=art.get("size_bytes"),
+                    captured_at=captured_ts,
+                    checksum_sha256=checksum,
+                    size_bytes=size_b,
                     snapshot_content=snapshot_content,
+                    storage_visibility=storage_visibility,
+                    is_present=insp.get("exists", False),
+                    metadata=dict(art.get("metadata", {}))
                 )
             )
 
