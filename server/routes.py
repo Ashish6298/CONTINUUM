@@ -22,7 +22,6 @@ from extractors.workspace_extractor import WorkspaceEvidenceExtractor
 from handoff.packager import UniversalHandoffPackager
 from handoff.adapters import get_adapter_for_model
 from pipeline.orchestrator import ContinuumPipeline
-from storage.manager import ContinuumStorageManager
 
 
 from server.auth import CorsOriginGuard, SessionAuthManager
@@ -188,6 +187,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_v1_resume_brief(query)
                 elif path in ("/api/v1/templates", "/api/templates"):
                     self.handle_get_v1_templates()
+                elif path in ("/api/v1/search", "/api/search"):
+                    self.handle_get_v1_search(query)
                 else:
                     self._send_error_response(f"Endpoint not found: {path}", status_code=404)
             except Exception as e:
@@ -395,6 +396,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_v1_checkpoints_compare()
             elif path in ("/api/v1/checkpoints/manual", "/api/checkpoints/manual"):
                 self.handle_post_v1_checkpoint_manual()
+            elif path in ("/api/v1/search/rebuild", "/api/search/rebuild"):
+                self.handle_post_v1_search_rebuild()
+            elif path in ("/api/v1/search", "/api/search"):
+                self.handle_post_v1_search()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
@@ -1362,6 +1367,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         create_backup = bool(data.get("create_backup", True))
         source_model = str(data.get("source", "browser"))
 
+        from storage.manager import ContinuumStorageManager
         storage = ContinuumStorageManager(str(self.workspace_root))
         storage.initialize_storage()
 
@@ -1477,6 +1483,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         Filters out high-risk files (.env, *.key, etc.).
         """
         force_refresh = query.get("refresh", ["0"])[0] in ("1", "true", "yes")
+        from storage.manager import ContinuumStorageManager
         storage = ContinuumStorageManager(str(self.workspace_root))
 
         if not force_refresh and storage.state_exists():
@@ -1746,6 +1753,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         target_model = model_map.get(target_model_str, TargetModel.UNIVERSAL)
 
         # Load state from cache (fast ~50ms) or run full pipeline scan if needed
+        from storage.manager import ContinuumStorageManager
         storage = ContinuumStorageManager(str(self.workspace_root))
         if storage.state_exists():
             try:
@@ -1850,4 +1858,127 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         self._send_json_response(payload)
+
+    def handle_get_v1_search(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/search (Phase 68)
+        Executes offline full-text search across activities and checkpoints using FTS5.
+        """
+        from storage.activity_store import ActivityCheckpointStore
+
+        q_str = query.get("q", [None])[0] or query.get("query", [None])[0]
+        record_type = query.get("record_type", [None])[0]
+        activity_id = query.get("activity_id", [None])[0]
+        status = query.get("status", [None])[0]
+        activity_type = query.get("activity_type", [None])[0] or query.get("type", [None])[0]
+        tag = query.get("tag", [None])[0]
+        collection = query.get("collection", [None])[0]
+        date_from = query.get("date_from", [None])[0]
+        date_to = query.get("date_to", [None])[0]
+
+        try:
+            limit = int(query.get("limit", [20])[0])
+        except (ValueError, TypeError):
+            limit = 20
+
+        try:
+            offset = int(query.get("offset", [0])[0])
+        except (ValueError, TypeError):
+            offset = 0
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        results, total = store.search(
+            query=q_str,
+            record_type=record_type,
+            activity_id=activity_id,
+            status=status,
+            activity_type=activity_type,
+            tag=tag,
+            collection=collection,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset
+        )
+
+        self._send_json_response({
+            "status": "success",
+            "query": q_str or "",
+            "total": total,
+            "count": len(results),
+            "limit": limit,
+            "offset": offset,
+            "results": [r.to_dict() if hasattr(r, "to_dict") else r for r in results],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_search(self) -> None:
+        """
+        POST /api/v1/search (Phase 68)
+        Programmatic full-text search endpoint accepting JSON payload.
+        """
+        from storage.activity_store import ActivityCheckpointStore
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        data = {}
+        if content_len > 0:
+            body_raw = self.rfile.read(content_len).decode("utf-8")
+            try:
+                data = json.loads(body_raw)
+            except Exception:
+                self._send_error_response("Malformed JSON body.", status_code=400)
+                return
+
+        q_str = data.get("query") or data.get("q")
+        record_type = data.get("record_type")
+        activity_id = data.get("activity_id")
+        status = data.get("status")
+        activity_type = data.get("activity_type") or data.get("type")
+        tag = data.get("tag")
+        collection = data.get("collection")
+        date_from = data.get("date_from")
+        date_to = data.get("date_to")
+        limit = int(data.get("limit", 20))
+        offset = int(data.get("offset", 0))
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        results, total = store.search(
+            query=q_str,
+            record_type=record_type,
+            activity_id=activity_id,
+            status=status,
+            activity_type=activity_type,
+            tag=tag,
+            collection=collection,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset
+        )
+
+        self._send_json_response({
+            "status": "success",
+            "query": q_str or "",
+            "total": total,
+            "count": len(results),
+            "limit": limit,
+            "offset": offset,
+            "results": [r.to_dict() if hasattr(r, "to_dict") else r for r in results],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_search_rebuild(self) -> None:
+        """
+        POST /api/v1/search/rebuild (Phase 68)
+        Rebuilds derived search FTS5 index from authoritative filesystem data (I-06).
+        """
+        from storage.activity_store import ActivityCheckpointStore
+        store = ActivityCheckpointStore(self.workspace_root)
+        indexed_count = store.rebuild_search_index()
+        self._send_json_response({
+            "status": "success",
+            "message": f"Successfully rebuilt search index with {indexed_count} record(s).",
+            "indexed_count": indexed_count,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
 

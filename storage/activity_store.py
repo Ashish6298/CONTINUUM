@@ -170,6 +170,25 @@ class ActivityCheckpointStore:
 
                 CREATE INDEX IF NOT EXISTS idx_chk_act_ts ON checkpoints_idx(activity_id, timestamp DESC);
                 CREATE INDEX IF NOT EXISTS idx_chk_parent ON checkpoints_idx(parent_checkpoint_id);
+
+                CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
+                    record_id UNINDEXED,
+                    record_type UNINDEXED,
+                    activity_id UNINDEXED,
+                    title,
+                    description,
+                    notes,
+                    decisions,
+                    actions,
+                    briefs,
+                    artifacts,
+                    tags,
+                    type,
+                    status,
+                    collection,
+                    timestamp UNINDEXED,
+                    tokenize=unicode61
+                );
             """)
 
     # =========================================================================
@@ -252,6 +271,12 @@ class ActivityCheckpointStore:
                 act_file.unlink()
             raise CommitFailedError(f"Failed to update activity index: {e}", internal_details=str(e))
 
+        # 3. Derived search index update (Phase 68)
+        try:
+            self.index_activity_search(activity)
+        except Exception:
+            pass
+
         return activity
 
     def get_activity(self, activity_id: str) -> Activity:
@@ -322,6 +347,12 @@ class ActivityCheckpointStore:
                     activity.id,
                 ),
             )
+
+        # Derived search index update (Phase 68)
+        try:
+            self.index_activity_search(activity)
+        except Exception:
+            pass
 
         return activity
 
@@ -691,6 +722,12 @@ class ActivityCheckpointStore:
             act = self.get_activity(checkpoint.activity_id)
             act.updated_at = datetime.now(timezone.utc).isoformat()
             self.update_activity(act)
+        except Exception:
+            pass
+
+        # 7. Derived search index update (Phase 68)
+        try:
+            self.index_checkpoint_search(checkpoint)
         except Exception:
             pass
 
@@ -1236,6 +1273,7 @@ class ActivityCheckpointStore:
             conn.executescript("""
                 DELETE FROM checkpoints_idx;
                 DELETE FROM activities_idx;
+                DELETE FROM search_fts;
             """)
 
         total_indexed = 0
@@ -1282,6 +1320,10 @@ class ActivityCheckpointStore:
                     ),
                 )
             total_indexed += 1
+            try:
+                self.index_activity_search(activity)
+            except Exception:
+                pass
 
             # Scan checkpoints for this activity
             chk_dir = act_dir / "checkpoints"
@@ -1341,5 +1383,288 @@ class ActivityCheckpointStore:
                         ),
                     )
                 total_indexed += 1
+                try:
+                    self.index_checkpoint_search(chk)
+                except Exception:
+                    pass
 
         return total_indexed
+
+    # =========================================================================
+    # SEARCH ENGINE & FTS INDEX (Phase 68)
+    # =========================================================================
+
+    def index_activity_search(self, activity: Activity) -> bool:
+        """
+        Indexes an activity into derived FTS5 table.
+        Does not block or corrupt authoritative operations on failure.
+        """
+        try:
+            from core.search_engine import SearchDocumentBuilder
+            doc = SearchDocumentBuilder.build_activity_document(activity)
+            with self._get_db_connection() as conn:
+                conn.execute("DELETE FROM search_fts WHERE record_id = ?", (doc["record_id"],))
+                conn.execute(
+                    """
+                    INSERT INTO search_fts
+                    (record_id, record_type, activity_id, title, description, notes,
+                     decisions, actions, briefs, artifacts, tags, type, status, collection, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        doc["record_id"],
+                        doc["record_type"],
+                        doc["activity_id"],
+                        doc["title"],
+                        doc["description"],
+                        doc["notes"],
+                        doc["decisions"],
+                        doc["actions"],
+                        doc["briefs"],
+                        doc["artifacts"],
+                        doc["tags"],
+                        doc["type"],
+                        doc["status"],
+                        doc["collection"],
+                        doc["timestamp"],
+                    ),
+                )
+            return True
+        except Exception:
+            return False
+
+    def index_checkpoint_search(
+        self,
+        checkpoint: UniversalCheckpoint,
+        activity: Optional[Activity] = None
+    ) -> bool:
+        """
+        Indexes a checkpoint into derived FTS5 table.
+        Does not block or corrupt authoritative operations on failure.
+        """
+        try:
+            from core.search_engine import SearchDocumentBuilder
+            if activity is None:
+                try:
+                    activity = self.get_activity(checkpoint.activity_id)
+                except Exception:
+                    pass
+            doc = SearchDocumentBuilder.build_checkpoint_document(checkpoint, activity=activity)
+            with self._get_db_connection() as conn:
+                conn.execute("DELETE FROM search_fts WHERE record_id = ?", (doc["record_id"],))
+                conn.execute(
+                    """
+                    INSERT INTO search_fts
+                    (record_id, record_type, activity_id, title, description, notes,
+                     decisions, actions, briefs, artifacts, tags, type, status, collection, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        doc["record_id"],
+                        doc["record_type"],
+                        doc["activity_id"],
+                        doc["title"],
+                        doc["description"],
+                        doc["notes"],
+                        doc["decisions"],
+                        doc["actions"],
+                        doc["briefs"],
+                        doc["artifacts"],
+                        doc["tags"],
+                        doc["type"],
+                        doc["status"],
+                        doc["collection"],
+                        doc["timestamp"],
+                    ),
+                )
+            return True
+        except Exception:
+            return False
+
+    def remove_search_document(self, record_id: str) -> None:
+        """Removes a record from the FTS5 search index."""
+        try:
+            with self._get_db_connection() as conn:
+                conn.execute("DELETE FROM search_fts WHERE record_id = ?", (record_id,))
+        except Exception:
+            pass
+
+    def search(
+        self,
+        query: Optional[str] = None,
+        record_type: Optional[str] = None,
+        activity_id: Optional[str] = None,
+        status: Optional[str] = None,
+        activity_type: Optional[str] = None,
+        tag: Optional[str] = None,
+        collection: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        limit: int = 20,
+        offset: int = 0
+    ) -> Tuple[List[Any], int]:
+        """
+        Searches activities and checkpoints using FTS5 with bounded pagination and filtering.
+        Returns a tuple of (results_list, total_match_count).
+        """
+        from core.search_engine import SearchQuerySanitizer, SearchResult
+        from server.sanitizer import DaemonSanitizer
+
+        clamped_limit = max(1, min(limit, 100))
+        clamped_offset = max(0, offset)
+
+        raw_query = (query or "").strip()
+        fts_query = SearchQuerySanitizer.sanitize(raw_query)
+
+        where_clauses: List[str] = []
+        params: List[Any] = []
+
+        if fts_query:
+            where_clauses.append("search_fts MATCH ?")
+            params.append(fts_query)
+
+        if record_type:
+            where_clauses.append("record_type = ?")
+            params.append(record_type.strip().lower())
+
+        if activity_id:
+            where_clauses.append("activity_id = ?")
+            params.append(activity_id.strip())
+
+        if status:
+            where_clauses.append("LOWER(status) = ?")
+            params.append(status.strip().lower())
+
+        if activity_type:
+            where_clauses.append("LOWER(type) = ?")
+            params.append(activity_type.strip().lower())
+
+        if collection:
+            where_clauses.append("collection = ?")
+            params.append(collection.strip())
+
+        if tag:
+            where_clauses.append("tags LIKE ?")
+            params.append(f"%{tag.strip().lower()}%")
+
+        if date_from:
+            where_clauses.append("timestamp >= ?")
+            params.append(date_from.strip())
+
+        if date_to:
+            where_clauses.append("timestamp <= ?")
+            params.append(date_to.strip())
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        count_sql = f"SELECT COUNT(*) as total FROM search_fts {where_sql}"
+
+        if fts_query:
+            select_sql = f"""
+                SELECT record_id, record_type, activity_id, title, description, timestamp,
+                       snippet(search_fts, -1, '<mark>', '</mark>', '...', 16) AS snippet,
+                       rank AS score, tags, type, status, collection
+                FROM search_fts
+                {where_sql}
+                ORDER BY rank
+                LIMIT ? OFFSET ?
+            """
+        else:
+            select_sql = f"""
+                SELECT record_id, record_type, activity_id, title, description, timestamp,
+                       '' AS snippet, 0.0 AS score, tags, type, status, collection
+                FROM search_fts
+                {where_sql}
+                ORDER BY timestamp DESC
+                LIMIT ? OFFSET ?
+            """
+
+        page_params = list(params) + [clamped_limit, clamped_offset]
+
+        with self._get_db_connection() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute(count_sql, params)
+                total = cur.fetchone()["total"]
+                cur.execute(select_sql, page_params)
+                rows = cur.fetchall()
+            except sqlite3.OperationalError:
+                if fts_query:
+                    quoted_fallback = f'"{raw_query.replace(chr(34), " ").strip()}"'
+                    params[0] = quoted_fallback
+                    page_params[0] = quoted_fallback
+                    try:
+                        cur.execute(count_sql, params)
+                        total = cur.fetchone()["total"]
+                        cur.execute(select_sql, page_params)
+                        rows = cur.fetchall()
+                    except Exception:
+                        return [], 0
+                else:
+                    return [], 0
+
+        results: List[SearchResult] = []
+        for r in rows:
+            tags_list = [t for t in (r["tags"] or "").split(" ") if t]
+            snippet_sanitized = DaemonSanitizer.sanitize_text(r["snippet"] or "")
+            desc_sanitized = DaemonSanitizer.sanitize_text(r["description"] or "")
+            results.append(
+                SearchResult(
+                    record_id=r["record_id"],
+                    record_type=r["record_type"],
+                    activity_id=r["activity_id"],
+                    title=r["title"],
+                    description=desc_sanitized,
+                    timestamp=r["timestamp"],
+                    snippet=snippet_sanitized,
+                    score=float(r["score"] or 0.0),
+                    tags=tags_list,
+                    collection=r["collection"] or None,
+                    status=r["status"] or None,
+                    activity_type=r["type"] or None,
+                )
+            )
+
+        return results, total
+
+    def rebuild_search_index(self) -> int:
+        """
+        Rebuilds the FTS5 search index from authoritative JSON files (I-06).
+        Returns total number of records indexed into search_fts.
+        """
+        indexed_count = 0
+        with self._get_db_connection() as conn:
+            conn.execute("DELETE FROM search_fts;")
+
+        if not self.activities_dir.exists():
+            return 0
+
+        for act_dir in self.activities_dir.iterdir():
+            if not act_dir.is_dir():
+                continue
+            act_file = act_dir / "activity.json"
+            if act_file.exists():
+                try:
+                    with open(act_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    act = Activity.from_dict(data)
+                    if self.index_activity_search(act):
+                        indexed_count += 1
+                except Exception:
+                    pass
+
+            chk_dir = act_dir / "checkpoints"
+            if chk_dir.exists():
+                for chk_file in chk_dir.glob("*.json"):
+                    if chk_file.name.endswith(".tmp") or ".tmp_" in chk_file.name:
+                        continue
+                    try:
+                        with open(chk_file, "r", encoding="utf-8") as f:
+                            cdata = json.load(f)
+                        chk = UniversalCheckpoint.from_dict(cdata)
+                        if self.index_checkpoint_search(chk):
+                            indexed_count += 1
+                    except Exception:
+                        pass
+
+        return indexed_count
