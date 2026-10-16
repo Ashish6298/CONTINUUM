@@ -6,9 +6,14 @@
 # ── 1. PROJECT SPECIFICATIONS & INTERNAL ROADMAP DOCUMENTS ───────────────────
 project.txt
 project*.txt
+projectv1.4.0.txt
 phase.txt — Project Continuum Roadmap to v1.0.0.md
 phase*.txt
+phasev1.3.0.txt
+phasev1.4.0.txt
 !phasev1.3.0_report.txt
+err.txt
+docs/reports/
 *.prompt.md
 scratch/
 temp/

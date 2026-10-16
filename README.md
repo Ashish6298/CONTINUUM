@@ -43,7 +43,6 @@
  ├── <b>[01] FOUNDATION & BENCHMARK</b>
  │    ├── ❯ <a href="#what-is-continuum"><b>Overview & Core Problem</b></a>
  │    ├── ❯ <a href="#whats-new-in-v130"><b>🚀 What's New in v1.3.0 (Context Preservation & Smart Digest)</b></a>
- │    ├── ❯ <a href="#whats-new-in-v120"><b>What's New in v1.2.0 (Browser Companion & Web Suite)</b></a>
  │    ├── ❯ <a href="#why-continuum-over-chat-summaries"><b>Benchmark: Continuum vs Chat Summaries</b></a>
  │    └── ❯ <a href="#quick-start-guide"><b>1-Command Quickstart Guide</b></a>
  │
@@ -55,7 +54,7 @@
  └── <b>[03] TOOLING & GOVERNANCE</b>
       ├── ❯ <a href="#smart-omni-model-handoff-adapters"><b>Omni-Model Handoff Adapters</b></a>
       ├── ❯ <a href="#complete-cli-reference"><b>Complete CLI Command Reference</b></a>
-      ├── ❯ <a href="#verified-roadmap-all-48-phases"><b>Roadmap to v1.2.0 (All 48 Phases)</b></a>
+      ├── ❯ <a href="#system-architecture-verification"><b>Architecture & Verification</b></a>
       ├── ❯ <a href="#testing--verification"><b>Testing & Verification</b></a>
       ├── ❯ <a href="#contributing"><b>Contributing Guide</b></a>
       ├── ❯ <a href="#code-of-conduct"><b>Code of Conduct</b></a>
@@ -154,68 +153,6 @@
     <td><b>🧹 Noise & Promotional Blurb Filtering</b></td>
     <td>
       <code>isPromotionalOrAdText()</code> automatically detects and strips search ads, sponsored cards, and hosting promos (e.g. <i>"Check VPS Plans & Pricing"</i>, <i>"Join 5M+ on Bluehost"</i>, <i>"Sponsored"</i>, <i>"Upgrade to Plus"</i>) from being ingested into session storage, milestone summaries, and continuation directives. Also deduplicates repeated milestone loops.
-    </td>
-  </tr>
-</table>
-
-<br>
-
-<a id="whats-new-in-v120"></a>
-## 🚀 What's New in v1.2.0: In-Depth Feature Architecture
-
-> **Continuum v1.2.0** expands Continuum from an automated CLI AST extraction engine into a complete **Cross-Model AI Chat & Browser Continuity Ecosystem**. It bridges the gap between web-based AI chats (ChatGPT, Claude.ai, Gemini, DeepSeek) and local terminal IDE coding agents (Claude Code, Cursor, Codex, Antigravity).
-
-<br/>
-
-<table>
-  <tr>
-    <th width="30%"><b>v1.2.0 Feature</b></th>
-    <th width="70%"><b>Technical Architecture & Capabilities</b></th>
-  </tr>
-  <tr>
-    <td><b>🧩 1-Click Browser Companion</b></td>
-    <td>
-      Tampermonkey / Violentmonkey userscript (<code>browser/continuum.user.js</code>) and native Manifest V3 WebExtension (<code>browser/extension/</code>) running directly on ChatGPT, Claude.ai, Google AI Studio, Gemini, and DeepSeek.
-      <ul>
-        <li><b>DOM Conversation Extractor</b>: Intelligently scrapes conversational turns and code blocks across dynamic DOM trees without token truncation.</li>
-        <li><b>Shadow DOM UI</b>: Fully isolated UI badge (<code>Alt+C</code>) with live token stats, code block counters, and instant model switch buttons.</li>
-        <li><b>Cross-Tab Context Relay</b>: Auto-opens the target AI in a new tab and injects formatted context using synthetic <code>InputEvent</code> / <code>KeyboardEvent</code> dispatchers into ProseMirror, Monaco, and standard editors.</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><b>🖥️ Local Web Control Dashboard</b></td>
-    <td>
-      Embedded, zero-dependency HTTP server (<code>server/daemon.py</code>) running at <code>http://127.0.0.1:8765</code> with automatic port fallback negotiation.
-      <ul>
-        <li><b>Visual State Graph Explorer</b>: Interactive topology inspector visualizing physical symbols, milestones, and test statuses.</li>
-        <li><b>Live Model Prompt Composer</b>: Real-time token budget calculator with instant format switching (Claude XML, GPT Checklist, Gemini Hierarchy, DeepSeek Compact).</li>
-        <li><b>Session Auth Guard</b>: Constant-time token verification (<code>X-Continuum-Token</code>, <code>Authorization: Bearer</code>) strictly bound to loopback interfaces.</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><b>🚀 Native Browser Launcher</b></td>
-    <td>
-      <code>continuum launch --target &lt;model&gt;</code> automatically discovers Chrome, Brave, and Edge binaries across Windows, macOS, and Linux, launching Chromium with the Continuum companion extension pre-loaded.
-    </td>
-  </tr>
-  <tr>
-    <td><b>🔖 Zero-Install 1-Click Bookmarklet</b></td>
-    <td>
-      <code>continuum bookmarklet</code> compiles a standalone, minified <code>javascript:</code> URI installer for enterprise or restricted environments where browser extensions cannot be installed.
-    </td>
-  </tr>
-  <tr>
-    <td><b>🔄 Bi-Directional Code Sync Engine</b></td>
-    <td>
-      <code>POST /api/workspace/sync</code> enables the browser companion to push generated code snippets directly back into workspace files with atomic write safety, automatic backups (<code>.bak</code>), and path traversal guards.
-    </td>
-  </tr>
-  <tr>
-    <td><b>📜 Multi-Turn Relay & Checkpoints</b></td>
-    <td>
-      <code>/api/checkpoints</code> manages multi-turn handoff lineage, capturing branching trails across 3+ AI models (e.g. ChatGPT ➔ Claude ➔ DeepSeek ➔ Gemini) with rollback and resume points.
     </td>
   </tr>
 </table>
@@ -516,16 +453,15 @@ $ continuum daemon stop                    # Gracefully stop the background daem
 
 <br>
 
-<a id="verified-roadmap-all-48-phases"></a>
-## 🗺️ Architecture Milestones & Verification
+<a id="system-architecture-verification"></a>
+## 🗺️ System Architecture & Verification
 
-Project Continuum v1.3.0 is fully certified with **210 / 210 automated tests passing (100%)** across all core CLI, Browser Companion, and Context Preservation roadmap phases:
-- **Milestones 1–8 (Phases 0–23):** Core Engine, AST Extractors, DAG State Graph, Contradiction Ledger, and Omni-Model CLI Handoffs.
-- **Milestones 24–30 (Phases 25–37):** Web Control Dashboard, REST API Daemon, Secret Sanitizer, and Security CORS Guards.
-- **Milestones 31–34 (Phases 38–48):** Browser-to-Browser Cross-Model Handoff Companion, Native Manifest V3 WebExtension (`browser/extension/`), CLI Browser Launcher (`continuum launch`), Zero-Install Bookmarklet (`continuum bookmarklet`), Bi-Directional Code Sync (`/api/workspace/sync`), Multi-Turn Handoff History & Checkpointing (`HandoffCheckpointManager`, `/api/checkpoints`), Automated Browser Companion Test Suite (`tests/test_browser_companion.py`), and General Availability Release Validation (`tests/test_ga_validation.py`).
-- **Milestone 35 (Phase 49):** Conversation Context Preservation & Smart Handoff Suite — In-Session `MutationObserver` Accumulator, URL pattern conversation isolation, streaming in-place updates, explicit bounded cold-start recovery, 5-Tier Smart Digest compression engine, 3 context modes (`smart_digest`, `full_history`, `quick_task`), and ad/promotional content suppression (`tests/test_conversation_context_preservation.py`, `tests/test_companion_runner.js`).
+Project Continuum v1.3.0 is certified with **210 / 210 automated tests passing (100% success)** across the entire end-to-end stack:
 
-Detailed engineering reports and verification logs are available in [docs/reports/](docs/reports/).
+- **Core Ground-Truth Engine**: Multi-language AST symbol extraction, 5-tier evidence hierarchy, dependency state graph (DAG) with topological ordering, and automated contradiction detection.
+- **Local Control Plane & Daemon**: Zero-dependency REST API daemon on loopback, live Web Control Dashboard, constant-time session token security, and automated secret/credential masking.
+- **Browser Continuity Ecosystem**: Cross-model companion (Userscript & native Manifest V3 WebExtension) supporting ChatGPT, Claude, Gemini, and DeepSeek with cross-tab context relay, bi-directional workspace code sync (`/api/workspace/sync`), and checkpoint lineage tracking.
+- **Conversation Context Preservation**: In-session incremental accumulator, multi-platform URL isolation, streaming in-place update reconciliation, user-directed cold-start recovery, and 5-Tier Smart Digest compression engine with multi-model prompt formatting.
 
 <br>
 
@@ -533,7 +469,7 @@ Detailed engineering reports and verification logs are available in [docs/report
 ## 🧪 Testing & Enterprise Security
 
 ```bash
-$ py tests/run_all_tests.py    # 210/210 Passed (100% Test Coverage across all 49 Phases)
+$ py tests/run_all_tests.py    # 210/210 Passed (100% Test Coverage across all System Modules)
 ```
 
 ```text
@@ -584,7 +520,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-**5. Run Automated 24-Phase Test Suite**
+**5. Run Automated Regression Test Suite**
 ```bash
 py tests/run_all_tests.py
 ```
