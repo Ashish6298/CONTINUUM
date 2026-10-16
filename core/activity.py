@@ -147,6 +147,11 @@ class Activity:
                     cleaned_related.append(clean_rid)
         self.related_activity_ids = cleaned_related
 
+    def validate(self) -> "Activity":
+        """Explicitly executes validation rules on this Activity."""
+        self.__post_init__()
+        return self
+
     def transition_to(self, target_status: Union[ActivityStatus, str]) -> None:
         """
         Executes a validated lifecycle status transition.

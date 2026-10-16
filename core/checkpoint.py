@@ -247,6 +247,11 @@ class UniversalCheckpoint:
         if isinstance(self.resume_brief, dict):
             self.resume_brief = ResumeBrief.from_dict(self.resume_brief)
 
+    def validate(self) -> "UniversalCheckpoint":
+        """Explicitly executes validation rules on this UniversalCheckpoint."""
+        self.__post_init__()
+        return self
+
     def to_dict(self) -> Dict[str, Any]:
         """Serializes UniversalCheckpoint to dictionary format."""
         return {
