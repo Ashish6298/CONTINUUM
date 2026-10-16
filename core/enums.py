@@ -128,3 +128,53 @@ class TargetModel(str, Enum):
     GEMINI = "GEMINI"
     LOCAL_LLM = "LOCAL_LLM"
     UNIVERSAL = "UNIVERSAL"
+
+
+# ==============================================================================
+# UNIVERSAL CONTINUUM (v1.4.0) ENUMS: ACTIVITY, CHECKPOINT, PROVENANCE
+# ==============================================================================
+
+class ActivityStatus(str, Enum):
+    """
+    Lifecycle status of an Activity.
+    Transitions:
+    - active    -> paused, completed, archived
+    - paused    -> active, completed, archived
+    - completed -> active (reopen), archived
+    - archived  -> active (restore), paused (restore)
+    """
+    ACTIVE = "active"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    ARCHIVED = "archived"
+
+
+class ActivityType(str, Enum):
+    """
+    Built-in activity domain types. Custom types are also supported.
+    """
+    CODING = "coding"
+    STUDY = "study"
+    RESEARCH = "research"
+    WRITING = "writing"
+    WORK_TASK = "work_task"
+    AI_AGENT = "ai_agent"
+    CUSTOM = "custom"
+
+
+class ProvenanceType(str, Enum):
+    """
+    Distinguishes the authoritative source of checkpoint content.
+    """
+    USER_CONFIRMED = "user_confirmed"
+    IMPORTED = "imported"
+    AUTO_CAPTURED = "auto_captured"
+    AI_GENERATED = "ai_generated"
+
+
+class ArtifactMode(str, Enum):
+    """
+    Distinguishes live file/resource references from snapshot copies.
+    """
+    REFERENCE = "reference"
+    SNAPSHOT = "snapshot"
