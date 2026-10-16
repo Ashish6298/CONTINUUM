@@ -33,6 +33,7 @@ class ContinuumDashboardApp {
     this.initElements();
     this.bindEvents();
     this.loadInitialData();
+    this.checkOnboardingStatus();
   }
 
   getTokenFromUrl() {
@@ -139,7 +140,15 @@ class ContinuumDashboardApp {
       detailBriefGenId: document.getElementById('detailBriefGenId'),
       detailBriefMarkdown: document.getElementById('detailBriefMarkdown'),
       detailTimelineCount: document.getElementById('detailTimelineCount'),
-      detailTimelineList: document.getElementById('detailTimelineList')
+      detailTimelineList: document.getElementById('detailTimelineList'),
+      // Onboarding & Template Elements (Phase 62)
+      modalOnboarding: document.getElementById('modalOnboarding'),
+      btnCloseOnboardingModal: document.getElementById('btnCloseOnboardingModal'),
+      btnSkipOnboarding: document.getElementById('btnSkipOnboarding'),
+      btnCreateFromOnboarding: document.getElementById('btnCreateFromOnboarding'),
+      templateCards: document.querySelectorAll('.template-card'),
+      onboardingActivityTitle: document.getElementById('onboardingActivityTitle'),
+      onboardingNextAction: document.getElementById('onboardingNextAction')
     };
   }
 
@@ -232,6 +241,20 @@ class ContinuumDashboardApp {
       }
     });
     this.el.btnDetailCopyBrief?.addEventListener('click', () => this.copyResumeBriefToClipboard());
+
+    // Onboarding Events (Phase 62)
+    this.el.btnCloseOnboardingModal?.addEventListener('click', () => this.skipOnboarding());
+    this.el.btnSkipOnboarding?.addEventListener('click', () => this.skipOnboarding());
+    this.el.btnCreateFromOnboarding?.addEventListener('click', () => this.createFromOnboarding());
+
+    this.el.templateCards?.forEach(card => {
+      card.addEventListener('click', () => {
+        this.el.templateCards.forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        const type = card.dataset.type;
+        this.handleTemplateSelect(type);
+      });
+    });
   }
 
   debounce(func, wait) {
@@ -872,6 +895,110 @@ class ContinuumDashboardApp {
       this.showToast('📋 Copied Continuity Resume Brief to clipboard!');
     } catch (err) {
       this.showToast('❌ Failed to copy to clipboard');
+    }
+  }
+
+  // ==========================================================================
+  // Onboarding & Template Methods (Phase 62)
+  // ==========================================================================
+  checkOnboardingStatus() {
+    // Never repeatedly force onboarding on established users
+    const hasSeenOnboarding = localStorage.getItem('continuum_onboarding_completed') === 'true';
+    if (!hasSeenOnboarding) {
+      if (this.el.modalOnboarding) {
+        this.el.modalOnboarding.style.display = 'flex';
+      }
+    }
+  }
+
+  skipOnboarding() {
+    localStorage.setItem('continuum_onboarding_completed', 'true');
+    if (this.el.modalOnboarding) {
+      this.el.modalOnboarding.style.display = 'none';
+    }
+    this.showToast('ℹ️ Onboarding skipped. You can open Resume Center anytime.');
+  }
+
+  handleTemplateSelect(type) {
+    const defaultTitles = {
+      coding: 'Coding Session',
+      research: 'Research Project',
+      writing: 'Writing Project',
+      study: 'Study Session',
+      work_task: 'Work Task',
+      ai_agent: 'AI-Agent Session',
+      custom: 'Custom Session'
+    };
+
+    const defaultActions = {
+      coding: 'Plan architecture and implement features',
+      research: 'Define research questions and collect evidence',
+      writing: 'Draft project outline and documentation',
+      study: 'Read core references and take notes',
+      work_task: 'Identify requirements and deliverables',
+      ai_agent: 'Specify agent goals and verify checkpoints',
+      custom: 'Define initial objectives and tasks'
+    };
+
+    if (this.el.onboardingActivityTitle) {
+      this.el.onboardingActivityTitle.value = defaultTitles[type] || 'New Activity';
+    }
+    if (this.el.onboardingNextAction) {
+      this.el.onboardingNextAction.value = defaultActions[type] || '';
+    }
+  }
+
+  async createFromOnboarding() {
+    const title = this.el.onboardingActivityTitle?.value?.trim() || 'Untitled Activity';
+    const activeCard = document.querySelector('.template-card.active');
+    const actType = activeCard?.dataset.type || 'coding';
+    const nextAction = this.el.onboardingNextAction?.value?.trim() || '';
+
+    try {
+      // 1. Create Activity
+      const actRes = await fetch('/api/v1/activities', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: json_str_safe({
+          title: title,
+          activity_type: actType,
+          status: 'active'
+        })
+      });
+
+      if (!actRes.ok) {
+        this.showToast('❌ Failed to initialize activity');
+        return;
+      }
+
+      const actData = await actRes.json();
+      const activityId = actData.activity.id;
+
+      // 2. Commit initial checkpoint with next action
+      await fetch('/api/v1/checkpoints/manual', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: json_str_safe({
+          activity_id: activityId,
+          context: `Started ${actType} activity: ${title}`,
+          pending_actions: nextAction ? [nextAction] : [],
+          completed_work: ['Initialized workspace activity from template']
+        })
+      });
+
+      localStorage.setItem('continuum_onboarding_completed', 'true');
+      if (this.el.modalOnboarding) {
+        this.el.modalOnboarding.style.display = 'none';
+      }
+
+      this.showToast(`🚀 Activity '${title}' started!`);
+
+      // Switch to Resume Center view to see the new activity & brief
+      await this.toggleResumeCenter(true);
+      await this.selectResumeActivity(activityId);
+    } catch (err) {
+      console.error('Error in createFromOnboarding:', err);
+      this.showToast(`❌ Error initializing activity: ${err}`);
     }
   }
 }

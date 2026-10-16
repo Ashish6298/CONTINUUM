@@ -178,6 +178,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_v1_checkpoints(query)
                 elif path in ("/api/v1/resume/brief", "/api/resume/brief"):
                     self.handle_get_v1_resume_brief(query)
+                elif path in ("/api/v1/templates", "/api/templates"):
+                    self.handle_get_v1_templates()
                 else:
                     self._send_error_response(f"Endpoint not found: {path}", status_code=404)
             except Exception as e:
@@ -594,6 +596,40 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "activity_title": activity.title,
             "checkpoint_id": checkpoint.id,
             "resume_brief": brief.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_templates(self) -> None:
+        """
+        GET /api/v1/templates (Phase 62)
+        Lists all available built-in and custom activity templates.
+        """
+        from core.activity import ACTIVITY_TEMPLATES, ActivityType
+
+        templates = []
+        for act_type, tpl in ACTIVITY_TEMPLATES.items():
+            key = act_type.value if hasattr(act_type, "value") else str(act_type)
+            templates.append({
+                "type": key,
+                "title": tpl.get("title", key.title()),
+                "description": tpl.get("description", ""),
+                "tags": list(tpl.get("tags", [])),
+                "default_steps": list(tpl.get("default_steps", [])),
+            })
+
+        # Append custom template option
+        templates.append({
+            "type": "custom",
+            "title": "Custom Activity",
+            "description": "Flexible blank activity for user-defined domains and workflows.",
+            "tags": ["custom"],
+            "default_steps": [],
+        })
+
+        self._send_json_response({
+            "status": "success",
+            "count": len(templates),
+            "templates": templates,
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
 

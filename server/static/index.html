@@ -351,6 +351,72 @@
     </div>
   </div>
 
+  <!-- Skippable Onboarding & Templates Modal (Phase 62) -->
+  <div id="modalOnboarding" class="modal-backdrop" style="display: none;">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="onboardingModalTitle">
+      <div class="modal-header">
+        <h3 id="onboardingModalTitle">✨ Welcome to Continuum Resume Anywhere</h3>
+        <button class="btn-close" id="btnCloseOnboardingModal" aria-label="Skip">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--text-secondary); font-size:0.85rem; line-height:1.5;">
+          Continuum automatically tracks, checkpoints, and packages your deep project context so you can pause work and resume instantly across human, AI agent, or IDE sessions without reconstructing state manually.
+        </p>
+
+        <div class="form-group">
+          <label>Select an Activity Template or Start Blank:</label>
+          <div class="template-grid" id="templateGrid">
+            <!-- Dynamically populated or static cards -->
+            <button class="template-card active" data-type="coding">
+              <span class="template-icon">💻</span>
+              <span class="template-title">Coding</span>
+            </button>
+            <button class="template-card" data-type="research">
+              <span class="template-icon">🔬</span>
+              <span class="template-title">Research</span>
+            </button>
+            <button class="template-card" data-type="writing">
+              <span class="template-icon">✍️</span>
+              <span class="template-title">Writing</span>
+            </button>
+            <button class="template-card" data-type="study">
+              <span class="template-icon">📚</span>
+              <span class="template-title">Study</span>
+            </button>
+            <button class="template-card" data-type="work_task">
+              <span class="template-icon">📋</span>
+              <span class="template-title">Work Task</span>
+            </button>
+            <button class="template-card" data-type="ai_agent">
+              <span class="template-icon">🤖</span>
+              <span class="template-title">AI-Agent</span>
+            </button>
+            <button class="template-card" data-type="custom">
+              <span class="template-icon">⚡</span>
+              <span class="template-title">Custom / Blank</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="onboardingActivityTitle">Activity Title <span class="required">*</span></label>
+          <input type="text" id="onboardingActivityTitle" class="form-control" placeholder="e.g. Implement Universal Resume Anywhere" value="Coding Session">
+        </div>
+
+        <div class="form-group">
+          <label for="onboardingNextAction">First Next Action (optional)</label>
+          <input type="text" id="onboardingNextAction" class="form-control" placeholder="e.g. Inspect architecture and plan milestones" value="Plan architecture">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" id="btnSkipOnboarding">Skip for Now</button>
+        <button class="btn btn-primary btn-sm" id="btnCreateFromOnboarding">
+          <span class="btn-icon">🚀</span> Start Activity & Checkpoint
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="/dashboard.js"></script>
 </body>
