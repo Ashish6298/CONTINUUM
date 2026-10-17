@@ -903,6 +903,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
 
     def handle_post_v1_activity(self) -> None:
         """POST /api/v1/activities - Create a new Activity."""
+        import uuid
         from storage.activity_store import ActivityCheckpointStore
         from core.activity import Activity, ActivityType, ActivityStatus, ActivityValidationError
 
