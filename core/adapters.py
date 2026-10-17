@@ -295,8 +295,8 @@ class WorkspaceIntegrationAdapter(BaseContinuityAdapter):
         if not target_path or not isinstance(target_path, str):
             raise AdapterMalformedInputError("Target path must be a non-empty string.")
 
-        # Strip any leading slashes or drive letters if relative intended
-        clean_path = target_path.strip()
+        # Normalize backslashes to forward slashes for cross-platform containment
+        clean_path = target_path.strip().replace("\\", "/")
         try:
             resolved = (self.workspace_root / clean_path).resolve()
         except Exception as e:
