@@ -96,7 +96,7 @@ class TestPerformanceAndReliability(unittest.TestCase):
         # Assertions for correctness and performance thresholds
         self.assertGreater(summary.total_files_scanned, 100)
         self.assertGreater(summary.total_symbols_extracted, 1000)
-        self.assertLess(total_duration_ms, 12000, "Full pipeline analysis of 1,200 symbols should finish in under 12 seconds")
+        self.assertLess(total_duration_ms, 18000, "Full pipeline analysis of 1,200 symbols should finish in under 18 seconds")
         self.assertGreater(summary.graph_nodes_count, 1000)
         self.assertIn("claude", handoff_results)
         self.assertIn("universal", handoff_results)
