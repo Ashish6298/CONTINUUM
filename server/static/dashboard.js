@@ -1463,6 +1463,14 @@ class ContinuumDashboardApp {
     }
   }
 
+  async loadActivities() {
+    return this.loadResumeCenterActivities();
+  }
+
+  selectActivity(activityId) {
+    return this.selectResumeActivity(activityId);
+  }
+
   renderTimelineList(append = false) {
     if (!this.el.detailTimelineList) return;
 
@@ -1764,9 +1772,9 @@ class ContinuumDashboardApp {
       const data = await res.json();
       this.showToast(`🌿 Successfully branched activity: ${data.activity.title}`);
       this.closeSnapshotModal();
-      await this.loadActivities();
+      await this.loadResumeCenterActivities();
       if (data.activity && data.activity.id) {
-        this.selectActivity(data.activity.id);
+        this.selectResumeActivity(data.activity.id);
       }
     } catch (e) {
       this.displayError(e.message, 'Error branching checkpoint');
@@ -1835,9 +1843,9 @@ class ContinuumDashboardApp {
       const confData = await confRes.json();
       this.showToast(`✨ Restored state from ${chkId}! All history preserved.`);
       this.closeSnapshotModal();
-      await this.loadActivities();
+      await this.loadResumeCenterActivities();
       if (activityId) {
-        this.selectActivity(activityId);
+        this.selectResumeActivity(activityId);
       }
     } catch (e) {
       this.displayError(e.message, 'Restore error');
