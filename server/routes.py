@@ -433,6 +433,12 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_v1_import_execute()
             elif path in ("/api/v1/import/recover", "/api/import/recover"):
                 self.handle_post_v1_import_recover()
+            elif path in ("/api/v1/transfer/package", "/api/transfer/package"):
+                self.handle_post_v1_transfer_package()
+            elif path in ("/api/v1/transfer/inspect", "/api/transfer/inspect"):
+                self.handle_post_v1_transfer_inspect()
+            elif path in ("/api/v1/transfer/import", "/api/transfer/import"):
+                self.handle_post_v1_transfer_import()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
@@ -2625,5 +2631,136 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             })
         except Exception as e:
             self._send_error_response(f"Import recovery failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_transfer_package(self) -> None:
+        """
+        POST /api/v1/transfer/package (Phase 79)
+        Creates an offline device transfer package archive.
+        Payload:
+        {
+            "output_path": optional str,
+            "package_name": optional str
+        }
+        """
+        from core.device_transfer import DeviceTransferManager
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = {}
+        if content_len > 0:
+            body_raw = self.rfile.read(content_len).decode("utf-8")
+            try:
+                body = json.loads(body_raw)
+            except Exception as e:
+                self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+                return
+
+        output_path = body.get("output_path")
+        package_name = body.get("package_name")
+
+        mgr = DeviceTransferManager(self.workspace_root)
+        try:
+            pkg_path = mgr.create_transfer_package(output_path=output_path, package_name=package_name)
+            self._send_json_response({
+                "status": "success",
+                "package_path": str(pkg_path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Transfer package creation failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_transfer_inspect(self) -> None:
+        """
+        POST /api/v1/transfer/inspect (Phase 79)
+        Inspects an offline transfer package without modifying destination workspace.
+        Payload:
+        {
+            "package_path": str
+        }
+        """
+        from core.device_transfer import DeviceTransferManager
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        package_path = body.get("package_path")
+        if not package_path:
+            self._send_error_response("Field 'package_path' is required.", status_code=400)
+            return
+
+        mgr = DeviceTransferManager(self.workspace_root)
+        try:
+            inspection = mgr.inspect_package(package_path)
+            self._send_json_response({
+                "status": "success",
+                "inspection": inspection.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Transfer package inspection failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_transfer_import(self) -> None:
+        """
+        POST /api/v1/transfer/import (Phase 79)
+        Imports an offline transfer package with automatic missing-artifact reconciliation.
+        Payload:
+        {
+            "package_path": str,
+            "conflict_strategy": optional str ("REJECT", "RENAME_NEW", "OVERWRITE", "SKIP", "DEDUPLICATE"),
+            "confirm_overwrite": optional bool (default false),
+            "handle_missing_artifacts": optional bool (default true)
+        }
+        """
+        from core.device_transfer import DeviceTransferManager
+        from core.enums import ConflictResolutionStrategy
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        package_path = body.get("package_path")
+        if not package_path:
+            self._send_error_response("Field 'package_path' is required.", status_code=400)
+            return
+
+        strategy_str = body.get("conflict_strategy", "REJECT")
+        try:
+            strategy = ConflictResolutionStrategy(strategy_str)
+        except ValueError:
+            self._send_error_response(f"Invalid conflict_strategy: {strategy_str}", status_code=400)
+            return
+
+        confirm_overwrite = bool(body.get("confirm_overwrite", False))
+        handle_missing = bool(body.get("handle_missing_artifacts", True))
+
+        mgr = DeviceTransferManager(self.workspace_root)
+        try:
+            res = mgr.import_transfer_package(
+                package_path=package_path,
+                conflict_strategy=strategy,
+                confirm_overwrite=confirm_overwrite,
+                handle_missing_artifacts=handle_missing,
+            )
+            self._send_json_response({
+                "status": "success",
+                "result": res.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Transfer import failed: {str(e)}", status_code=400)
+
 
 

@@ -57,7 +57,7 @@ from core.privacy import PrivacyManager
 
 
 BACKUP_FORMAT_VERSION = "continuum-backup-v1.0"
-SUPPORTED_BACKUP_VERSIONS = {"continuum-backup-v1.0"}
+SUPPORTED_BACKUP_VERSIONS = {"continuum-backup-v1.0", "continuum-backup-v1.1", "1.0.0", "1.0.1"}
 CONTINUUM_VERSION = "1.4.0"
 CHUNK_SIZE = 64 * 1024  # 64 KB streaming buffer for bounded memory (I-17)
 

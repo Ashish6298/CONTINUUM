@@ -29,6 +29,13 @@ from core.import_engine import (
     CorruptedArchiveError,
     InterruptedImportRecoveryError,
 )
+from core.device_transfer import (
+    DeviceTransferManager,
+    TransferPackageInspection,
+    TransferImportResult,
+    DeviceTransferError,
+    IncompatibleDeviceVersionError,
+)
 from core.activity import (
     Activity,
     ActivityValidationError,
@@ -256,4 +263,9 @@ __all__ = [
     "ImportConflictError",
     "CorruptedArchiveError",
     "InterruptedImportRecoveryError",
+    "DeviceTransferManager",
+    "TransferPackageInspection",
+    "TransferImportResult",
+    "DeviceTransferError",
+    "IncompatibleDeviceVersionError",
 ]
