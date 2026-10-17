@@ -68,12 +68,15 @@ class DeterministicResumeBriefGenerator:
     def __init__(
         self,
         ai_provider_callback: Optional[Callable[[str, Dict[str, Any]], Optional[Dict[str, Any]]]] = None,
+        workspace_root: Optional[Any] = None,
     ):
         """
         :param ai_provider_callback: Optional hook for AI enhancement. Receives (prompt, metadata)
                                      and returns structured enhancement dict.
+        :param workspace_root: Optional workspace root path.
         """
         self.ai_provider_callback = ai_provider_callback
+        self.workspace_root = workspace_root
 
     def _sanitize_string(self, text: str) -> str:
         """Redacts inline secrets, credentials, and custom denied terms via PrivacyManager."""
