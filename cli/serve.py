@@ -83,36 +83,53 @@ def print_serve_banner(status: DaemonServerStatus, token: str, watch_enabled: bo
     authenticated_url = f"{status.server_url}?token={token}" if token else status.server_url
 
     banner = f"""
-{BOLD}{MAGENTA}┌─ CONTINUUM WEB CONTROL DASHBOARD & RESUME CENTER ──────────────────────────┐{RESET}
+{BOLD}{MAGENTA}┌─ CONTINUUM WEB CONTROL DASHBOARD ──────────────────────────────────────────┐{RESET}
 │                                                                            │
-│  {GREEN}●{RESET} {BOLD}Dashboard URL  :{RESET} {CYAN}{status.server_url}{RESET}
-│  {GRAY}📁 Workspace Root:{RESET} {status.workspace_root}
-│  {YELLOW}🔑 Auth Token    :{RESET} {token if token else 'None'}
-│  {GRAY}👁️  Live Watcher  :{RESET} {'Enabled' if watch_enabled else 'Disabled'}
-│  {GRAY}⚙️  Process PID   :{RESET} {status.pid}
+│  {GREEN}● ACTIVE{RESET}  {BOLD}Dashboard URL  :{RESET} {CYAN}{status.server_url}{RESET}
+│  {GRAY}📁 ROOT{RESET}    {BOLD}Workspace Path :{RESET} {status.workspace_root}
+│  {YELLOW}🔑 TOKEN{RESET}   {BOLD}Auth Token     :{RESET} {token if token else 'None'}
+│  {GRAY}👁️  WATCH{RESET}  {BOLD}Live Watcher   :{RESET} {'Enabled (Sub-millisecond AST Tracker)' if watch_enabled else 'Disabled'}
+│  {GRAY}⚙️  PID{RESET}    {BOLD}Process PID    :{RESET} {status.pid}
 │                                                                            │
-│  {BOLD}Direct Login URL:{RESET}                                                        │
+│  {BOLD}Direct Instant-Access Link:{RESET}                                              │
 │  {CYAN}{authenticated_url}{RESET}
 │                                                                            │
-├─ 📖 QUICK START & USAGE GUIDE ─────────────────────────────────────────────┤
-│                                                                            │
-│  {BOLD}1. Open Dashboard:{RESET} Open your browser at the URL above (opens auto).     │
-│  {BOLD}2. Select Activity:{RESET} In the left sidebar, choose an activity or create    │
-│     a new one (e.g. Coding, Study, Task) to track separate workstreams.   │
-│  {BOLD}3. Capture Checkpoints:{RESET} Click "📸 Capture Checkpoint" as you complete   │
-│     milestones to durably save active focus, finished tasks & next steps.  │
-│  {BOLD}4. Deterministic Resume:{RESET} Continuum auto-generates a 6-point Resume      │
-│     Brief without hallucinations. Click "Copy Brief" to continue work.     │
-│  {BOLD}5. AI Handoff Export:{RESET} Click "📦 Export Handoff" to package prompt       │
-│     context bundles tailored for Claude, GPT-4o, or Gemini.                │
-│  {BOLD}6. Branch & Compare:{RESET} Inspect historical snapshots, fork clean branches  │
-│     with "🌿 Branch", or compare changes with "⚖️ Compare".                 │
-│  {BOLD}7. Instant Search:{RESET} Press {BOLD}Alt+S{RESET} or click "🔍 Search" for offline FTS5   │
-│     full-text search across all your activities and checkpoints.           │
-│                                                                            │
-│  {BOLD}To Stop Server:{RESET} Press {BOLD}Ctrl+C{RESET} in this terminal, or run:                 │
-│                 {CYAN}$ continuum serve --stop{RESET}                                    │
 {BOLD}{MAGENTA}└────────────────────────────────────────────────────────────────────────────┘{RESET}
+
+{BOLD}{CYAN}┌─ 🔮 UNIVERSAL RESUME ANYWHERE // OPERATIONAL PROTOCOL ─────────────────────┐{RESET}
+│                                                                            │
+│  {CYAN}▶ [01] LAUNCH & ENTER{RESET}                                                     │
+│    Browser opens automatically, or navigate via the Direct Link above.     │
+│                                                                            │
+│  {CYAN}▶ [02] WORKSTREAM PARTITIONING{RESET}                                             │
+│    Select an activity in the left dock or create a new session (Coding,     │
+│    Study, Agent, Task) to keep deep context tracks strictly isolated.      │
+│                                                                            │
+│  {CYAN}▶ [03] DURABLE CHECKPOINT CAPTURE{RESET}                                          │
+│    Click {MAGENTA}"📸 Capture Checkpoint"{RESET} as milestones complete. Snapshots active    │
+│    focus, finished tasks, and next actions durably to SQLite & JSON.       │
+│                                                                            │
+│  {CYAN}▶ [04] DETERMINISTIC RESUME ENGINE{RESET}                                         │
+│    Continuum auto-synthesizes a 6-point Resume Brief. Zero hallucination.  │
+│    Click {GREEN}"Copy Brief"{RESET} to immediately resume work where you left off.          │
+│                                                                            │
+│  {CYAN}▶ [05] OMNI-MODEL AGENT HANDOFF{RESET}                                           │
+│    Click {MAGENTA}"📦 Export Handoff"{RESET} to package prompt context bundles tailored with │
+│    token budgeting for Claude (200k), GPT-4o (128k), or Gemini (1M).       │
+│                                                                            │
+│  {CYAN}▶ [06] TIME-TRAVEL & ISOLATED FORKING{RESET}                                      │
+│    Click {CYAN}"🔍 Inspect"{RESET} on any historical checkpoint to view read-only state.   │
+│    Click {GREEN}"🌿 Branch"{RESET} to fork an independent branch without mutating history.  │
+│                                                                            │
+│  {CYAN}▶ [07] LOCAL FTS5 COGNITIVE SEARCH{RESET}                                         │
+│    Press {YELLOW}Alt+S{RESET} or click {CYAN}"🔍 Search"{RESET} for sub-millisecond full-text retrieval  │
+│    across activities, decisions, and checkpoints — 100% offline.           │
+│                                                                            │
+│  {GRAY}──────────────────────────────────────────────────────────────────────────{RESET}│
+│  {BOLD}Control Keybindings & Daemon Management:{RESET}                                   │
+│    • {YELLOW}Alt+S{RESET}   : Global FTS5 Search        • {YELLOW}Ctrl+C{RESET} : Graceful Server Stop │
+│    • Background Stop Command   : {CYAN}continuum serve --stop{RESET}                      │
+{BOLD}{CYAN}└────────────────────────────────────────────────────────────────────────────┘{RESET}
 """
     try:
         if hasattr(sys.stdout, "buffer") and hasattr(sys.stdout.buffer, "write"):
