@@ -1595,3 +1595,66 @@ body {
   color: var(--text-secondary);
 }
 
+/* ==========================================================================
+   Phase 80 Accessibility Verification Styles (WCAG 2.1 AA Compliant)
+   ========================================================================== */
+
+/* Visible Focus Indicator for Keyboard Navigation */
+:focus-visible {
+  outline: 2px solid var(--accent-primary, #6366f1) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.25) !important;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex="0"]:focus-visible,
+a:focus-visible {
+  outline: 2px solid #818cf8 !important;
+  outline-offset: 2px !important;
+}
+
+/* Screen Reader Only Utility */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Non-color-only status indicators: explicit icons and distinct border patterns */
+.status-badge-active {
+  border-left: 3px solid #10b981 !important;
+}
+.status-badge-paused {
+  border-left: 3px dashed #f59e0b !important;
+}
+.status-badge-completed {
+  border-left: 3px double #38bdf8 !important;
+}
+.status-badge-archived {
+  border-left: 3px dotted #94a3b8 !important;
+}
+.status-badge-failed {
+  border-left: 3px solid #ef4444 !important;
+}
+
+/* Modal Accessibility & Focus Management */
+.modal-backdrop[aria-hidden="true"],
+.modal[aria-hidden="true"] {
+  display: none !important;
+}
+
+.modal-dialog:focus,
+.modal-card:focus {
+  outline: none;
+}
+
+

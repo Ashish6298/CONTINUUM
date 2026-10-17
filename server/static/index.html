@@ -614,6 +614,79 @@
     </div>
   </div>
 
+  <!-- Branch Creation Dialog (Phase 65 & Phase 80) -->
+  <div class="modal" id="modalBranchDialog" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="branchDialogTitle">
+    <div class="modal-dialog glass-panel" style="max-width: 550px;">
+      <div class="modal-header">
+        <h3 id="branchDialogTitle" style="margin:0;">🌿 Branch from Checkpoint</h3>
+        <button class="btn-close" id="btnCloseBranchModal" aria-label="Close branch dialog">&times;</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:0.75rem;">
+        <label for="txtBranchName">Branch Name:</label>
+        <input type="text" id="txtBranchName" class="form-input" placeholder="e.g. experimental-architecture" aria-required="true" />
+        <p style="font-size:0.78rem; color:var(--text-muted);">
+          Branching creates an independent continuation with stable identity and ancestry without mutating historical checkpoints.
+        </p>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap:0.5rem;">
+        <button class="btn btn-secondary btn-sm" id="btnCancelBranch">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btnConfirmBranch">Create Branch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmed Restore Dialog (Phase 66 & Phase 80) -->
+  <div class="modal" id="modalRestoreDialog" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="restoreDialogTitle">
+    <div class="modal-dialog glass-panel" style="max-width: 550px;">
+      <div class="modal-header">
+        <h3 id="restoreDialogTitle" style="margin:0;">↺ Restore Checkpoint</h3>
+        <button class="btn-close" id="btnCloseRestoreModal" aria-label="Close restore dialog">&times;</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:0.75rem;">
+        <p style="font-size:0.85rem; color:var(--text-secondary);">
+          Restoring sets this historical snapshot as current state. Newer history is preserved as recovery checkpoints.
+        </p>
+        <label for="txtRestoreReason">Restore Reason (optional):</label>
+        <input type="text" id="txtRestoreReason" class="form-input" placeholder="e.g. reverting regression" />
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap:0.5rem;">
+        <button class="btn btn-secondary btn-sm" id="btnCancelRestore">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btnConfirmRestore">Confirm Restore</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Offline Transfer / Import Dialog (Phase 78 & 79 & Phase 80) -->
+  <div class="modal" id="modalImportDialog" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="importDialogTitle">
+    <div class="modal-dialog glass-panel" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="importDialogTitle" style="margin:0;">📥 Import Transfer Package</h3>
+        <button class="btn-close" id="btnCloseImportModal" aria-label="Close import dialog">&times;</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:0.75rem;">
+        <label for="txtImportArchivePath">Archive Path (.tar.gz):</label>
+        <input type="text" id="txtImportArchivePath" class="form-input" placeholder="path/to/continuum_transfer.tar.gz" aria-required="true" />
+        <label for="selConflictStrategy">Conflict Strategy:</label>
+        <select id="selConflictStrategy" class="form-select">
+          <option value="REJECT">REJECT (Default fail-safe)</option>
+          <option value="RENAME_NEW">RENAME_NEW (Preserve local, assign new IDs)</option>
+          <option value="OVERWRITE">OVERWRITE (Explicit replacement)</option>
+          <option value="SKIP">SKIP (Keep local, ignore incoming)</option>
+        </select>
+        <div id="importPreviewStatus" role="status" aria-live="polite" style="font-size:0.8rem; color:var(--text-muted);"></div>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap:0.5rem;">
+        <button class="btn btn-secondary btn-sm" id="btnCancelImport">Cancel</button>
+        <button class="btn btn-outline btn-sm" id="btnPreviewImport">Preview</button>
+        <button class="btn btn-primary btn-sm" id="btnExecuteImport">Execute Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen Reader Announcements (ARIA Live Regions) -->
+  <div id="a11yAnnouncer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="a11yAlertAnnouncer" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
   <!-- Scripts -->
   <script src="/dashboard.js"></script>
 </body>

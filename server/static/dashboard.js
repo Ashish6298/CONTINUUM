@@ -376,6 +376,14 @@ class ContinuumDashboardApp {
       }
     });
 
+    // Accessible dialog close listeners
+    document.getElementById('btnCloseBranchModal')?.addEventListener('click', () => this.closeBranchModal());
+    document.getElementById('btnCancelBranch')?.addEventListener('click', () => this.closeBranchModal());
+    document.getElementById('btnCloseRestoreModal')?.addEventListener('click', () => this.closeRestoreModal());
+    document.getElementById('btnCancelRestore')?.addEventListener('click', () => this.closeRestoreModal());
+    document.getElementById('btnCloseImportModal')?.addEventListener('click', () => this.closeImportModal());
+    document.getElementById('btnCancelImport')?.addEventListener('click', () => this.closeImportModal());
+
     // Global keyboard shortcuts (Alt+S for search, Esc to close)
     window.addEventListener('keydown', (e) => {
       if (e.altKey && (e.key === 's' || e.key === 'S')) {
@@ -384,17 +392,76 @@ class ContinuumDashboardApp {
         return;
       }
       if (e.key === 'Escape') {
+        const branchModal = document.getElementById('modalBranchDialog');
+        if (branchModal && branchModal.style.display === 'flex') {
+          this.closeBranchModal();
+          return;
+        }
+        const restoreModal = document.getElementById('modalRestoreDialog');
+        if (restoreModal && restoreModal.style.display === 'flex') {
+          this.closeRestoreModal();
+          return;
+        }
+        const importModal = document.getElementById('modalImportDialog');
+        if (importModal && importModal.style.display === 'flex') {
+          this.closeImportModal();
+          return;
+        }
         const isSnapshotOpen = this.el.modalSnapshotDetail && this.el.modalSnapshotDetail.style.display === 'flex';
+        if (isSnapshotOpen) { this.closeSnapshotModal(); return; }
         const isDiffOpen = this.el.modalCheckpointDiff && this.el.modalCheckpointDiff.style.display === 'flex';
+        if (isDiffOpen) { this.closeDiffModal(); return; }
         const isCaptureOpen = this.el.modalManualCapture && this.el.modalManualCapture.style.display === 'flex';
+        if (isCaptureOpen) { this.closeManualCaptureModal(); return; }
         const isOnboardingOpen = this.el.modalOnboarding && this.el.modalOnboarding.style.display === 'flex';
-        if (!isSnapshotOpen && !isDiffOpen && !isCaptureOpen && !isOnboardingOpen) {
-          if (this.el.searchCenterView && this.el.searchCenterView.style.display !== 'none') {
-            this.toggleSearchCenter(false);
-          }
+        if (isOnboardingOpen) { this.skipOnboarding(); return; }
+        if (this.el.searchCenterView && this.el.searchCenterView.style.display !== 'none') {
+          this.toggleSearchCenter(false);
         }
       }
     });
+  }
+
+  announceToScreenReader(message, isAlert = false) {
+    const announcer = document.getElementById(isAlert ? 'a11yAlertAnnouncer' : 'a11yAnnouncer');
+    if (announcer) {
+      announcer.textContent = '';
+      setTimeout(() => {
+        announcer.textContent = message;
+      }, 50);
+    }
+  }
+
+  openModalAccessible(modal) {
+    if (!modal) return;
+    this.lastFocusedElement = document.activeElement;
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+    const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length > 0) {
+      focusable[0].focus();
+    }
+  }
+
+  closeModalAccessible(modal) {
+    if (!modal) return;
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+    if (this.lastFocusedElement && typeof this.lastFocusedElement.focus === 'function') {
+      this.lastFocusedElement.focus();
+    }
+  }
+
+  closeBranchModal() {
+    this.closeModalAccessible(document.getElementById('modalBranchDialog'));
+  }
+
+  closeRestoreModal() {
+    this.closeModalAccessible(document.getElementById('modalRestoreDialog'));
+  }
+
+  closeImportModal() {
+    this.closeModalAccessible(document.getElementById('modalImportDialog'));
   }
 
   debounce(func, wait) {
