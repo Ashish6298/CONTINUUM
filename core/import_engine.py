@@ -43,6 +43,7 @@ from core.backup import (
     CompleteBackupEngine,
     CorruptedBackupError,
     MissingRelationError,
+    OversizedBackupError,
     UnsupportedBackupVersionError,
     hash_file_stream,
 )
@@ -201,7 +202,7 @@ class CompleteImportEngine:
         # 1. Complete pre-mutation verification
         try:
             verification = self.backup_engine.verify_backup(path, raise_on_error=True)
-        except (CorruptedBackupError, UnsupportedBackupVersionError) as err:
+        except (CorruptedBackupError, UnsupportedBackupVersionError, OversizedBackupError, MissingRelationError) as err:
             raise CorruptedArchiveError(str(err)) from err
 
         import_id = f"preview_{uuid.uuid4().hex[:8]}"
@@ -262,7 +263,7 @@ class CompleteImportEngine:
         # Step 2: Validate fully before live mutation
         try:
             self.backup_engine.verify_backup(path, raise_on_error=True)
-        except (CorruptedBackupError, UnsupportedBackupVersionError) as err:
+        except (CorruptedBackupError, UnsupportedBackupVersionError, OversizedBackupError, MissingRelationError) as err:
             raise CorruptedArchiveError(str(err)) from err
 
         import_id = f"imp_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"

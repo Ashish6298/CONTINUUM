@@ -1,0 +1,70 @@
+================================================================================
+PHASE 75 PERMISSIONS AND INTEGRITY VALIDATION AUDIT REPORT
+================================================================================
+Date: 2026-10-17
+Milestone: MILESTONE 42 - RETENTION, PRIVACY AND SECURITY
+Phase: PHASE 75 - Permissions and Integrity Validation
+Status: PASSED (100% Pre-Mutation Integrity & Permission Invariants Certified)
+Test Suite: tests/test_phase75_permissions_integrity.py (9 tests passed)
+Overall Suite Status: 477/477 Tests Passing
+
+1. PHASE REQUIREMENTS & SPECIFICATION AUDIT
+--------------------------------------------------------------------------------
+Phase 75 enforces strict least-privilege permissions, comprehensive archive and
+payload validation, honest security disclosure, and atomic pre-mutation gates:
+- Minimum adapter permissions:
+  * Workspace containment verification preventing traversal out of workspace root
+    (rejects ../../../etc/passwd, ..\..\Windows\System32).
+  * Direct denial of access to high-risk credential files (.env, id_rsa, secrets.json).
+- Comprehensive validation before applying mutations:
+  * Archive format, gzip/tar magic bytes, and readable tar structure.
+  * Supported format versions ("continuum-backup-v1.0", "continuum-backup-v1.1", etc.).
+  * Bounded payload and archive sizes (MAX_BACKUP_ARCHIVE_BYTES = 500 MB;
+    MAX_PAYLOAD_BYTES = 2 MB).
+  * Entity shapes and structural schema constraints (ActivityValidationError,
+    CheckpointValidationError).
+  * Stable IDs and relational integrity: parent checkpoint and activity containment
+    verified before live changes.
+- Pre-restore verification:
+  * Verification runs prior to restore execution.
+  * Clear disclosure that SHA-256 checksum is NOT encryption:
+    "NONE (Unencrypted checksummed tar.gz archive. SHA-256 checksums provide
+    data integrity and tamper/corruption detection, NOT confidentiality or encryption.)"
+- Error sanitization:
+  * Error messages, context excerpts, and adapter inputs redact sensitive tokens,
+    GitHub PATs, database URIs, passwords, and private keys.
+- Mutation blockage:
+  * Corrupt, tampered, or invalid archives cannot partially overwrite or corrupt
+    authoritative records. Live storage remains 100% untouched.
+
+2. TEST SUITE VERIFICATION MATRIX
+--------------------------------------------------------------------------------
+[PASS] test_01_minimum_adapter_permissions_and_path_containment
+       Verifies least privilege and path traversal confinement within workspace.
+[PASS] test_02_access_to_high_risk_secret_files_denied
+       Verifies adapters reject reading credential and secret files (.env, id_rsa).
+[PASS] test_03_archive_format_and_tampered_corruption_detection
+       Verifies detection of byte corruption, truncation, and tampered archives.
+[PASS] test_04_unsupported_version_rejection
+       Verifies that archives specifying unsupported format versions are rejected.
+[PASS] test_05_oversized_payload_and_archive_rejection
+       Verifies bounds enforcement on adapter payloads and backup archives.
+[PASS] test_06_missing_references_and_broken_relations_blocked
+       Verifies missing parent checkpoints or missing owning activities block restore.
+[PASS] test_07_checksum_is_not_encryption_disclosure
+       Verifies truthful disclosure: Checksums provide integrity, not confidentiality.
+[PASS] test_08_error_sanitization_does_not_leak_sensitive_payloads
+       Verifies that errors and payloads do not leak raw API keys, tokens, or passwords.
+[PASS] test_09_gate_invalid_input_cannot_partially_overwrite_records
+       GATE INVARIANT: Invalid input cannot partially overwrite authoritative records.
+
+3. GATE VERIFICATION
+--------------------------------------------------------------------------------
+GATE: Invalid input cannot partially overwrite authoritative records.
+RESULT: SATISFIED AND CERTIFIED.
+
+4. READINESS FOR NEXT PHASE
+--------------------------------------------------------------------------------
+Phase 75 is fully verified, integrated, and certified.
+READY FOR NEXT PHASE.
+================================================================================

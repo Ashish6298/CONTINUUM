@@ -122,7 +122,22 @@ class BackupScopeError(BackupError):
         self.error_code = "ERR_BACKUP_SCOPE"
 
 
-# ==============================================================================
+class OversizedBackupError(BackupError):
+    """Raised when an incoming backup or archive exceeds allowable size limits (I-17)."""
+    def __init__(self, size_bytes: int, max_bytes: int):
+        super().__init__(
+            message=f"Backup archive size ({size_bytes} bytes) exceeds maximum allowable limit ({max_bytes} bytes).",
+            suggested_action="Compress the archive or adjust payload size bounds to prevent resource exhaustion.",
+            details=f"Received size: {size_bytes} bytes; Max allowed: {max_bytes} bytes",
+        )
+        self.error_code = "ERR_BACKUP_OVERSIZED"
+        self.size_bytes = size_bytes
+        self.max_bytes = max_bytes
+
+
+# Maximum allowable archive size: 500 MB (bounds memory and disk during verification/restore)
+MAX_BACKUP_ARCHIVE_BYTES: int = 500 * 1024 * 1024
+
 # BACKUP METADATA & MANIFEST MODELS
 # ==============================================================================
 
@@ -571,10 +586,17 @@ class CompleteBackupEngine:
                 raise CorruptedBackupError(err_msg)
             return BackupVerificationResult(is_valid=False, error=err_msg)
 
-        if p.stat().st_size == 0:
+        file_size = p.stat().st_size
+        if file_size == 0:
             err_msg = f"Backup archive is an empty file (0 bytes): {p}"
             if raise_on_error:
                 raise CorruptedBackupError(err_msg)
+            return BackupVerificationResult(is_valid=False, error=err_msg)
+
+        if file_size > MAX_BACKUP_ARCHIVE_BYTES:
+            err_msg = f"Backup archive size ({file_size} bytes) exceeds maximum allowable limit ({MAX_BACKUP_ARCHIVE_BYTES} bytes)."
+            if raise_on_error:
+                raise OversizedBackupError(file_size, MAX_BACKUP_ARCHIVE_BYTES)
             return BackupVerificationResult(is_valid=False, error=err_msg)
 
         try:
@@ -756,7 +778,7 @@ class CompleteBackupEngine:
                     encryption_status=manifest.encryption_status,
                     recovery_promise_verified=True,
                 )
-        except (UnsupportedBackupVersionError, CorruptedBackupError, MissingRelationError, InvariantViolationError):
+        except (UnsupportedBackupVersionError, OversizedBackupError, CorruptedBackupError, MissingRelationError, InvariantViolationError):
             raise
         except (tarfile.TarError, EOFError, OSError, zlib.error, gzip.BadGzipFile) as e:
             err_msg = f"Archive file is corrupted, truncated, or unreadable: {str(e)}"
