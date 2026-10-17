@@ -414,7 +414,7 @@ def print_welcome_hub() -> None:
        lets you extract conversations and inject them across AI tabs seamlessly.
 
 
-  {BOLD}3. Universal Work Continuity & Resume Center (v1.4.0):{RESET}
+  {BOLD}3. Universal Work Continuity & Resume Center:{RESET}
 
      {CYAN}$ continuum serve{RESET}
 

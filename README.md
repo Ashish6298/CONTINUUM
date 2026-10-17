@@ -305,7 +305,7 @@ pip install -e .
        lets you extract conversations and inject them across AI tabs seamlessly.
 
 
-  3. Universal Work Continuity & Resume Center (v1.4.0):
+  3. Universal Work Continuity & Resume Center:
 
      $ continuum serve
 
