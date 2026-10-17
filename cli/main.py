@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="continuum",
         description="Project Continuum — AI Work Continuity & Agent Handoff System"
     )
-    parser.add_argument("--version", action="version", version="continuum v1.0.0 (Python 3.10+ | Schema 1.0.0)")
+    parser.add_argument("--version", action="version", version="continuum v1.4.0 (Python 3.10+ | Schema 1.4.0)")
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
     # 1. init
@@ -351,7 +351,7 @@ def handle_daemon(args: argparse.Namespace) -> int:
 
 def print_welcome_hub() -> None:
     """Prints a solid, unbroken block-font terminal welcome hub with Natural Blood Moon palette."""
-    version = "v1.2.0"
+    version = "v1.4.0"
     py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
     if os.name == "nt":
@@ -412,6 +412,18 @@ def print_welcome_hub() -> None:
 
      • {BOLD}Why to use:{RESET}  1-Click installer for the Continuum browser companion that
        lets you extract conversations and inject them across AI tabs seamlessly.
+
+
+  {BOLD}3. Universal Work Continuity & Resume Center (v1.4.0):{RESET}
+
+     {CYAN}$ continuum serve{RESET}
+
+     • {BOLD}When to use:{RESET} When you want local-first, durable task tracking across
+       checkpoints, deterministic resume briefs, local full-text search,
+       and a full browser dashboard for your work.
+
+     • {BOLD}Why to use:{RESET}  Launches the offline Web Dashboard & Resume Center with
+       timeline diffs, branching, safe restore, and zero telemetry.
 
   {GRAY}─────────────────────────────────────────────────────────────────────────────{RESET}
   {GRAY}{version}   python {py_version}   mit license   github.com/Ashish6298/CONTINUUM{RESET}   
