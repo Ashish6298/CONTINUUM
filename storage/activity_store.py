@@ -1837,3 +1837,7 @@ class ActivityCheckpointStore:
                         pass
 
         return indexed_count
+
+
+# Backward-compatible convenience alias
+ActivityStore = ActivityCheckpointStore
