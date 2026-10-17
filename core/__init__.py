@@ -88,6 +88,10 @@ from core.backup import (
     CorruptedBackupError,
     MissingRelationError,
     BackupScopeError,
+    PORTABLE_EXPORT_FORMAT_VERSION,
+    PortableExportManifest,
+    PortableExportResult,
+    PortableExportEngine,
 )
 from core.invariants import (
     InvariantId,
@@ -252,6 +256,10 @@ __all__ = [
     "CorruptedBackupError",
     "MissingRelationError",
     "BackupScopeError",
+    "PORTABLE_EXPORT_FORMAT_VERSION",
+    "PortableExportManifest",
+    "PortableExportResult",
+    "PortableExportEngine",
     "ConflictResolutionStrategy",
     "ConflictType",
     "ImportStageStatus",
