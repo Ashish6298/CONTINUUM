@@ -1,0 +1,113 @@
+================================================================================
+PHASE 78 VERIFICATION AND AUDIT REPORT: IMPORT, CONFLICTS AND RESTORE
+================================================================================
+Date: 2026-10-17T13:35:00Z
+Workspace: D:\CONTINUUM
+Milestone: Milestone 43 — Export, Backup, Import and Transfer
+Phase: Phase 78 — Import, Conflicts and Restore
+Status: VERIFIED & COMPLETED
+Total Regression Test Suite: 444/444 Passed (100%)
+Duration: 51.675s
+
+--------------------------------------------------------------------------------
+1. PHASE OVERVIEW & REQUIREMENTS IMPLEMENTATION
+--------------------------------------------------------------------------------
+Phase 78 implements the authoritative, staged import, conflict resolution, and restore
+engine for Project Continuum, establishing crash-safe transaction boundaries, explicit
+conflict policies, pre-mutation integrity verification, and safe retry capabilities.
+
+Key Architectural Guarantees:
+1. Pre-Mutation Complete Verification:
+   - Before any live filesystem or SQLite record is modified, incoming archives undergo
+     rigorous validation: tar validity, gzip stream integrity, root manifest existence,
+     format version compatibility (format_version="1.0.0"), per-member SHA-256 checksums,
+     and internal relational graph consistency (activity and parent checkpoint references).
+   - If corruption, tampering, truncation, or unsupported versions are encountered, the
+     import aborts immediately with user-safe exceptions (CorruptedArchiveError,
+     UnsupportedBackupVersionError). The live store is left 100% pristine.
+
+2. Isolated Staging & Transaction Journaling (`core.import_engine.CompleteImportEngine`):
+   - Archive members are extracted exclusively into an isolated staging directory:
+     `<workspace_root>/.continuum/staging/<import_id>/extracted/`
+   - Strict Anti-ZipSlip protection: Every extracted member path is verified to remain
+     strictly contained within the staging target directory.
+   - Lifecycle tracked atomically in `journal.json` across formal phases:
+     VALIDATING -> STAGED -> COMMITTING -> COMMITTED (or ROLLED_BACK / FAILED).
+
+3. Explicit Conflict Resolution Strategies (`ConflictResolutionStrategy`):
+   - DEDUPLICATE: Identical matching records (same ID and identical content/hash) are safely
+     deduplicated without error.
+   - REJECT: Default fail-safe policy. If any incoming entity has a conflicting ID with
+     divergent content, import halts immediately before live mutation, returning descriptive
+     conflict diagnostics.
+   - RENAME_NEW: Preserves existing local records untouched; automatically assigns fresh
+     UUIDs to conflicting incoming entities, records provenance metadata (e.g. `imported_from_<id>`),
+     and transparently rewires child checkpoints and dependencies to maintain DAG integrity.
+   - OVERWRITE: Requires explicit `confirm_overwrite=True` confirmation. Backs up existing local
+     files into `<staging_dir>/rollback/` before overwriting, guaranteeing rollbacks if aborted.
+   - SKIP: Preserves existing local versions and skips incoming conflicting records.
+
+4. Preservation of Unrelated Data:
+   - Local activities, checkpoints, artifacts, and configuration files that are not present
+     in the backup archive are completely untouched and unaffected by the import.
+
+5. Crash-Safe Rollback & Interruption Recovery:
+   - If an unexpected crash, power interruption, or failure occurs during the live commit phase,
+     `recover_interrupted_imports()` inspects the staging journal:
+     * Restores backed-up files from `rollback/` to their original live paths.
+     * Deletes any partially written new files recorded in the journal.
+     * Marks the session as ROLLED_BACK and cleans up staging artifacts.
+     * Subsequent imports can be retried cleanly without corrupted or stuck state.
+
+6. Complete Derived Index Rebuild:
+   - Upon successful commit, authoritative files drive a complete, deterministic rebuild
+     of derived SQLite indexes (`activities_idx`, `checkpoints_idx`, `search_fts`), keeping
+     query performance optimal and fully synchronized with authoritative records.
+
+7. REST API Integration (`server/routes.py`):
+   - `POST /api/v1/import/preview`: Previews archive import, validates integrity, and reports
+     conflicts and additions without live mutations.
+   - `POST /api/v1/import/execute`: Executes atomic, staged import with selected conflict strategy.
+   - `POST /api/v1/import/recover`: Scans for interrupted staging transactions and restores state.
+
+--------------------------------------------------------------------------------
+2. TEST EXECUTION SUMMARY
+--------------------------------------------------------------------------------
+Phase 78 Unit & Integration Suite (`tests/test_phase78_import.py`):
+  • test_clean_import: PASSED (Full roundtrip import into empty workspace)
+  • test_id_collision_identical_content: PASSED (Deduplication on matching content)
+  • test_same_id_different_content_reject: PASSED (Fail-safe REJECT blocks live mutation)
+  • test_same_id_different_content_rename_new: PASSED (UUID reallocation & child rewiring)
+  • test_same_id_different_content_overwrite: PASSED (Confirmed overwrite with rollback backup)
+  • test_same_id_different_content_skip: PASSED (Preserves local record, skips incoming)
+  • test_corrupt_archive_blocks_mutation: PASSED (Corrupt archives rejected pre-mutation)
+  • test_interruption_and_recovery: PASSED (Rollback from interrupted state and safe retry)
+  • test_unrelated_data_unchanged: PASSED (Unrelated activities untouched during import)
+  • test_gate_no_silent_overwrite_or_unrecoverable_partial_import: PASSED (Gate verification)
+  • test_rest_api_import_endpoints: PASSED (POST /preview, /execute, and /recover)
+
+Full System Regression Suite (`tests/run_all_tests.py`):
+  • Total Tests Run: 444
+  • Passed: 444 (100%)
+  • Failures: 0
+  • Errors: 0
+  • Duration: 51.675s
+
+--------------------------------------------------------------------------------
+3. GATE VERIFICATION
+--------------------------------------------------------------------------------
+Gate Invariant: "No silent overwrite or unrecoverable partial import."
+- Under no circumstance is an existing divergent record overwritten without explicit
+  `confirm_overwrite=True` authorization.
+- In all failure, interruption, or rejection scenarios, either zero live mutations occur,
+  or the rollback mechanism restores authoritative records to their exact prior state.
+- GATE STATUS: PASSED.
+
+--------------------------------------------------------------------------------
+4. READINESS EVALUATION
+--------------------------------------------------------------------------------
+Is system ready for next phase? YES.
+All Phase 78 requirements have been implemented, tested, verified against the full regression
+suite (444/444 passing), and integrated cleanly into Project Continuum. Ready for Phase 79
+(Device Transfer Guide).
+================================================================================

@@ -15,6 +15,19 @@ from core.enums import (
     ActivityType,
     ProvenanceType,
     ArtifactMode,
+    ConflictResolutionStrategy,
+    ConflictType,
+    ImportStageStatus,
+)
+from core.import_engine import (
+    CompleteImportEngine,
+    EntityConflict,
+    ImportPlan,
+    ImportResult,
+    ImportError,
+    ImportConflictError,
+    CorruptedArchiveError,
+    InterruptedImportRecoveryError,
 )
 from core.activity import (
     Activity,
@@ -232,4 +245,15 @@ __all__ = [
     "CorruptedBackupError",
     "MissingRelationError",
     "BackupScopeError",
+    "ConflictResolutionStrategy",
+    "ConflictType",
+    "ImportStageStatus",
+    "CompleteImportEngine",
+    "EntityConflict",
+    "ImportPlan",
+    "ImportResult",
+    "ImportError",
+    "ImportConflictError",
+    "CorruptedArchiveError",
+    "InterruptedImportRecoveryError",
 ]

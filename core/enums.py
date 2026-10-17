@@ -178,3 +178,36 @@ class ArtifactMode(str, Enum):
     """
     REFERENCE = "reference"
     SNAPSHOT = "snapshot"
+
+
+class ConflictResolutionStrategy(str, Enum):
+    """
+    Strategies for resolving entity ID and content collisions during archive import.
+    """
+    REJECT = "REJECT"          # Abort import before any live mutation (fail-safe default)
+    RENAME_NEW = "RENAME_NEW"  # Assign new UUIDs and rewire incoming dependents, preserving local
+    OVERWRITE = "OVERWRITE"    # Explicitly confirmed replacement; backs up existing records
+    SKIP = "SKIP"              # Preserve local records; skip incoming conflicting entities
+    DEDUPLICATE = "DEDUPLICATE" # Safe no-op for identical content (same ID, matching hash)
+
+
+class ConflictType(str, Enum):
+    """
+    Types of conflict detected between staged and live records.
+    """
+    IDENTICAL_CONTENT = "IDENTICAL_CONTENT"  # Matching ID and identical checksum
+    CONTENT_DIVERGENCE = "CONTENT_DIVERGENCE" # Matching ID but differing fields/content
+    PARENT_MISMATCH = "PARENT_MISMATCH"       # Mismatched parent checkpoint in ancestry
+
+
+class ImportStageStatus(str, Enum):
+    """
+    Lifecycle phases of an atomic import transaction.
+    """
+    VALIDATING = "VALIDATING"
+    STAGED = "STAGED"
+    COMMITTING = "COMMITTING"
+    COMMITTED = "COMMITTED"
+    ROLLED_BACK = "ROLLED_BACK"
+    FAILED = "FAILED"
+

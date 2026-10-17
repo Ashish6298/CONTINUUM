@@ -15,7 +15,7 @@ across Project Continuum:
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
 
-from core.enums import EvidenceType, Status, TargetModel
+from core.enums import EvidenceType, Status, TargetModel, ConflictResolutionStrategy
 from core.evidence import Evidence
 from core.state_models import (
     CanonicalProjectState,
@@ -340,5 +340,24 @@ class IBackupManager(Protocol):
 
     def get_backup_scope(self) -> Dict[str, Any]:
         ...
+
+
+@runtime_checkable
+class IImportManager(Protocol):
+    """Contract for safe, staged backup archive import and conflict resolution."""
+    def preview_import(self, archive_path: Union[str, Path]) -> Dict[str, Any]:
+        ...
+
+    def execute_import(
+        self,
+        archive_path: Union[str, Path],
+        conflict_strategy: ConflictResolutionStrategy = ConflictResolutionStrategy.REJECT,
+        confirm_overwrite: bool = False,
+    ) -> Dict[str, Any]:
+        ...
+
+    def recover_interrupted_imports(self) -> List[Dict[str, Any]]:
+        ...
+
 
 

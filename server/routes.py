@@ -427,6 +427,12 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_v1_backup_create()
             elif path in ("/api/v1/backup/verify", "/api/backup/verify"):
                 self.handle_post_v1_backup_verify()
+            elif path in ("/api/v1/import/preview", "/api/import/preview"):
+                self.handle_post_v1_import_preview()
+            elif path in ("/api/v1/import/execute", "/api/import/execute"):
+                self.handle_post_v1_import_execute()
+            elif path in ("/api/v1/import/recover", "/api/import/recover"):
+                self.handle_post_v1_import_recover()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
@@ -2502,4 +2508,122 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             }, status_code=status_code)
         except Exception as e:
             self._send_error_response(f"Backup verification failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_import_preview(self) -> None:
+        """
+        POST /api/v1/import/preview (Phase 78)
+        Previews an archive import, checking validity and detecting conflicts without mutating state.
+        Payload:
+        {
+            "archive_path": str,
+            "conflict_strategy": optional str (default REJECT)
+        }
+        """
+        from core.import_engine import CompleteImportEngine
+        from core.enums import ConflictResolutionStrategy
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        archive_path = body.get("archive_path")
+        if not archive_path:
+            self._send_error_response("Field 'archive_path' is required.", status_code=400)
+            return
+
+        strategy_str = body.get("conflict_strategy", "REJECT")
+        try:
+            strategy = ConflictResolutionStrategy(strategy_str)
+        except ValueError:
+            self._send_error_response(f"Invalid conflict_strategy: {strategy_str}", status_code=400)
+            return
+
+        engine = CompleteImportEngine(self.workspace_root)
+        try:
+            plan = engine.preview_import(archive_path, conflict_strategy=strategy)
+            self._send_json_response({
+                "status": "success",
+                "plan": plan.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Import preview failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_import_execute(self) -> None:
+        """
+        POST /api/v1/import/execute (Phase 78)
+        Executes an atomic, staged import of a Continuum backup archive.
+        Payload:
+        {
+            "archive_path": str,
+            "conflict_strategy": optional str ("REJECT", "RENAME_NEW", "OVERWRITE", "SKIP", "DEDUPLICATE"),
+            "confirm_overwrite": optional bool (default false)
+        }
+        """
+        from core.import_engine import CompleteImportEngine
+        from core.enums import ConflictResolutionStrategy
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        archive_path = body.get("archive_path")
+        if not archive_path:
+            self._send_error_response("Field 'archive_path' is required.", status_code=400)
+            return
+
+        strategy_str = body.get("conflict_strategy", "REJECT")
+        try:
+            strategy = ConflictResolutionStrategy(strategy_str)
+        except ValueError:
+            self._send_error_response(f"Invalid conflict_strategy: {strategy_str}", status_code=400)
+            return
+
+        confirm_overwrite = bool(body.get("confirm_overwrite", False))
+        engine = CompleteImportEngine(self.workspace_root)
+        try:
+            result = engine.execute_import(
+                archive_path,
+                conflict_strategy=strategy,
+                confirm_overwrite=confirm_overwrite
+            )
+            self._send_json_response({
+                "status": "success",
+                "result": result.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Import execution failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_import_recover(self) -> None:
+        """
+        POST /api/v1/import/recover (Phase 78)
+        Inspects staging area for incomplete/interrupted transactions and recovers state.
+        """
+        from core.import_engine import CompleteImportEngine
+        engine = CompleteImportEngine(self.workspace_root)
+        try:
+            recovered = engine.recover_interrupted_imports()
+            self._send_json_response({
+                "status": "success",
+                "recovered_sessions": recovered,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Import recovery failed: {str(e)}", status_code=400)
+
 
