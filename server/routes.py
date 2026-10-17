@@ -196,6 +196,8 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_v1_retention_preview(query)
                 elif path in ("/api/v1/privacy/config", "/api/privacy/config"):
                     self.handle_get_v1_privacy_config()
+                elif path in ("/api/v1/backup/scope", "/api/backup/scope"):
+                    self.handle_get_v1_backup_scope()
                 else:
                     self._send_error_response(f"Endpoint not found: {path}", status_code=404)
             except Exception as e:
@@ -421,6 +423,10 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_v1_privacy_config()
             elif path in ("/api/v1/privacy/redact", "/api/privacy/redact"):
                 self.handle_post_v1_privacy_redact()
+            elif path in ("/api/v1/backup/create", "/api/backup/create"):
+                self.handle_post_v1_backup_create()
+            elif path in ("/api/v1/backup/verify", "/api/backup/verify"):
+                self.handle_post_v1_backup_verify()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
@@ -2407,3 +2413,93 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "result": result.to_dict(),
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
+
+    def handle_get_v1_backup_scope(self) -> None:
+        """
+        GET /api/v1/backup/scope (Phase 77)
+        Returns the formal scope definition of complete backups.
+        """
+        from core.backup import CompleteBackupEngine
+        engine = CompleteBackupEngine(self.workspace_root)
+        self._send_json_response({
+            "status": "success",
+            "scope": engine.get_backup_scope(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_backup_create(self) -> None:
+        """
+        POST /api/v1/backup/create (Phase 77)
+        Generates a complete, verified backup archive.
+        Payload:
+        {
+            "output_path": optional str,
+            "backup_name": optional str
+        }
+        """
+        from core.backup import CompleteBackupEngine
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = {}
+        if content_len > 0:
+            body_raw = self.rfile.read(content_len).decode("utf-8")
+            try:
+                body = json.loads(body_raw)
+            except Exception as e:
+                self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+                return
+
+        output_path = body.get("output_path")
+        backup_name = body.get("backup_name")
+
+        engine = CompleteBackupEngine(self.workspace_root)
+        try:
+            res = engine.create_backup(output_path=output_path, backup_name=backup_name)
+            self._send_json_response({
+                "status": "success",
+                "backup": res.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Backup creation failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_backup_verify(self) -> None:
+        """
+        POST /api/v1/backup/verify (Phase 77)
+        Verifies the integrity and completeness of a backup archive.
+        Payload:
+        {
+            "archive_path": str,
+            "raise_on_error": optional bool (default false)
+        }
+        """
+        from core.backup import CompleteBackupEngine
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        archive_path = body.get("archive_path")
+        if not archive_path:
+            self._send_error_response("Field 'archive_path' is required.", status_code=400)
+            return
+
+        raise_on_error = bool(body.get("raise_on_error", False))
+        engine = CompleteBackupEngine(self.workspace_root)
+        try:
+            res = engine.verify_backup(archive_path, raise_on_error=raise_on_error)
+            status_code = 200 if res.is_valid else 400
+            self._send_json_response({
+                "status": "success" if res.is_valid else "failed",
+                "result": res.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }, status_code=status_code)
+        except Exception as e:
+            self._send_error_response(f"Backup verification failed: {str(e)}", status_code=400)
+

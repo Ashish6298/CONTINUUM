@@ -12,7 +12,8 @@ across Project Continuum:
 7. IModelAdapter (Phases 14-15)
 """
 
-from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
 
 from core.enums import EvidenceType, Status, TargetModel
 from core.evidence import Evidence
@@ -321,6 +322,23 @@ class IIntegrityManager(Protocol):
         ...
 
     def repair(self, dry_run: bool = False) -> Any:
+        ...
+
+
+@runtime_checkable
+class IBackupManager(Protocol):
+    """Contract for complete, disaster-recovery backup generation and integrity verification."""
+    def create_backup(
+        self,
+        output_path: Optional[Union[str, Path]] = None,
+        backup_name: Optional[str] = None
+    ) -> Any:
+        ...
+
+    def verify_backup(self, archive_path: Union[str, Path], raise_on_error: bool = True) -> Any:
+        ...
+
+    def get_backup_scope(self) -> Dict[str, Any]:
         ...
 
 

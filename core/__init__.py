@@ -55,6 +55,20 @@ from core.privacy import (
     SecretRedactionResult,
     PrivacyConfigError,
 )
+from core.backup import (
+    CompleteBackupEngine,
+    BackupManifest,
+    BackupResult,
+    BackupVerificationResult,
+    BackupScope,
+    RecordsSummary,
+    FileManifestEntry,
+    BackupError,
+    UnsupportedBackupVersionError,
+    CorruptedBackupError,
+    MissingRelationError,
+    BackupScopeError,
+)
 from core.invariants import (
     InvariantId,
     InvariantCategory,
@@ -206,4 +220,16 @@ __all__ = [
     "SecretDetectionEvidence",
     "SecretRedactionResult",
     "PrivacyConfigError",
+    "CompleteBackupEngine",
+    "BackupManifest",
+    "BackupResult",
+    "BackupVerificationResult",
+    "BackupScope",
+    "RecordsSummary",
+    "FileManifestEntry",
+    "BackupError",
+    "UnsupportedBackupVersionError",
+    "CorruptedBackupError",
+    "MissingRelationError",
+    "BackupScopeError",
 ]
