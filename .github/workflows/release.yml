@@ -34,7 +34,7 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel build
           pip install -e ".[dev]"
 
-      - name: Run Full 24-Phase Test Suite Verification
+      - name: Run Full Test Suite Verification (507+ Tests)
         run: |
           python tests/run_all_tests.py
 
@@ -48,18 +48,20 @@ jobs:
           echo "## 🚀 Project Continuum Release ${{ github.ref_name || inputs.version }}" > RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 🌟 Overview" >> RELEASE_NOTES.md
-          echo "Project Continuum provides persistent, mathematical ground-truth continuity across AI coding models (Claude, GPT-4o, Gemini, Cursor, Antigravity, and Local LLMs)." >> RELEASE_NOTES.md
+          echo "Project Continuum v1.4.0 provides persistent, mathematical ground-truth continuity and Universal Resume Anywhere across AI coding models (Claude, ChatGPT, Gemini, Cursor, Antigravity, and Local LLMs)." >> RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 📦 Included Features" >> RELEASE_NOTES.md
+          echo "- **Universal Resume Anywhere Engine**: Full activity timelines, checkpoints, decisions, and deterministic resume briefs." >> RELEASE_NOTES.md
           echo "- **3-State Separation Architecture**: Physical Workspace State, Conversational State, and Agent Execution State." >> RELEASE_NOTES.md
           echo "- **5-Tier Evidence Hierarchy**: Physical AST facts outrank conversational claims and speculative agent edits." >> RELEASE_NOTES.md
-          echo "- **Canonical State Graph (DAG)**: Automated dependency tracking, topological sorting, and Mermaid visualization." >> RELEASE_NOTES.md
-          echo "- **Omni-Model Handoff Adapters**: Dedicated adapters for Anthropic Claude, OpenAI GPT-4o / Codex, Google Gemini Pro, and Universal Markdown." >> RELEASE_NOTES.md
-          echo "- **Smart CLI Subcommands**: \`init\`, \`scan\`, \`status\`, \`graph\`, \`handoff\`, and \`daemon\`." >> RELEASE_NOTES.md
-          echo "- **Zero-Telemetry Security**: 100% offline local processing with automated secret & credential sanitization." >> RELEASE_NOTES.md
+          echo "- **Checkpoint History, Branching & Restore**: Non-destructive DAG branching and forward-append restore preserving history." >> RELEASE_NOTES.md
+          echo "- **Instant Local FTS5 Search**: Sub-millisecond filtering across activities and checkpoints with SQLite index rebuildability." >> RELEASE_NOTES.md
+          echo "- **Portable Export & Complete Backup**: Transactional import, conflict resolution strategies, and offline device transfer." >> RELEASE_NOTES.md
+          echo "- **Omni-Model Handoff Adapters**: Dedicated prompt adapters for Anthropic Claude, OpenAI ChatGPT / Codex, Google Gemini, and Universal Markdown." >> RELEASE_NOTES.md
+          echo "- **Zero-Telemetry Security**: 100% offline local processing with automated secret redaction and least-privilege permissions." >> RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 🧪 Verification" >> RELEASE_NOTES.md
-          echo "- Certified **126 / 126 unit & integration tests passing (100%)** across all 24 roadmap phases." >> RELEASE_NOTES.md
+          echo "- Certified **507+ unit & integration tests passing (100%)** across all roadmap milestones." >> RELEASE_NOTES.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
