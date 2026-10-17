@@ -383,7 +383,7 @@ class ActivityCheckpointStore:
         clamped_limit = max(1, min(limit, self.MAX_PAGE_LIMIT))
         clamped_offset = max(0, offset)
 
-        query = "SELECT id, file_path FROM activities_idx WHERE 1=1"
+        query = "SELECT id, title, description, type, status, tags_json, collection, created_at, updated_at, file_path FROM activities_idx WHERE 1=1"
         count_query = "SELECT COUNT(*) FROM activities_idx WHERE 1=1"
         params: List[Any] = []
 
@@ -443,9 +443,24 @@ class ActivityCheckpointStore:
         for row in rows:
             act_id = row["id"]
             try:
-                activities.append(self.get_activity(act_id))
+                tags = json.loads(row["tags_json"]) if row["tags_json"] else []
+                act = Activity(
+                    id=act_id,
+                    title=row["title"],
+                    description=row["description"],
+                    activity_type=row["type"],
+                    status=ActivityStatus(row["status"]),
+                    tags=tags,
+                    collection=row["collection"],
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
+                )
+                activities.append(act)
             except Exception:
-                continue
+                try:
+                    activities.append(self.get_activity(act_id))
+                except Exception:
+                    continue
 
         return activities, total_count
 
@@ -1280,6 +1295,14 @@ class ActivityCheckpointStore:
         if not self.activities_dir.exists():
             return 0
 
+        # Batched rows for high performance at target scale (Phase 81)
+        act_rows: List[Tuple] = []
+        chk_rows: List[Tuple] = []
+        fts_act_rows: List[Tuple] = []
+        fts_chk_rows: List[Tuple] = []
+
+        from core.search_engine import SearchDocumentBuilder
+
         # Scan activities
         for act_dir in self.activities_dir.iterdir():
             if not act_dir.is_dir():
@@ -1299,29 +1322,40 @@ class ActivityCheckpointStore:
             desc_val = getattr(activity, "description", "") or getattr(activity, "purpose", "")
             type_val = activity.activity_type.value if hasattr(activity.activity_type, "value") else str(activity.activity_type)
             status_val = activity.status.value if hasattr(activity.status, "value") else str(activity.status)
-            with self._get_db_connection() as conn:
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO activities_idx
-                    (id, title, description, type, status, tags_json, collection, created_at, updated_at, file_path)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        activity.id,
-                        activity.title,
-                        desc_val,
-                        type_val,
-                        status_val,
-                        json.dumps(list(activity.tags)),
-                        activity.collection,
-                        activity.created_at,
-                        activity.updated_at,
-                        str(act_file),
-                    ),
-                )
+
+            act_rows.append((
+                activity.id,
+                activity.title,
+                desc_val,
+                type_val,
+                status_val,
+                json.dumps(list(activity.tags)),
+                activity.collection,
+                activity.created_at,
+                activity.updated_at,
+                str(act_file),
+            ))
             total_indexed += 1
+
             try:
-                self.index_activity_search(activity)
+                doc = SearchDocumentBuilder.build_activity_document(activity)
+                fts_act_rows.append((
+                    doc["record_id"],
+                    doc["record_type"],
+                    doc["activity_id"],
+                    doc["title"],
+                    doc["description"],
+                    doc["notes"],
+                    doc["decisions"],
+                    doc["actions"],
+                    doc["briefs"],
+                    doc["artifacts"],
+                    doc["tags"],
+                    doc["type"],
+                    doc["status"],
+                    doc["collection"],
+                    doc["timestamp"],
+                ))
             except Exception:
                 pass
 
@@ -1357,36 +1391,87 @@ class ActivityCheckpointStore:
                 if chk.resume_brief:
                     summary_text = getattr(chk.resume_brief, "purpose", None) or getattr(chk.resume_brief, "summary", None)
 
-                with self._get_db_connection() as conn:
-                    conn.execute(
-                        """
-                        INSERT OR REPLACE INTO checkpoints_idx
-                        (id, activity_id, parent_checkpoint_id, timestamp, progress,
-                         completed_count, pending_count, decisions_count, blockers_count,
-                         artifacts_count, provenance_type, summary, file_path)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            chk.id,
-                            chk.activity_id,
-                            chk.parent_checkpoint_id,
-                            chk.timestamp,
-                            chk_progress,
-                            len(chk.completed_work),
-                            len(chk.pending_actions),
-                            len(chk.decisions),
-                            len(chk.blockers),
-                            len(chk.artifacts),
-                            chk_prov,
-                            summary_text,
-                            str(chk_file),
-                        ),
-                    )
+                chk_rows.append((
+                    chk.id,
+                    chk.activity_id,
+                    chk.parent_checkpoint_id,
+                    chk.timestamp,
+                    chk_progress,
+                    len(chk.completed_work),
+                    len(chk.pending_actions),
+                    len(chk.decisions),
+                    len(chk.blockers),
+                    len(chk.artifacts),
+                    chk_prov,
+                    summary_text,
+                    str(chk_file),
+                ))
                 total_indexed += 1
+
                 try:
-                    self.index_checkpoint_search(chk)
+                    doc = SearchDocumentBuilder.build_checkpoint_document(chk)
+                    fts_chk_rows.append((
+                        doc["record_id"],
+                        doc["record_type"],
+                        doc["activity_id"],
+                        doc["title"],
+                        doc["description"],
+                        doc["notes"],
+                        doc["decisions"],
+                        doc["actions"],
+                        doc["briefs"],
+                        doc["artifacts"],
+                        doc["tags"],
+                        doc["type"],
+                        doc["status"],
+                        doc["collection"],
+                        doc["timestamp"],
+                    ))
                 except Exception:
                     pass
+
+        # Perform atomic batch execution in SQLite
+        with self._get_db_connection() as conn:
+            if act_rows:
+                conn.executemany(
+                    """
+                    INSERT OR REPLACE INTO activities_idx
+                    (id, title, description, type, status, tags_json, collection, created_at, updated_at, file_path)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    act_rows,
+                )
+            if chk_rows:
+                conn.executemany(
+                    """
+                    INSERT OR REPLACE INTO checkpoints_idx
+                    (id, activity_id, parent_checkpoint_id, timestamp, progress,
+                     completed_count, pending_count, decisions_count, blockers_count,
+                     artifacts_count, provenance_type, summary, file_path)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    chk_rows,
+                )
+            if fts_act_rows:
+                conn.executemany(
+                    """
+                    INSERT INTO search_fts
+                    (record_id, record_type, activity_id, title, description, notes,
+                     decisions, actions, briefs, artifacts, tags, type, status, collection, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    fts_act_rows,
+                )
+            if fts_chk_rows:
+                conn.executemany(
+                    """
+                    INSERT INTO search_fts
+                    (record_id, record_type, activity_id, title, description, notes,
+                     decisions, actions, briefs, artifacts, tags, type, status, collection, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    fts_chk_rows,
+                )
 
         return total_indexed
 
