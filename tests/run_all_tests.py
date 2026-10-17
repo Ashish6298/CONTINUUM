@@ -35,6 +35,20 @@ def run_test_suite() -> int:
     print(f"Overall Status: {'SUCCESS (100% Passed)' if result.wasSuccessful() else 'FAILED'}")
     print("=" * 80)
 
+    if not result.wasSuccessful():
+        print("\n" + "!" * 80)
+        print("FAILED / ERRORED TESTS BREAKDOWN:")
+        print("!" * 80)
+        for test, trace in result.failures:
+            first_line = trace.strip().splitlines()[-1] if trace else "Failure"
+            print(f"::error title={test}::{first_line}")
+            print(f"\n[FAIL] {test}\n{trace}")
+        for test, trace in result.errors:
+            first_line = trace.strip().splitlines()[-1] if trace else "Error"
+            print(f"::error title={test}::{first_line}")
+            print(f"\n[ERROR] {test}\n{trace}")
+        print("!" * 80)
+
     return 0 if result.wasSuccessful() else 1
 
 
