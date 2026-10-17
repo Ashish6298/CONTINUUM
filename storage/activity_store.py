@@ -1683,7 +1683,7 @@ class ActivityCheckpointStore:
                 total = cur.fetchone()["total"]
                 cur.execute(select_sql, page_params)
                 rows = cur.fetchall()
-            except sqlite3.OperationalError:
+            except (sqlite3.Error, Exception):
                 if fts_query:
                     quoted_fallback = f'"{raw_query.replace(chr(34), " ").strip()}"'
                     params[0] = quoted_fallback

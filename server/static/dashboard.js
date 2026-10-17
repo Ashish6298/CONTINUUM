@@ -377,12 +377,12 @@ class ContinuumDashboardApp {
     });
 
     // Accessible dialog close listeners
-    document.getElementById('btnCloseBranchModal')?.addEventListener('click', () => this.closeBranchModal());
-    document.getElementById('btnCancelBranch')?.addEventListener('click', () => this.closeBranchModal());
-    document.getElementById('btnCloseRestoreModal')?.addEventListener('click', () => this.closeRestoreModal());
-    document.getElementById('btnCancelRestore')?.addEventListener('click', () => this.closeRestoreModal());
-    document.getElementById('btnCloseImportModal')?.addEventListener('click', () => this.closeImportModal());
-    document.getElementById('btnCancelImport')?.addEventListener('click', () => this.closeImportModal());
+    document.getElementById('btnCloseBranchModal')?.addEventListener('click', () => this.closeBranchModal(true));
+    document.getElementById('btnCancelBranch')?.addEventListener('click', () => this.closeBranchModal(true));
+    document.getElementById('btnCloseRestoreModal')?.addEventListener('click', () => this.closeRestoreModal(true));
+    document.getElementById('btnCancelRestore')?.addEventListener('click', () => this.closeRestoreModal(true));
+    document.getElementById('btnCloseImportModal')?.addEventListener('click', () => this.closeImportModal(true));
+    document.getElementById('btnCancelImport')?.addEventListener('click', () => this.closeImportModal(true));
 
     // Global keyboard shortcuts (Alt+S for search, Esc to close)
     window.addEventListener('keydown', (e) => {
@@ -394,17 +394,17 @@ class ContinuumDashboardApp {
       if (e.key === 'Escape') {
         const branchModal = document.getElementById('modalBranchDialog');
         if (branchModal && branchModal.style.display === 'flex') {
-          this.closeBranchModal();
+          this.closeBranchModal(true);
           return;
         }
         const restoreModal = document.getElementById('modalRestoreDialog');
         if (restoreModal && restoreModal.style.display === 'flex') {
-          this.closeRestoreModal();
+          this.closeRestoreModal(true);
           return;
         }
         const importModal = document.getElementById('modalImportDialog');
         if (importModal && importModal.style.display === 'flex') {
-          this.closeImportModal();
+          this.closeImportModal(true);
           return;
         }
         const isSnapshotOpen = this.el.modalSnapshotDetail && this.el.modalSnapshotDetail.style.display === 'flex';
@@ -452,16 +452,28 @@ class ContinuumDashboardApp {
     }
   }
 
-  closeBranchModal() {
+  closeBranchModal(wasCancelled = false) {
     this.closeModalAccessible(document.getElementById('modalBranchDialog'));
+    if (wasCancelled) {
+      this.announceToScreenReader('Branch creation cancelled. Source timeline remains unchanged.');
+      this.showToast('ℹ️ Branch creation cancelled. No data was modified.');
+    }
   }
 
-  closeRestoreModal() {
+  closeRestoreModal(wasCancelled = false) {
     this.closeModalAccessible(document.getElementById('modalRestoreDialog'));
+    if (wasCancelled) {
+      this.announceToScreenReader('Restore operation cancelled. No data was modified.');
+      this.showToast('ℹ️ Restore cancelled. No data was modified.');
+    }
   }
 
-  closeImportModal() {
+  closeImportModal(wasCancelled = false) {
     this.closeModalAccessible(document.getElementById('modalImportDialog'));
+    if (wasCancelled) {
+      this.announceToScreenReader('Import cancelled. No changes were committed to the workspace.');
+      this.showToast('ℹ️ Import cancelled. No data was modified.');
+    }
   }
 
   debounce(func, wait) {
@@ -762,16 +774,44 @@ class ContinuumDashboardApp {
   }
 
 
-  showToast(message) {
+  sanitizeTextForDisplay(text) {
+    if (!text || typeof text !== 'string') return '';
+    return text
+      .replace(/\b(ghp|gho|ghu|ghs|ghr)_[a-zA-Z0-9]{36}\b/g, '<REDACTED_GITHUB_TOKEN>')
+      .replace(/\b(AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}\b/g, '<REDACTED_AWS_KEY>')
+      .replace(/(password|secret|token|api_key|access_key)\s*[:=]\s*['"]?[^\s'";,&]+['"]?/gi, '$1=<REDACTED>')
+      .replace(/\bBearer\s+[a-zA-Z0-9_\-\.]{15,}\b/g, 'Bearer <REDACTED_TOKEN>');
+  }
+
+  displayError(errorObj, fallbackMsg = 'Operation encountered an error') {
+    let err = {};
+    if (typeof errorObj === 'string') {
+      err = { error: errorObj };
+    } else if (errorObj && typeof errorObj === 'object') {
+      err = errorObj;
+    }
+    const whatFailed = this.sanitizeTextForDisplay(err.what_failed || err.error || err.message || fallbackMsg);
+    const dataCommitted = err.data_committed ? 'YES' : 'NO (Authoritative records remain unchanged)';
+    const nextSteps = this.sanitizeTextForDisplay(err.next_steps || err.suggested_action || 'Review request parameters and retry.');
+
+    this.announceToScreenReader(`Error: ${whatFailed}. Data committed: ${dataCommitted}. Next steps: ${nextSteps}`, true);
+    
+    // Gate: UI never implies false success. Format comprehensive structured error details.
+    const formattedMsg = `❌ What Failed: ${whatFailed}\n💾 Data Committed: ${dataCommitted}\n👉 Next Steps: ${nextSteps}`;
+    this.showToast(formattedMsg, 'error');
+  }
+
+  showToast(message, type = 'info') {
     if (!this.el.toastContainer) return;
     const toast = document.createElement('div');
-    toast.className = 'toast';
+    toast.className = `toast ${type === 'error' ? 'toast-error' : (type === 'warning' ? 'toast-warning' : '')}`;
     toast.textContent = message;
     this.el.toastContainer.appendChild(toast);
+    const duration = type === 'error' ? 5500 : 2800;
     setTimeout(() => {
       toast.style.opacity = '0';
       setTimeout(() => toast.remove(), 200);
-    }, 2800);
+    }, duration);
   }
 
   // ==========================================================================
@@ -1689,11 +1729,19 @@ class ContinuumDashboardApp {
   async promptBranchCheckpoint(chkId) {
     if (!chkId) return;
     const branchName = prompt('Enter a name for the new branch continuation (e.g., experiment-a, refactor-tests):', 'branch');
-    if (branchName === null) return;
+    if (branchName === null) {
+      this.announceToScreenReader('Branch creation cancelled. Source timeline remains unchanged.');
+      this.showToast('ℹ️ Branch creation cancelled. No data was modified.');
+      return;
+    }
     const cleanBranchName = branchName.trim() || 'branch';
 
     const title = prompt('Enter a title for the new branched activity (optional, leave blank for default):', '');
-    if (title === null) return;
+    if (title === null) {
+      this.announceToScreenReader('Branch creation cancelled. Source timeline remains unchanged.');
+      this.showToast('ℹ️ Branch creation cancelled. No data was modified.');
+      return;
+    }
 
     try {
       this.showToast('🌿 Creating independent branch continuation...');
@@ -1709,7 +1757,7 @@ class ContinuumDashboardApp {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        this.showToast(`❌ Branching failed: ${err.error || res.statusText}`);
+        this.displayError(err, `Branching failed (${res.statusText})`);
         return;
       }
 
@@ -1721,7 +1769,7 @@ class ContinuumDashboardApp {
         this.selectActivity(data.activity.id);
       }
     } catch (e) {
-      this.showToast(`❌ Error branching checkpoint: ${e.message}`);
+      this.displayError(e.message, 'Error branching checkpoint');
     }
   }
 
@@ -1741,7 +1789,7 @@ class ContinuumDashboardApp {
 
       if (!prevRes.ok) {
         const err = await prevRes.json().catch(() => ({}));
-        this.showToast(`❌ Restore preview failed: ${err.error || prevRes.statusText}`);
+        this.displayError(err, `Restore preview failed (${prevRes.statusText})`);
         return;
       }
 
@@ -1751,14 +1799,20 @@ class ContinuumDashboardApp {
       let msg = `⚠️ CONFIRM RESTORE TO CHECKPOINT ${chkId}?\n\n`;
       msg += `Working State Changes:\n${preview.state_change_summary}\n\n`;
       msg += `Preservation Guarantee:\n${preview.preservation_guarantee}\n\n`;
-      msg += `Note: This will NOT delete intermediate or newer checkpoints. A new restored checkpoint will be committed.\n\nProceed with confirmed restore?`;
+      msg += `Consequences: Workspace files will be reverted to this checkpoint snapshot. Newer checkpoints will NOT be deleted; history remains fully preserved.\n\nProceed with confirmed restore?`;
 
       if (!confirm(msg)) {
-        this.showToast('Restore operation cancelled');
+        this.announceToScreenReader('Restore operation cancelled. Workspace records were not modified.');
+        this.showToast('ℹ️ Restore cancelled. No data was modified.');
         return;
       }
 
       const reason = prompt('Enter a reason for this restore (optional):', 'Reverting to historical checkpoint');
+      if (reason === null) {
+        this.announceToScreenReader('Restore operation cancelled. Workspace records were not modified.');
+        this.showToast('ℹ️ Restore cancelled. No data was modified.');
+        return;
+      }
 
       this.showToast('⏪ Committing restored checkpoint...');
       const confRes = await fetch('/api/v1/checkpoints/restore/confirm', {
@@ -1774,7 +1828,7 @@ class ContinuumDashboardApp {
 
       if (!confRes.ok) {
         const err = await confRes.json().catch(() => ({}));
-        this.showToast(`❌ Restore failed: ${err.error || confRes.statusText}`);
+        this.displayError(err, `Restore failed (${confRes.statusText})`);
         return;
       }
 
@@ -1786,7 +1840,7 @@ class ContinuumDashboardApp {
         this.selectActivity(activityId);
       }
     } catch (e) {
-      this.showToast(`❌ Restore error: ${e.message}`);
+      this.displayError(e.message, 'Restore error');
     }
   }
 

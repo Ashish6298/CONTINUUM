@@ -415,11 +415,28 @@ TRANSACTION_BOUNDARIES: Dict[TransactionOperation, TransactionBoundary] = {
 # USER-SAFE ERROR HIERARCHY
 # ==============================================================================
 
+def _sanitize_error_text(text: str) -> str:
+    """Sanitizes user-facing error text to ensure zero secret leakage (Phase 82)."""
+    if not text or not isinstance(text, str):
+        return ""
+    import re
+    # GitHub PAT
+    t = re.sub(r"\b(ghp|gho|ghu|ghs|ghr)_[a-zA-Z0-9]{36}\b", "<REDACTED_GITHUB_TOKEN>", text)
+    # AWS Access Key
+    t = re.sub(r"\b(AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}\b", "<REDACTED_AWS_KEY>", t)
+    # Key-value secrets / passwords
+    t = re.sub(r"(?i)(password|secret|token|api_key|passwd|access_key)\s*[:=]\s*['\"]?[^\s'\";,&]+['\"]?", r"\1=<REDACTED>", t)
+    # Bearer tokens
+    t = re.sub(r"\bBearer\s+[a-zA-Z0-9_\-\.]{15,}\b", "Bearer <REDACTED_TOKEN>", t)
+    return t
+
+
 class ContinuumUserError(Exception):
     """
-    Base class for user-safe errors in Project Continuum.
+    Base class for user-safe errors in Project Continuum (Phase 82).
     Guarantees:
-    - User-facing message is clean, actionable, and free of sensitive tokens or system secrets.
+    - Errors state what failed, whether data committed, and next steps.
+    - User-facing message is clean, actionable, and strictly free of sensitive tokens or system secrets.
     - Diagnostic technical details are retained in 'internal_details' for logging.
     """
     def __init__(
@@ -429,10 +446,20 @@ class ContinuumUserError(Exception):
         error_code: str = "ERR_CONTINUUM_GENERIC",
         internal_details: Optional[str] = None,
         remediable: bool = True,
+        what_failed: Optional[str] = None,
+        data_committed: bool = False,
+        next_steps: Optional[str] = None,
     ):
-        super().__init__(user_message)
-        self.user_message = user_message
-        self.suggested_action = suggested_action
+        clean_msg = _sanitize_error_text(user_message)
+        clean_action = _sanitize_error_text(suggested_action or next_steps or "")
+        clean_failed = _sanitize_error_text(what_failed or user_message)
+
+        super().__init__(clean_msg)
+        self.user_message = clean_msg
+        self.suggested_action = clean_action
+        self.next_steps = clean_action
+        self.what_failed = clean_failed
+        self.data_committed = bool(data_committed)
         self.error_code = error_code
         self.internal_details = internal_details or ""
         self.remediable = remediable
@@ -441,6 +468,10 @@ class ContinuumUserError(Exception):
         return {
             "error_code": self.error_code,
             "message": self.user_message,
+            "what_failed": self.what_failed,
+            "data_committed": self.data_committed,
+            "data_committed_statement": "YES (Data committed to disk)" if self.data_committed else "NO (Authoritative records remain unchanged)",
+            "next_steps": self.next_steps,
             "suggested_action": self.suggested_action,
             "remediable": self.remediable,
         }
@@ -453,6 +484,9 @@ class InvariantViolationError(ContinuumUserError):
             user_message=f"Invariant violation [{invariant_id.value}]: {message}",
             suggested_action=suggested_action or "Review operation constraints to ensure architectural invariants are respected.",
             error_code=f"ERR_INVARIANT_{invariant_id.name}",
+            what_failed=f"Architectural invariant [{invariant_id.value}] would be violated: {message}",
+            data_committed=False,
+            next_steps=suggested_action or "Review operation constraints to ensure architectural invariants are respected.",
         )
         self.invariant_id = invariant_id
 
@@ -462,9 +496,12 @@ class CommitFailedError(ContinuumUserError):
     def __init__(self, message: str, internal_details: Optional[str] = None):
         super().__init__(
             user_message=f"Commit failed: {message}",
-            suggested_action="Ensure the workspace directory is writable and disk space is available, then retry.",
+            suggested_action="Ensure the workspace directory is writable and disk space is available, then retry. No changes were committed.",
             error_code="ERR_STORAGE_COMMIT_FAILED",
             internal_details=internal_details,
+            what_failed=f"Checkpoint commit failed to write to disk: {message}",
+            data_committed=False,
+            next_steps="Ensure the workspace directory is writable and disk space is available, then retry. No changes were committed.",
         )
 
 
@@ -473,21 +510,27 @@ class UnsafeRestoreError(ContinuumUserError):
     def __init__(self, message: str, internal_details: Optional[str] = None):
         super().__init__(
             user_message=f"Restore aborted: {message}",
-            suggested_action="Verify target checkpoint integrity or select an alternate historical checkpoint.",
+            suggested_action="Verify target checkpoint integrity or select an alternate historical checkpoint. Existing timeline was NOT altered.",
             error_code="ERR_RESTORE_UNSAFE",
             internal_details=internal_details,
+            what_failed=f"State restore aborted: {message}",
+            data_committed=False,
+            next_steps="Verify target checkpoint integrity or select an alternate historical checkpoint. Existing timeline was NOT altered.",
         )
 
 
 class ImportValidationError(ContinuumUserError):
     """Raised when an external import payload fails validation before write."""
     def __init__(self, message: str, validation_errors: Optional[List[str]] = None):
-        action = f"Correct validation issues ({', '.join(validation_errors[:3])}) and retry." if validation_errors else "Verify the import file schema."
+        action = f"Correct validation issues ({', '.join(validation_errors[:3])}) and retry." if validation_errors else "Verify the import file schema and integrity."
         super().__init__(
             user_message=f"Import validation failed: {message}",
             suggested_action=action,
             error_code="ERR_IMPORT_VALIDATION",
             internal_details="; ".join(validation_errors) if validation_errors else None,
+            what_failed=f"Import archive pre-mutation validation failed: {message}",
+            data_committed=False,
+            next_steps=action,
         )
         self.validation_errors = validation_errors or []
 
@@ -495,21 +538,29 @@ class ImportValidationError(ContinuumUserError):
 class RetentionLimitError(ContinuumUserError):
     """Raised when history pruning cannot safely satisfy ancestry constraints."""
     def __init__(self, message: str):
+        action = "Increase history retention quota or unmark non-essential protected checkpoints."
         super().__init__(
             user_message=f"Retention limit cannot be met: {message}",
-            suggested_action="Increase history retention quota or unmark non-essential protected checkpoints.",
+            suggested_action=action,
             error_code="ERR_RETENTION_ANCESTRY_GUARD",
+            what_failed=f"Retention pruning cannot safely satisfy ancestry constraints: {message}",
+            data_committed=False,
+            next_steps=action,
         )
 
 
 class MigrationError(ContinuumUserError):
     """Raised when schema migration encounters an unrecoverable discrepancy."""
     def __init__(self, message: str, internal_details: Optional[str] = None):
+        action = "Review migration diagnostics. Your existing data remains intact in .continuum/backup/."
         super().__init__(
             user_message=f"Migration error: {message}",
-            suggested_action="Review migration diagnostics. Your existing data remains intact in .continuum/backup/.",
+            suggested_action=action,
             error_code="ERR_MIGRATION_FAILED",
             internal_details=internal_details,
+            what_failed=f"Schema migration error: {message}",
+            data_committed=False,
+            next_steps=action,
         )
 
 

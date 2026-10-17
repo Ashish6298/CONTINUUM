@@ -132,11 +132,26 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         encoded = json.dumps(sanitized_data, indent=2, ensure_ascii=False).encode("utf-8")
         self.wfile.write(encoded)
 
-    def _send_error_response(self, message: str, status_code: int = 400, details: Optional[Any] = None) -> None:
-        """Sends a standardized JSON error response."""
+    def _send_error_response(
+        self,
+        message: str,
+        status_code: int = 400,
+        details: Optional[Any] = None,
+        what_failed: Optional[str] = None,
+        data_committed: bool = False,
+        next_steps: Optional[str] = None,
+    ) -> None:
+        """
+        Sends a standardized JSON error response adhering to Phase 82 Error UX.
+        Errors state what failed, whether data committed, and next steps without leaking secrets.
+        """
         error_payload = {
             "error": message,
             "status_code": status_code,
+            "what_failed": what_failed or message,
+            "data_committed": bool(data_committed),
+            "data_committed_statement": "YES (Data was committed to disk)" if data_committed else "NO (Authoritative records remain unchanged)",
+            "next_steps": next_steps or "Review the request parameters and retry.",
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if details is not None:
@@ -1175,13 +1190,39 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, status_code=201)
         except (CheckpointNotFoundError, ActivityNotFoundError) as e:
-            self._send_error_response(str(e), status_code=404)
+            self._send_error_response(
+                str(e),
+                status_code=404,
+                what_failed=f"Branch source not found: {e}",
+                data_committed=False,
+                next_steps="Verify that the source activity and checkpoint exist before branching.",
+            )
         except (CheckpointValidationError, ValueError) as e:
-            self._send_error_response(str(e), status_code=400)
+            self._send_error_response(
+                str(e),
+                status_code=400,
+                what_failed=f"Branch validation failed: {e}",
+                data_committed=False,
+                next_steps="Check branch parameters and retry with valid identifiers. Source timeline is unchanged.",
+            )
         except CommitFailedError as e:
-            self._send_error_response(f"Branch commit failed: {e}", status_code=500, details=getattr(e, "internal_details", None))
+            self._send_error_response(
+                f"Branch commit failed: {e}",
+                status_code=500,
+                details=getattr(e, "internal_details", None),
+                what_failed=f"Branch creation commit failed: {e}",
+                data_committed=False,
+                next_steps="Ensure workspace directory is writable and disk space is available, then retry. Source timeline is unchanged.",
+            )
         except Exception as e:
-            self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
+            self._send_error_response(
+                f"Internal server error: {e}",
+                status_code=500,
+                details=traceback.format_exc(),
+                what_failed=f"Branch operation failed with unexpected error: {e}",
+                data_committed=False,
+                next_steps="Review server logs or restart the daemon. Source records were not modified.",
+            )
 
     def handle_get_v1_activity_branch_ancestry(self, query: Dict[str, List[str]]) -> None:
         """
@@ -1311,13 +1352,39 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, status_code=201)
         except (CheckpointNotFoundError, ActivityNotFoundError) as e:
-            self._send_error_response(str(e), status_code=404)
+            self._send_error_response(
+                str(e),
+                status_code=404,
+                what_failed=f"Restore target not found: {e}",
+                data_committed=False,
+                next_steps="Verify that target checkpoint exists in the activity timeline. Existing workspace records were not altered.",
+            )
         except (IncompatibleRestoreError, CheckpointValidationError, ValueError) as e:
-            self._send_error_response(str(e), status_code=400)
+            self._send_error_response(
+                str(e),
+                status_code=400,
+                what_failed=f"Restore aborted due to validation failure: {e}",
+                data_committed=False,
+                next_steps="Review restore parameters or select a compatible historical checkpoint. Existing records were NOT altered.",
+            )
         except CommitFailedError as e:
-            self._send_error_response(f"Restore failed: {e}", status_code=409 if "Concurrency" in str(e) else 500, details=getattr(e, "internal_details", None))
+            self._send_error_response(
+                f"Restore failed: {e}",
+                status_code=409 if "Concurrency" in str(e) else 500,
+                details=getattr(e, "internal_details", None),
+                what_failed=f"Restore commit failed: {e}",
+                data_committed=False,
+                next_steps="Refresh timeline to check for concurrent activity, then retry. Workspace state was preserved.",
+            )
         except Exception as e:
-            self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
+            self._send_error_response(
+                f"Internal server error: {e}",
+                status_code=500,
+                details=traceback.format_exc(),
+                what_failed=f"Restore operation encountered unexpected error: {e}",
+                data_committed=False,
+                next_steps="Review server logs or restart the daemon. Workspace records were not modified.",
+            )
 
     def handle_post_v1_checkpoint_manual(self) -> None:
         """
@@ -1929,30 +1996,38 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             offset = 0
 
         store = ActivityCheckpointStore(self.workspace_root)
-        results, total = store.search(
-            query=q_str,
-            record_type=record_type,
-            activity_id=activity_id,
-            status=status,
-            activity_type=activity_type,
-            tag=tag,
-            collection=collection,
-            date_from=date_from,
-            date_to=date_to,
-            limit=limit,
-            offset=offset
-        )
-
-        self._send_json_response({
-            "status": "success",
-            "query": q_str or "",
-            "total": total,
-            "count": len(results),
-            "limit": limit,
-            "offset": offset,
-            "results": [r.to_dict() if hasattr(r, "to_dict") else r for r in results],
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
+        try:
+            results, total = store.search(
+                query=q_str,
+                record_type=record_type,
+                activity_id=activity_id,
+                status=status,
+                activity_type=activity_type,
+                tag=tag,
+                collection=collection,
+                date_from=date_from,
+                date_to=date_to,
+                limit=limit,
+                offset=offset
+            )
+            self._send_json_response({
+                "status": "success",
+                "query": q_str or "",
+                "total": total,
+                "count": len(results),
+                "limit": limit,
+                "offset": offset,
+                "results": [r.to_dict() if hasattr(r, "to_dict") else r for r in results],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(
+                f"Search query failed: {str(e)}",
+                status_code=500,
+                what_failed=f"Search execution failed: {str(e)}",
+                data_committed=False,
+                next_steps="Try rebuilding the search index or adjusting query filters. Authoritative records remain intact.",
+            )
 
     def handle_post_v1_search(self) -> None:
         """
@@ -1984,30 +2059,38 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         offset = int(data.get("offset", 0))
 
         store = ActivityCheckpointStore(self.workspace_root)
-        results, total = store.search(
-            query=q_str,
-            record_type=record_type,
-            activity_id=activity_id,
-            status=status,
-            activity_type=activity_type,
-            tag=tag,
-            collection=collection,
-            date_from=date_from,
-            date_to=date_to,
-            limit=limit,
-            offset=offset
-        )
-
-        self._send_json_response({
-            "status": "success",
-            "query": q_str or "",
-            "total": total,
-            "count": len(results),
-            "limit": limit,
-            "offset": offset,
-            "results": [r.to_dict() if hasattr(r, "to_dict") else r for r in results],
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
+        try:
+            results, total = store.search(
+                query=q_str,
+                record_type=record_type,
+                activity_id=activity_id,
+                status=status,
+                activity_type=activity_type,
+                tag=tag,
+                collection=collection,
+                date_from=date_from,
+                date_to=date_to,
+                limit=limit,
+                offset=offset
+            )
+            self._send_json_response({
+                "status": "success",
+                "query": q_str or "",
+                "total": total,
+                "count": len(results),
+                "limit": limit,
+                "offset": offset,
+                "results": [r.to_dict() if hasattr(r, "to_dict") else r for r in results],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(
+                f"Search query failed: {str(e)}",
+                status_code=500,
+                what_failed=f"Search execution failed: {str(e)}",
+                data_committed=False,
+                next_steps="Try rebuilding the search index or adjusting query filters. Authoritative records remain intact.",
+            )
 
     def handle_post_v1_search_rebuild(self) -> None:
         """
@@ -2016,13 +2099,22 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         """
         from storage.activity_store import ActivityCheckpointStore
         store = ActivityCheckpointStore(self.workspace_root)
-        indexed_count = store.rebuild_search_index()
-        self._send_json_response({
-            "status": "success",
-            "message": f"Successfully rebuilt search index with {indexed_count} record(s).",
-            "indexed_count": indexed_count,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
+        try:
+            indexed_count = store.rebuild_search_index()
+            self._send_json_response({
+                "status": "success",
+                "message": f"Successfully rebuilt search index with {indexed_count} record(s).",
+                "indexed_count": indexed_count,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(
+                f"Failed to rebuild search index: {str(e)}",
+                status_code=500,
+                what_failed=f"Search index rebuild failed: {str(e)}",
+                data_committed=False,
+                next_steps="Verify workspace directory permissions and disk space. Authoritative activity records are unaffected.",
+            )
 
     def handle_post_v1_artifacts_inspect(self) -> None:
         """
@@ -2613,7 +2705,13 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 "timestamp": datetime.now(timezone.utc).isoformat()
             })
         except Exception as e:
-            self._send_error_response(f"Import execution failed: {str(e)}", status_code=400)
+            self._send_error_response(
+                f"Import execution failed: {str(e)}",
+                status_code=400,
+                what_failed=f"Archive import failed: {str(e)}",
+                data_committed=False,
+                next_steps="Review conflict strategy and archive integrity. Staged import was aborted; unrelated live records are completely unchanged.",
+            )
 
     def handle_post_v1_import_recover(self) -> None:
         """
