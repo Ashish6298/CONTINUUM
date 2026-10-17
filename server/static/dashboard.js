@@ -2140,7 +2140,8 @@ class ContinuumDashboardApp {
       });
 
       if (!actRes.ok) {
-        this.showToast('❌ Failed to initialize activity');
+        const err = await actRes.json().catch(() => ({}));
+        this.showToast(`❌ Failed to initialize activity: ${err.error || actRes.statusText}`);
         return;
       }
 

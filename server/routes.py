@@ -14,6 +14,7 @@ import sys
 import traceback
 from typing import Any, Dict, List, Optional
 import urllib.parse
+import uuid
 
 from core.enums import TargetModel
 from core.state_models import CanonicalProjectState
