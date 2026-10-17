@@ -453,15 +453,22 @@ class SafeRetentionEngine:
             raise FileNotFoundError(f"Backup directory '{backup_dir_path}' does not exist.")
 
         restored_count = 0
+        activities_to_rebuild = set()
         for b_file in src_path.glob("*.json"):
             try:
                 data = json.loads(b_file.read_text(encoding="utf-8"))
-                chk = UniversalCheckpoint.from_dict(data)
-                # Ensure activity exists
-                if self.store._get_activity_file(chk.activity_id).exists():
-                    self.store.commit_checkpoint(chk)
-                    restored_count += 1
+                activity_id = data.get("activity_id")
+                if activity_id and self.store._get_activity_file(activity_id).exists():
+                    chk_dir = self.store._get_checkpoints_dir(activity_id)
+                    dest = chk_dir / b_file.name
+                    if not dest.exists():
+                        shutil.copy2(b_file, dest)
+                        restored_count += 1
+                        activities_to_rebuild.add(activity_id)
             except Exception:
                 continue
+
+        if restored_count > 0:
+            self.store.rebuild_index_from_authoritative_files()
 
         return restored_count
