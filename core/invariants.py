@@ -111,7 +111,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Viewing historical checkpoints is strictly read-only; browsing past states cannot silently rewrite history.",
         category=InvariantCategory.DATA_INTEGRITY_AND_RECOVERY,
         enforcement_mechanism="Defensive copy on retrieval; write prevention on historical timeline records; explicit restore boundary.",
-        test_suite="tests/test_phase54_checkpoint.py, tests/test_phase62_history_view.py",
+        test_suite="tests/test_phase54_checkpoint.py, tests/test_phase63_timeline.py",
         test_cases=[
             "test_checkpoint_ancestry_and_provenance_immutability",
             "test_historical_checkpoint_view_is_immutable",
@@ -123,7 +123,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Branching creates a new independent continuation with provenance ancestry, leaving original timeline intact.",
         category=InvariantCategory.IDENTITY_AND_LIFECYCLE,
         enforcement_mechanism="Creation of new activity/checkpoint tree linked via parent_checkpoint_id; zero mutation of origin timeline.",
-        test_suite="tests/test_phase54_checkpoint.py, tests/test_phase63_branching.py",
+        test_suite="tests/test_phase54_checkpoint.py, tests/test_phase65_branch.py",
         test_cases=[
             "test_checkpoint_ancestry_and_provenance_immutability",
             "test_branch_creates_independent_continuation",
@@ -135,7 +135,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Restore explicitly changes working state, validates compatibility, preserves newer checkpoints, and is crash-safe.",
         category=InvariantCategory.DATA_INTEGRITY_AND_RECOVERY,
         enforcement_mechanism="Pre-restore safety snapshot; RESTORE audit checkpoint; no deletion of forward checkpoints.",
-        test_suite="tests/test_phase51_audit.py, tests/test_phase64_restore.py",
+        test_suite="tests/test_phase51_audit.py, tests/test_phase66_restore.py",
         test_cases=[
             "test_state_corruption_detection_and_auto_recovery",
             "test_restore_preserves_forward_checkpoints",
@@ -147,7 +147,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Summaries, briefs, and search indexes are derived; authoritative ground truth resides solely in structured records.",
         category=InvariantCategory.DATA_INTEGRITY_AND_RECOVERY,
         enforcement_mechanism="Structured checkpoint fields marked authoritative; ResumeBrief has is_authoritative=False; index rebuild utility.",
-        test_suite="tests/test_phase54_checkpoint.py, tests/test_phase60_briefs.py, tests/test_phase66_index_rebuild.py",
+        test_suite="tests/test_phase54_checkpoint.py, tests/test_phase60_briefs.py, tests/test_phase56_persistence.py",
         test_cases=[
             "test_authoritative_vs_derived_fields_isolation",
             "test_derived_brief_generation_from_authoritative_state",
@@ -159,7 +159,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Search snippets and index construction strictly enforce capture settings and secret redaction during builds and rebuilds.",
         category=InvariantCategory.SECURITY_AND_PRIVACY,
         enforcement_mechanism="Credential sanitization and regex pattern masking applied prior to indexing and excerpt generation.",
-        test_suite="tests/test_phase51_audit.py, tests/test_phase65_search.py",
+        test_suite="tests/test_phase51_audit.py, tests/test_phase68_search_index.py",
         test_cases=[
             "test_secret_redaction_and_path_normalization",
             "test_search_index_excludes_redacted_secrets",
@@ -171,7 +171,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Automated capture and background indexing are opt-in, debounced, deduplicated, observable, and strictly bounded.",
         category=InvariantCategory.SCALE_AND_PERFORMANCE,
         enforcement_mechanism="Explicit auto_capture flag in configuration; deduplication hash checks; bounded queue sizes.",
-        test_suite="tests/test_verification_extractor.py, tests/test_phase61_automation.py",
+        test_suite="tests/test_verification_extractor.py, tests/test_phase71_triggers.py",
         test_cases=[
             "test_discovery_does_not_execute_automatically",
             "test_automation_debouncing_and_deduplication",
@@ -207,7 +207,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Never silently prune protected or required checkpoint ancestry; explain when retention limits cannot be met safely.",
         category=InvariantCategory.DATA_INTEGRITY_AND_RECOVERY,
         enforcement_mechanism="Ancestry graph traversal; protection markers on branch heads and milestones; RetentionLimitError explanation.",
-        test_suite="tests/test_phase58_recovery.py, tests/test_phase64_retention.py",
+        test_suite="tests/test_phase58_consistency.py, tests/test_phase73_retention.py",
         test_cases=[
             "test_retention_pruning_respects_protected_ancestry",
             "test_retention_error_on_impossible_constraint",
@@ -219,7 +219,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Validate imported packages, archives, or external checkpoints before mutating live storage.",
         category=InvariantCategory.DATA_INTEGRITY_AND_RECOVERY,
         enforcement_mechanism="Draft 2020-12 schema validation and relational foreign-key check in memory before disk write.",
-        test_suite="tests/test_phase51_audit.py, tests/test_phase70_import.py",
+        test_suite="tests/test_phase51_audit.py, tests/test_phase78_import.py",
         test_cases=[
             "test_schema_validation_and_rejection",
             "test_malformed_import_rejected_without_state_mutation",
@@ -231,7 +231,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Backups contain all necessary data, relationships, and metadata needed for their stated recovery scope.",
         category=InvariantCategory.DATA_INTEGRITY_AND_RECOVERY,
         enforcement_mechanism="Manifest-driven backup archiver validating completeness of referenced activities and checkpoints.",
-        test_suite="tests/test_phase51_audit.py, tests/test_phase71_backup.py",
+        test_suite="tests/test_phase51_audit.py, tests/test_phase77_backup.py",
         test_cases=[
             "test_checkpoint_record_migration_compatibility",
             "test_backup_archive_completeness_and_restoration",
@@ -255,7 +255,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="External model adapters and integrations cannot bypass core validation, security rules, or domain invariants.",
         category=InvariantCategory.SECURITY_AND_PRIVACY,
         enforcement_mechanism="Adapters consume validated domain entities; adapter outputs pass through standard serializer/sanitizer.",
-        test_suite="tests/test_phase51_audit.py, tests/test_phase54_checkpoint.py",
+        test_suite="tests/test_phase51_audit.py, tests/test_phase72_adapters.py",
         test_cases=[
             "test_omni_model_adapters_contract",
             "test_checkpoint_validation_rules",
@@ -280,7 +280,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Large histories, searches, and artifact listings enforce bounded memory retrieval, pagination, or streaming.",
         category=InvariantCategory.SCALE_AND_PERFORMANCE,
         enforcement_mechanism="Pagination parameters (limit/offset, cursor); limit bounds (max 100 items per page); generator-based queries.",
-        test_suite="tests/test_phase56_persistence.py, tests/test_phase65_search.py",
+        test_suite="tests/test_phase56_persistence.py, tests/test_phase68_search_index.py",
         test_cases=[
             "test_paginated_checkpoint_history_retrieval",
             "test_search_results_page_bounded_memory",
@@ -292,7 +292,7 @@ INVARIANT_REGISTRY: Dict[InvariantId, InvariantDefinition] = {
         description="Optional new fields, schemas, or extensions never break older valid records or legacy storage layouts.",
         category=InvariantCategory.DATA_INTEGRITY_AND_RECOVERY,
         enforcement_mechanism="Default values for new dataclass fields; fallback mappings; backward-compatible migration bridges.",
-        test_suite="tests/test_phase54_checkpoint.py, tests/test_schema.py",
+        test_suite="tests/test_phase54_checkpoint.py, tests/test_serialization.py",
         test_cases=[
             "test_checkpoint_minimal_creation_and_defaults",
             "test_legacy_handoff_checkpoint_migration_compatibility",
