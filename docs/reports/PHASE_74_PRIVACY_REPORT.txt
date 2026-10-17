@@ -1,0 +1,101 @@
+================================================================================
+PHASE 74 VERIFICATION AND AUDIT REPORT: PRIVACY CONTROLS & SECRET REDACTION
+================================================================================
+Date: 2026-10-17T01:50:00Z
+Workspace: D:\CONTINUUM
+Milestone: Milestone 42 — Retention, Privacy and Security
+Phase: Phase 74 — Privacy Controls and Secret Redaction
+Status: VERIFIED & COMPLETED
+Total Regression Test Suite: 424/424 Passed (100%)
+Duration: 58.397s
+
+--------------------------------------------------------------------------------
+1. PHASE OVERVIEW & REQUIREMENTS IMPLEMENTATION
+--------------------------------------------------------------------------------
+Phase 74 establishes comprehensive, centralized privacy controls and secret redaction
+across Project Continuum, ensuring that credentials, confidential custom terms, and
+unpermitted artifacts can never leak into derived indexes, search snippets, resume briefs,
+runtime logs, or portable exports.
+
+Key Architectural Guarantees:
+1. Unified Settings & Policy Configuration (`core.privacy.PrivacyConfig`):
+   - Automation: `automation_allowed`, `automation_privacy_level` (strict/standard),
+     `automation_exclude_sensitive`.
+   - Excerpts / Snippets: `allow_excerpts` (boolean toggle), `max_excerpt_chars` (bounded 20-5000).
+   - Snapshots: `allow_snapshots`, `max_snapshot_size_bytes` (bounded 1KB-50MB).
+   - Sensitive Content: `redact_sensitive_content`, `redact_credentials_in_logs`,
+     `custom_denied_terms`, `custom_high_risk_filenames`, `custom_secret_patterns`.
+   - Export Inclusion: `export_include_secrets` (invariant: plaintext secrets cannot be exported),
+     `export_redact_sensitive`, `export_include_snapshots`.
+   - AI Enhancement: `ai_enhancement_allowed` (workspace policy gating), `ai_data_sharing_consent`,
+     `ai_disclose_scope`.
+   - Persisted atomically to `.continuum/privacy.json`.
+
+2. High-Confidence Secret Detection & Redaction (`core.privacy.PrivacyManager`):
+   - Reuses and extends `DaemonSanitizer` and `SecretSanitizer` patterns:
+     * AWS Access Key IDs (`AKIA...`), GitHub Personal/OAuth Tokens (`ghp_...`, `gho_...`),
+       GitLab Tokens (`glpat-...`), OpenAI Keys (`sk-...`), Anthropic Keys (`sk-ant-...`),
+       Google Cloud/Studio API Keys (`AIza...`), Slack Tokens (`xoxb-...`), JWT Tokens,
+       Generic DB Connection URIs with embedded passwords, Bearer authentication headers,
+       and PEM private keys.
+   - Case-insensitive custom denied terms with word boundary matching.
+   - Evidence-based claims: Returns `SecretRedactionResult` with detected categories, masked
+     samples, and explicit disclosure that regex/entropy detection reduces risk but cannot
+     guarantee 100% detection of arbitrary bespoke or obfuscated secrets without verified signatures.
+
+3. Propagation Across Subsystems:
+   - Search & Snippets: `SearchDocumentBuilder` and `bound_excerpt` automatically redact denied
+     terms and secrets; when `allow_excerpts` is False, snippets emit `"[EXCERPT REDACTED]"`.
+   - Rebuild Purification: Updating privacy settings triggers FTS5 search index rebuild,
+     completely purging newly denied terms from `search_fts`.
+   - Resume Briefs: `DeterministicResumeBriefGenerator` scrubs all brief fields via `PrivacyManager`
+     and strictly gates AI enhancement behind `ai_enhancement_allowed`.
+   - Runtime Logs: `sanitize_log()` strips passwords, credentials, and tokens from log outputs.
+   - Exports: `sanitize_export_data()` strips snapshot blobs when disabled, masks sensitive key
+     values, and redacts custom denied terms.
+
+4. Gate Verification:
+   - Gate Condition: "Derived data and integrations cannot bypass privacy controls."
+   - Verified that neither search indexing, search snippets, resume briefs, runtime logs,
+     nor export structures can leak sensitive or excluded content.
+
+--------------------------------------------------------------------------------
+2. REST API ENDPOINTS
+--------------------------------------------------------------------------------
+The following endpoints were added to `server/routes.py` and certified:
+- `GET /api/v1/privacy/config` (alias: `/api/privacy/config`):
+  Returns current privacy policy configuration.
+- `POST /api/v1/privacy/config` (alias: `/api/privacy/config`):
+  Updates privacy policy, writes atomically to `.continuum/privacy.json`, and triggers
+  FTS5 search index rebuild to synchronize derived data.
+- `POST /api/v1/privacy/redact` (alias: `/api/privacy/redact`):
+  Evaluates input text against privacy rules and returns redaction result with evidence.
+
+--------------------------------------------------------------------------------
+3. AUTOMATED TEST SUITE EXECUTION
+--------------------------------------------------------------------------------
+Phase 74 Test Suite (`tests/test_phase74_privacy.py`):
+- test_secret_redaction_comprehensive: PASSED
+- test_custom_denied_terms_redaction: PASSED
+- test_high_risk_file_exclusions: PASSED
+- test_settings_changes_persistence_and_validation: PASSED
+- test_search_indexing_and_snippets_privacy_propagation: PASSED
+- test_index_rebuild_with_updated_privacy_rules: PASSED
+- test_export_sanitization_excludes_secrets_and_snapshots: PASSED
+- test_brief_sanitization_and_ai_gating: PASSED
+- test_log_sanitization: PASSED
+- test_rest_api_privacy_endpoints: PASSED
+- test_gate_derived_data_and_integrations_cannot_bypass_privacy: PASSED
+
+Result: 11/11 tests passed in 0.534s.
+Complete Regression Suite: 424/424 tests passed in 58.397s (100% success rate, 0 failures, 0 regressions).
+
+--------------------------------------------------------------------------------
+4. READINESS FOR NEXT PHASE
+--------------------------------------------------------------------------------
+STATUS: READY FOR NEXT PHASE.
+Phase 74 (Privacy Controls and Secret Redaction) is fully implemented, verified, and certified.
+The codebase is ready to proceed to:
+- PHASE 75 — Permissions and Integrity Validation: Minimum adapter permissions, archive
+  format/version/checksum validation, verify backup before restore, error sanitization.
+================================================================================

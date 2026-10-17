@@ -1,0 +1,218 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING DISCOVERY REPORT
+Milestone 35: Repository Discovery and Baseline
+Phase 50: Repository and Architecture Inventory
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 50 executes a comprehensive, evidence-based architectural inventory of the
+entire Project Continuum repository. In accordance with the v1.4.0 specification
+("Universal Resume Anywhere"), this audit verifies:
+- Physical directory tree, packaging manifests, and zero-dependency runtime.
+- Application entry points (CLI subcommands, daemon, REST server, Web SPA).
+- Internal component boundaries and dependency graphs.
+- Real locations and capabilities of existing activity, session, context,
+  checkpoint, history, resume, search, export, and migration mechanisms.
+- Identification of extension points vs. net-new subsystems.
+- Unknowns, architectural friction points, and risk register for v1.4.0.
+
+2. RUNTIME, MANIFESTS & PACKAGE INVENTORY
+--------------------------------------------------------------------------------
+- Python Runtime: Python >= 3.10 supported (Certified on Python 3.11.4).
+- Production Dependencies: ZERO external third-party packages (`dependencies = []`
+  in `pyproject.toml`). All core capabilities leverage the Python Standard Library:
+  `dataclasses`, `sqlite3`, `http.server`, `urllib.parse`, `hashlib`, `json`,
+  `uuid`, `pathlib`, `shutil`, `re`, `argparse`, `sys`.
+- Development Dependencies: `pytest>=7.0.0` (with plugins `anyio`, `asyncio`, `cov`).
+- Browser Companion: Pure Vanilla ES6 JavaScript (`browser/continuum.user.js` and
+  `browser/extension/`). Zero npm/node dependencies required for production.
+- Packaging Manifest: `pyproject.toml` (Build system: `setuptools>=61.0`, `wheel`).
+- Distribution Entry Point: `cli.main:main` mapped to CLI command `continuum`.
+
+3. APPLICATION ENTRY POINTS & INTERFACES
+--------------------------------------------------------------------------------
+A. Command Line Interface (`cli/main.py`):
+   - `continuum init`: Initializes `.continuum/` storage tree and Git hooks.
+   - `continuum status`: Formats project status (AST symbols, files, build, DAG).
+   - `continuum scan`: Extracts workspace files and AST symbols into state DAG.
+   - `continuum graph`: Queries Canonical State Graph, topological stats, Mermaid export.
+   - `continuum handoff`: Packages omni-model or target-specific AI context handoffs.
+   - `continuum daemon`: Controls background workspace observer daemon.
+   - `continuum serve`: Starts the HTTP REST API and embedded Web Dashboard.
+   - `continuum launch`: Launches Chromium with pre-loaded extension.
+   - `continuum bookmarklet`: Generates portable browser bookmarklet.
+   - `continuum browser`: 1-click Tampermonkey companion installation helper.
+   - `continuum setup`: Automated one-command developer onboarding.
+
+B. REST API Server (`server/routes.py`, `server/daemon.py`):
+   - Port: `8181` (Default host: `127.0.0.1`).
+   - CORS Security: Strict origin verification via `server/auth.py:CorsOriginGuard`
+     (Permits localhost, ChatGPT, Claude, Gemini, DeepSeek).
+   - Session Security: Bearer token verification via `server/auth.py:SessionAuthManager`.
+   - Secret Redaction: Real-time sanitization via `server/sanitizer.py:DaemonSanitizer`.
+   - Active Endpoints:
+     - `GET  /`: Serves Web Dashboard SPA (`server/static/index.html`).
+     - `GET  /dashboard.css`, `/dashboard.js`: Static dashboard assets.
+     - `GET  /continuum.user.js`: Serves browser companion script.
+     - `GET  /setup`: Browser companion installation helper.
+     - `GET  /api/status`: Active project state and topological metrics.
+     - `GET  /api/context`: Tailored context for specified model.
+     - `GET  /api/symbols`: Extracted AST symbols.
+     - `GET  /api/diff`: Git working tree diffs.
+     - `GET  /api/checkpoints`: Lists recorded handoff checkpoints.
+     - `POST /api/checkpoints`: Records an immutable handoff checkpoint.
+     - `POST /api/prompt`: Generates model-tailored continuation prompt.
+     - `POST /api/workspace/sync`: Atomic workspace file sync with traversal defense.
+
+C. Presentation Layer & UI (`server/static/`):
+   - `index.html`: Responsive single-page application dashboard.
+   - `dashboard.css`: Modern dark-theme typography and CSS grid.
+   - `dashboard.js`: Client-side state polling, token counters, prompt copying.
+
+4. COMPONENT MAP & SUBSYSTEM BOUNDARIES
+--------------------------------------------------------------------------------
++-----------------------------------------------------------------------------+
+| CLI INTERFACE (`cli/main.py`, `cli/serve.py`, `cli/launcher.py`)            |
++-----------------------------------------------------------------------------+
+                                       |
++-----------------------------------------------------------------------------+
+| REST SERVER & SECURITY (`server/routes.py`, `server/auth.py`, sanitizer.py) |
++-----------------------------------------------------------------------------+
+          |                                               |
++------------------------------------+   +------------------------------------+
+| EVALUATION & HANDOFF ENGINE        |   | REPOSITORY SENSORS & OBSERVERS     |
+| - `handoff/packager.py`            |   | - `extractors/workspace_extractor` |
+| - `handoff/adapters/` (Claude/GPT) |   | - `extractors/git_extractor`       |
+| - `context/selector.py`, pruner.py |   | - `extractors/config_extractor`    |
+| - `confidence/`, `contradictions/` |   | - `watcher/detector.py`, updater   |
++------------------------------------+   +------------------------------------+
+                   \                                 /
++-----------------------------------------------------------------------------+
+| CANONICAL STATE GRAPH (DAG) (`graph/manager.py`, `graph/query.py`)          |
++-----------------------------------------------------------------------------+
+                                       |
++-----------------------------------------------------------------------------+
+| THREE-STATE ONTOLOGY (`core/state_models.py`, `core/enums.py`)              |
+| 1. ProjectState (Physical Ground Truth: Files, Symbols, Tests, Git)         |
+| 2. ConversationalState (TurnRecords, Claims, Hypotheses)                    |
+| 3. AgentExecutionState (In-flight Plans, Next Actions)                      |
+| 4. HandoffCheckpoint & Lineage Traversal                                    |
++-----------------------------------------------------------------------------+
+                                       |
++-----------------------------------------------------------------------------+
+| DURABLE PERSISTENCE & HOOKS (`storage/manager.py`, `storage/models.py`)     |
+| - `.continuum/state.json` (Active Canonical State)                          |
+| - `.continuum/history/` (Versioned State Snapshots)                         |
+| - `.continuum/backup/` (Pre-modification Backups)                           |
+| - `.continuum/handoffs/` (Immutable Handoff Checkpoints)                    |
++-----------------------------------------------------------------------------+
+
+5. EXISTING CONCEPTS vs. v1.4.0 EXTENSION OPPORTUNITIES
+--------------------------------------------------------------------------------
+1. Activity / Session:
+   - Existing: Conversational turns in `ConversationalState`, browser companion
+     session storage keys (`continuum_chat_v130_<platform>_<convId>`).
+   - Gap for v1.4.0: No first-class `Activity` entity with lifecycle states
+     (`active`, `paused`, `completed`, `archived`) or domain templates (Study,
+     Research, Writing, Work Task, Coding, AI-Agent).
+   - Strategy: Implement net-new `Activity` domain model in Milestone 2.
+
+2. Checkpoint & Provenance:
+   - Existing: `HandoffCheckpoint` in `core/state_models.py` and
+     `HandoffCheckpointManager` in `.continuum/handoffs/`. Tracks parent IDs,
+     prompts, message/code counts.
+   - Gap for v1.4.0: Universal checkpoint requires structured state, progress,
+     completed work, pending actions, decisions, context, blockers, artifacts
+     (references vs snapshots), excerpts, and deterministic resume brief.
+   - Strategy: Evolve and extend checkpoint model cleanly preserving existing
+     handoff checkpoint records.
+
+3. History, Diffs, Branch, and Restore:
+   - Existing: `ContinuumStorageManager` writes versioned state snapshots to
+     `.continuum/history/state_<timestamp>.json` with LRU pruning (up to 100).
+   - Gap for v1.4.0: History must be read-only; branching must create independent
+     timelines with ancestry tracking; restore must revert active working state
+     while preserving all newer historical checkpoints. Branch != Restore.
+   - Strategy: Add explicit BranchingEngine and RestoreManager in Milestone 5.
+
+4. Resume Brief:
+   - Existing: Handoff prompt generators synthesize context for target LLMs.
+   - Gap for v1.4.0: Deterministic Resume Brief generator that runs 100% locally
+     without an LLM answering the 6 core continuity questions.
+   - Strategy: Build pure Python deterministic synthesizer in Milestone 4.
+
+5. Search:
+   - Existing: Graph query engine in `graph/query.py`.
+   - Gap for v1.4.0: Unified, offline, paginated full-text search across
+     activities, checkpoints, briefs, decisions, notes, and tags.
+   - Strategy: Implement rebuildable inverted index in Milestone 6.
+
+6. Export, Backup, and Migration:
+   - Existing: File backups in `.continuum/backup/`.
+   - Gap for v1.4.0: Portable versioned exports, complete backups with SHA-256
+     checksums, staged import validation with conflict resolution.
+   - Strategy: Build dedicated archival pipeline in Milestone 9.
+
+6. UNKNOWNS & RISK REGISTER
+--------------------------------------------------------------------------------
+[RISK-01] Coexistence of HandoffCheckpoint & Universal Activity Checkpoint:
+- Risk: Breaking existing API endpoints (`/api/checkpoints`) or test cases.
+- Mitigation: Design universal checkpoint schema to be backward-compatible with
+  `HandoffCheckpoint`, ensuring older checkpoints deserialize gracefully.
+
+[RISK-02] Filesystem Directory Scale on Windows:
+- Risk: High checkpoint volumes (tens of thousands) causing directory listing
+  latency on Windows NTFS.
+- Mitigation: In Milestone 3, implement structured date/activity partitioned
+  subdirectories or a lightweight SQLite index while retaining zero-dependency
+  pure Python.
+
+[RISK-03] Branch vs. Restore Confusion:
+- Risk: Inadvertent conflation of branching and restore logic.
+- Mitigation: Strict behavioral separation in code; Branch creates a new activity
+  with parent linkage; Restore alters working state and creates a restore-event
+  checkpoint while strictly keeping all newer checkpoints intact.
+
+7. VERIFICATION & TEST OUTCOMES
+--------------------------------------------------------------------------------
+A. Phase 50 Dedicated Inventory Test Suite (`tests/test_phase50_discovery.py`):
+   - `test_package_structure_and_imports`: PASSED
+   - `test_zero_production_dependencies`: PASSED
+   - `test_cli_subcommands_registration`: PASSED
+   - `test_existing_checkpoint_and_lineage_concept`: PASSED
+   - `test_storage_manager_contracts`: PASSED
+   - `test_server_routes_and_security_guards`: PASSED
+   - `test_static_assets_exist`: PASSED
+   - `test_github_workflows_exist`: PASSED
+   - Summary: 8 passed in 0.15s.
+
+B. Complete Repository Regression Test Suite (`pytest`):
+   - Command: `pytest`
+   - Total Tests Collected: 218
+   - Total Tests Passed: 218 (100%)
+   - Failures / Errors: 0
+   - Execution Time: 30.56s
+
+8. ACCEPTANCE CHECKLIST
+--------------------------------------------------------------------------------
+[X] Package manifests and zero external production dependencies verified.
+[X] All CLI subcommands and server endpoints cataloged and verified.
+[X] Storage directories and snapshot contracts verified.
+[X] Existing checkpoint and lineage mechanisms audited.
+[X] Component boundaries and dependencies mapped.
+[X] Unknowns and risk register documented.
+[X] Phase 50 automated test suite implemented and passing (8/8).
+[X] Zero regressions across existing suite (218/218 passing).
+[X] Report saved as .txt in docs/reports/PHASE_50_DISCOVERY_REPORT.txt.
+
+9. FINAL STATUS & READINESS
+--------------------------------------------------------------------------------
+STATUS: PASS
+READINESS FOR NEXT PHASE: READY
+Prerequisites for Milestone 1 Phase 1.2 (Phase 51: Data, Persistence, Security
+and Integration Audit) are fully satisfied. No blocking issues found.
+================================================================================

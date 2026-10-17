@@ -1,0 +1,323 @@
+================================================================================
+PROJECT CONTINUUM v1.4.0 — MANUAL TESTING GUIDE FOR "D:\CP"
+Universal Resume Track: End-to-End Verification
+================================================================================
+
+PREREQUISITES & TERMINAL SETUP
+--------------------------------------------------------------------------------
+Open a PowerShell terminal and set your environment so Python can locate the
+Continuum v1.4.0 core modules from "D:\CONTINUUM":
+
+    $env:PYTHONPATH = "D:\CONTINUUM"
+    cd D:\CP
+
+
+================================================================================
+STEP 1: INITIALIZE STORAGE & AUTO-MIGRATE TO v1.4.0 (Phases 56 & 57)
+================================================================================
+Tests storage initialization and versioned schema migration engine:
+
+    python -c "
+    from storage.activity_store import ActivityStore
+    store = ActivityStore('D:/CP')
+    count = store.get_activity_count()
+    print(f'Storage initialized successfully! Existing activities: {count}')
+    "
+
+Expected Output:
+- Automatically initializes .continuum/activities/ and derived SQLite index .continuum/index.db
+- Confirms storage is ready and prints activity count without errors.
+
+
+================================================================================
+STEP 2: CREATE ACTIVITIES (BLANK & TEMPLATE-BASED) (Phases 53, 62 & 67)
+================================================================================
+Tests the Universal Activity Model, Lifecycle, and Starter Templates:
+
+    python -c "
+    from storage.activity_store import ActivityStore
+    from core.enums import ActivityType, ActivityStatus
+    from storage.templates import ActivityTemplateManager
+
+    store = ActivityStore('D:/CP')
+
+    # 1. Create a blank feature activity
+    act1 = store.create_activity(
+        title='Control Plane Auth Refactoring',
+        description='Refactoring authentication service and session tokens',
+        activity_type=ActivityType.FEATURE,
+        tags=['auth', 'security', 'backend'],
+        collection='security'
+    )
+    print(f'Created Activity 1: {act1.id} [{act1.title}] - Status: {act1.status.value}')
+
+    # 2. Create an activity using the built-in Coding Template
+    template = ActivityTemplateManager.get_template('coding')
+    act2 = store.create_activity(
+        title='Bugfix: Token Expiry Race Condition',
+        description='Resolving token invalidation race in multi-worker environment',
+        activity_type=ActivityType.BUGFIX,
+        tags=['bugfix', 'concurrency'],
+        collection='security'
+    )
+    print(f'Created Activity 2 from Template: {act2.id} [{act2.title}]')
+    "
+
+Expected Output:
+- Two new activities created with stable local IDs (e.g., act_...).
+- Both stored as authoritative JSON in .continuum/activities/<id>/activity.json.
+
+
+================================================================================
+STEP 3: CAPTURE AUTHORITATIVE CHECKPOINTS (Phases 54 & 59)
+================================================================================
+Tests immutable checkpoint snapshots, decisions, blockers, and progress:
+
+    python -c "
+    from storage.activity_store import ActivityStore
+    from core.checkpoint import UniversalCheckpoint
+    from core.activity import DecisionRecord
+
+    store = ActivityStore('D:/CP')
+    activities = store.list_activities(limit=1)
+    act_id = activities[0].id
+
+    # Create Checkpoint #1
+    chk1 = store.create_checkpoint(UniversalCheckpoint(
+        activity_id=act_id,
+        structured_state={'auth_provider': 'local_jwt', 'jwt_algorithm': 'HS256'},
+        progress={'milestone': 'Architecture Defined', 'completion_pct': 25},
+        completed_work=['Audited current session management', 'Defined token lifespan'],
+        pending_actions=['Implement token revocation list', 'Write integration tests'],
+        decisions=[
+            DecisionRecord(
+                decision='Use SHA-256 HMAC for signing',
+                rationale='Fast, zero external dependencies required',
+                constraints=['Requires 256-bit secret key']
+            )
+        ],
+        blockers=['Redis dependency is not configured yet'],
+        context='Phase 1 of auth refactoring completed.'
+    ))
+    print(f'Committed Checkpoint 1: {chk1.id} (Parent: {chk1.parent_checkpoint_id})')
+
+    # Create Checkpoint #2 (Child of Checkpoint #1)
+    chk2 = store.create_checkpoint(UniversalCheckpoint(
+        activity_id=act_id,
+        parent_checkpoint_id=chk1.id,
+        structured_state={'auth_provider': 'local_jwt', 'jwt_algorithm': 'HS256', 'revocation': 'in_memory'},
+        progress={'milestone': 'Revocation Implemented', 'completion_pct': 60},
+        completed_work=['Implemented in-memory token blacklist', 'Added expiry checks'],
+        pending_actions=['Add persistent fallback store', 'Run load tests'],
+        blockers=[],
+        context='Blacklist working in local tests. Redis blocker resolved.'
+    ))
+    print(f'Committed Checkpoint 2: {chk2.id} (Parent: {chk2.parent_checkpoint_id})')
+    "
+
+Expected Output:
+- Checkpoints committed atomically with parent DAG references.
+- Indexed into SQLite FTS5 store automatically.
+
+
+================================================================================
+STEP 4: GENERATE DETERMINISTIC 5-TIER RESUME BRIEF (Phase 60)
+================================================================================
+Tests offline, zero-AI deterministic briefing:
+
+    python -c "
+    from storage.activity_store import ActivityStore
+    from core.resume_generator import ResumeBriefGenerator
+
+    store = ActivityStore('D:/CP')
+    activities = store.list_activities(limit=1)
+    act = activities[0]
+    head_chk = store.get_head_checkpoint(act.id)
+
+    generator = ResumeBriefGenerator()
+    brief = generator.generate_brief(act, head_chk)
+
+    print('=' * 60)
+    print(f'RESUME BRIEF: {brief.title}')
+    print('=' * 60)
+    print('Purpose:         ', brief.purpose)
+    print('Completed Work:  ', brief.last_completed_work)
+    print('Key Decisions:   ', [d.decision for d in brief.decisions])
+    print('Active Blockers: ', brief.blockers or 'None')
+    print('Next Actions:    ', brief.next_actions)
+    print('=' * 60)
+    "
+
+Expected Output:
+- Formatted 5-tier briefing printed immediately without calling any external model.
+
+
+================================================================================
+STEP 5: CHECKPOINT TIMELINE & DIFF COMPARISON (Phases 63 & 64)
+================================================================================
+Tests paginated time travel and state delta comparison:
+
+    python -c "
+    from storage.activity_store import ActivityStore
+    from core.diff import CheckpointDiffEngine
+
+    store = ActivityStore('D:/CP')
+    act = store.list_activities(limit=1)[0]
+    timeline = store.get_timeline(act.id, limit=10)
+
+    print(f'Timeline for activity {act.id}: {len(timeline)} checkpoints')
+    for i, chk in enumerate(timeline):
+        print(f'  [{i+1}] {chk.id} - Progress: {chk.progress.get(\"completion_pct\")}% - At: {chk.timestamp}')
+
+    # Compare Checkpoint 1 vs Checkpoint 2
+    if len(timeline) >= 2:
+        chk1, chk2 = timeline[1], timeline[0]
+        diff = CheckpointDiffEngine.compute_diff(chk1, chk2)
+        print('\n--- CHECKPOINT DIFF ---')
+        print('Added Completed Work:  ', diff.added_completed_work)
+        print('Resolved Blockers:     ', diff.resolved_blockers)
+        print('State Changes:         ', diff.state_diff)
+    "
+
+Expected Output:
+- Detailed breakdown of work completed, blockers resolved, and state mutations between checkpoints.
+
+
+================================================================================
+STEP 6: NON-DESTRUCTIVE CHECKPOINT BRANCHING (Phase 65)
+================================================================================
+Tests branching from an earlier checkpoint without mutating original ancestry:
+
+    python -c "
+    from storage.activity_store import ActivityStore
+
+    store = ActivityStore('D:/CP')
+    act = store.list_activities(limit=1)[0]
+    timeline = store.get_timeline(act.id)
+    earlier_chk = timeline[-1]  # Checkpoint 1
+
+    branched_act = store.branch_activity(
+        source_activity_id=act.id,
+        source_checkpoint_id=earlier_chk.id,
+        new_title='Experiment: WebAuthn Passkeys Alternative'
+    )
+    print(f'Branched new Activity: {branched_act.id}')
+    print(f'   Origin Source: {branched_act.metadata.get(\"branch_source_activity_id\")}')
+    print(f'   Origin Checkpoint: {branched_act.metadata.get(\"branch_source_checkpoint_id\")}')
+    "
+
+Expected Output:
+- Creates an independent child activity linked back to the historical checkpoint.
+- Leaves the original activity timeline completely intact.
+
+
+================================================================================
+STEP 7: LOCAL FTS5 SEARCH & DISASTER REBUILD (Phase 68)
+================================================================================
+Tests SQLite FTS5 search across all activities and checkpoints, and verifies
+instant disaster recovery rebuild:
+
+    python -c "
+    from storage.activity_store import ActivityStore
+
+    store = ActivityStore('D:/CP')
+
+    # 1. Search for keywords across all records
+    results = store.search(query='token blacklist')
+    print(f'Search Results for \"token blacklist\": {len(results)} matches found.')
+    for r in results:
+        print(f'   Match: [{r.entity_type}] {r.title} - Snippet: {r.matched_snippet}')
+
+    # 2. Test Disaster Rebuild: simulate deleted SQLite index
+    rebuilt_count = store.rebuild_index()
+    print(f'Rebuilt FTS5 index from authoritative JSON: {rebuilt_count} records indexed.')
+    "
+
+Expected Output:
+- Finds matches with context snippets.
+- Successfully scans JSON files and rebuilds the SQLite FTS5 index.
+
+
+================================================================================
+STEP 8: COMPLETE BACKUP & PORTABLE EXPORT (Phases 76 & 77)
+================================================================================
+Tests complete workspace archiving vs selective portable export:
+
+    python -c "
+    from core.backup import CompleteBackupEngine, PortableExportEngine
+    from storage.activity_store import ActivityStore
+
+    store = ActivityStore('D:/CP')
+
+    # 1. Complete Backup (Full Disaster Recovery Tarball)
+    backup_engine = CompleteBackupEngine(store)
+    backup_path = backup_engine.create_backup(output_path='D:/CP/continuum_backup.tar.gz')
+    print(f'Complete Backup generated: {backup_path}')
+
+    # 2. Verify Backup Integrity (SHA-256 manifest & version checks)
+    verification = backup_engine.verify_backup(backup_path)
+    print(f'Backup Verification: {verification.status} - Valid: {verification.is_valid}')
+
+    # 3. Portable Selective Export (Sharing specific tasks)
+    export_engine = PortableExportEngine(store)
+    activities = store.list_activities(limit=1)
+    export_path = export_engine.export_activities(
+        activity_ids=[activities[0].id],
+        output_path='D:/CP/portable_auth_export.tar.gz'
+    )
+    print(f'Portable Export created: {export_path}')
+    "
+
+Expected Output:
+- continuum_backup.tar.gz created and verified with SHA-256 integrity manifest.
+- portable_auth_export.tar.gz created containing selected activities only.
+
+
+================================================================================
+STEP 9: STAGED IMPORT & CONFLICT RESOLUTION (Phase 78)
+================================================================================
+Tests the 3-phase staged import engine with conflict detection:
+
+    python -c "
+    from storage.activity_store import ActivityStore
+    from core.import_engine import CompleteImportEngine, ConflictStrategy
+
+    store = ActivityStore('D:/CP')
+    import_engine = CompleteImportEngine(store)
+
+    # Preview import without mutating live state
+    preview = import_engine.preview_import('D:/CP/continuum_backup.tar.gz')
+    print(f'Import Preview: {len(preview.incoming_activities)} activities, {len(preview.incoming_checkpoints)} checkpoints.')
+    print(f'Detected Conflicts: {len(preview.conflicts)}')
+
+    # Execute import with DEDUPLICATE strategy (skips identical records safely)
+    result = import_engine.execute_import('D:/CP/continuum_backup.tar.gz', strategy=ConflictStrategy.DEDUPLICATE)
+    print(f'Import Execution Result: {result.status} (Imported: {result.imported_count}, Skipped: {result.skipped_count})')
+    "
+
+Expected Output:
+- Preview runs non-destructively in a staging area.
+- DEDUPLICATE strategy imports cleanly without duplicating existing identical records.
+
+
+================================================================================
+STEP 10: LAUNCH EMBEDDED RESUME CENTER & WEB DASHBOARD (Phases 61, 80 & 82)
+================================================================================
+Tests the embedded HTTP daemon, Resume Center, and WCAG AA accessibility in your
+web browser:
+
+    python -m cli.main serve --path D:\CP --port 8765
+
+1. Open your browser and navigate to:
+   http://127.0.0.1:8765
+
+2. Interactive UI Verification Checklist:
+   [ ] Resume Center: Displays recent activities with current status and latest Resume Brief.
+   [ ] Timeline View: Displays checkpoint timeline with milestones and decisions.
+   [ ] Search: Type keywords in search bar to see instant local FTS5 search results.
+   [ ] Keyboard Navigation: Press Tab / Shift+Tab to verify visible focus outlines.
+   [ ] Dialog Focus Trap: Open a modal and press Esc to ensure focus returns to trigger element.
+   [ ] Dark/Light Theme: Toggle theme and verify persistent styling.
+
+3. Stop the server when finished by pressing Ctrl+C in your terminal.
+================================================================================

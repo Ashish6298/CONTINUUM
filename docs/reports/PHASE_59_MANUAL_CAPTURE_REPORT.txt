@@ -1,0 +1,125 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING AUDIT & IMPLEMENTATION REPORT
+Milestone 38: Capture and Resume
+Phase 59: Manual Checkpoint Capture
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS (Ready for Phase 60: Deterministic Resume Briefs)
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 59 initiates Milestone 38 (Capture and Resume) of Project Continuum v1.4.0
+"Universal Resume Anywhere". Conforming to invariants I-01 (Stable IDs), I-02 (Durable
+Commit Confirmation), I-08 (Opt-In & Bounded Automation), and I-10 (Comprehensive
+Secret Redaction), this phase implements:
+1. `ManualCaptureEngine`: Pure local manual checkpoint capture engine.
+2. Complete data capture flow supporting:
+   - Target Activity binding (create/select).
+   - Structured state & progress tracking.
+   - Completed work, pending actions, and blockers (multiline lists).
+   - Explicit design decisions and rationale.
+   - Context narrative and live references.
+   - Selected artifact references (references vs snapshot mode).
+3. Robust Double-Submission & Idempotency Defense:
+   - In-memory time-window deduplication (30s cache) combined with deterministic
+     intent hashing and caller-supplied `idempotency_key`.
+   - Prevents duplicate clicks or rapid retries from polluting checkpoint history.
+4. Privacy Sanitization & Secret Exclusions:
+   - Evaluates input context, decisions, completed work, and artifact snapshot
+     contents against DaemonSanitizer regex pattern matchers and custom denied terms.
+   - Excludes high-risk credential files (.env, *.key, *.pem) from artifact lists.
+5. REST API Endpoints:
+   - `GET /api/v1/activities` (paginated activity listing)
+   - `POST /api/v1/activities` (activity creation)
+   - `GET /api/v1/checkpoints` (paginated checkpoint listing)
+   - `POST /api/v1/checkpoints/manual` (manual checkpoint capture)
+6. Web Control Dashboard UI:
+   - Added "Capture Checkpoint" header action button with dark glassmorphic modal dialog.
+   - Keyboard accessible, clear commit progress state, and toast feedback.
+7. Automation & AI Independence:
+   - Manual capture functions 100% offline with zero external network or AI dependencies.
+
+2. INSPECTED & CHANGED FILES
+--------------------------------------------------------------------------------
+- Inspected Existing Files:
+  * `phasev1.4.0.txt`: Phase 59 specification and gate requirements.
+  * `projectv1.4.0.txt`: Products model and constraints for manual capture.
+  * `storage/activity_store.py`: Authoritative commit logic and relational integrity checks.
+  * `server/routes.py`: REST dispatch and API handlers.
+  * `server/static/index.html`, `dashboard.js`, `dashboard.css`: Dashboard SPA interface.
+- Changed / Created Files:
+  * `core/manual_capture.py`: Implemented `ManualCaptureEngine`, `ManualCaptureRequest`,
+    `ManualCaptureResponse`, `PrivacySettings`, `DuplicateSubmissionError`, `CaptureStorageError`.
+  * `core/__init__.py`: Exported manual capture classes.
+  * `server/routes.py`: Added v1 REST endpoints for activities and manual checkpoint capture.
+  * `server/static/index.html`: Added capture button and modal markup.
+  * `server/static/dashboard.css`: Added modal glassmorphic styling and form controls.
+  * `server/static/dashboard.js`: Added modal lifecycle and submit handlers.
+  * `tests/test_phase59_manual_capture.py`: 8 comprehensive unit tests.
+  * `docs/reports/PHASE_59_MANUAL_CAPTURE_REPORT.txt`: This engineering report.
+
+3. ARCHITECTURAL CONTRACTS & INVARIANTS ENFORCED
+--------------------------------------------------------------------------------
+A. Durable Commit Confirmation (I-02):
+   - Checkpoints are written to atomic `.tmp` files, flushed to disk, replaced, and
+     indexed in SQLite before confirmation is returned.
+   - Failures raise `CaptureStorageError` with original cause preserved; no false success.
+
+B. Double-Submission Defense (I-08, I-14):
+   - Identical submissions or duplicate idempotency keys within the 30-second window
+     are rejected with `DuplicateSubmissionError` (HTTP 409 Conflict).
+
+C. Comprehensive Secret Redaction (I-10):
+   - API tokens (sk-*, ghp_*, AKIA*, etc.), passwords, and custom denied terms are
+     masked before disk writes. High-risk credential files are excluded from artifacts.
+
+D. Offline Independence Gate:
+   - Engine executes synchronously and locally. Does not require or invoke any external
+     AI service or remote network connection.
+
+4. AUTOMATED TESTS & VERIFICATION
+--------------------------------------------------------------------------------
+- Test Suite: `tests/test_phase59_manual_capture.py`
+  * `test_full_manual_checkpoint_capture`: PASSED
+  * `test_partial_valid_checkpoint_capture`: PASSED
+  * `test_invalid_input_rejections`: PASSED
+  * `test_dangling_parent_reference_rejection`: PASSED
+  * `test_duplicate_submission_defense`: PASSED
+  * `test_storage_failure_handling`: PASSED
+  * `test_privacy_exclusions_and_secret_redaction`: PASSED
+  * `test_high_risk_file_artifact_exclusion`: PASSED
+  * Outcomes: 8 passed in 0.60s (100% success).
+
+- Full Milestone 35–38 Checkpoint Verification:
+  * Phases 50–59 tests: 74 passed in 3.65s (100% success).
+
+- Full Repository Test Execution:
+  * `python tests/run_all_tests.py`
+  * Total Tests Run: 284
+  * Total Passed: 284
+  * Failures: 0
+  * Errors: 0
+  * Overall Status: SUCCESS (100% Passed in 33.450s)
+
+5. COMPATIBILITY & LIMITATIONS
+--------------------------------------------------------------------------------
+- Backward Compatibility:
+  * Fully preserves legacy handoff checkpoint endpoints (`/api/checkpoints`).
+  * Additive API routing on `/api/v1/` preserves existing browser companion behavior.
+- Limitations:
+  * In-memory deduplication window is local to running process instance.
+  * Deep disk full conditions raise user-safe `CaptureStorageError`.
+
+6. ACCEPTANCE CHECKLIST & GATE EVALUATION
+--------------------------------------------------------------------------------
+[x] Add capture flow in existing UI style for state, progress, work, actions, decisions, context, blockers, references, artifacts.
+[x] Allow partial valid checkpoints (minimal input succeeds).
+[x] Clearly show commit success/failure in response and UI.
+[x] Prevent accidental duplicate submission (idempotency key & intent hashing).
+[x] Exclude sensitive content per privacy settings (DaemonSanitizer redactions).
+[x] Gate verification: manual capture works offline regardless of automation/AI settings.
+
+FINAL STATUS: PASS
+READY FOR NEXT PHASE: YES (Proceed to Phase 60 — Deterministic Resume Briefs)
+================================================================================

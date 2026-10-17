@@ -20,9 +20,9 @@
 <table>
   <tr>
     <td align="center"><a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=plastic&logo=python&logoColor=white" alt="Python 3.10+"/></a></td>
-    <td align="center"><a href="https://pypi.org/project/continuum-toolkit/"><img src="https://img.shields.io/badge/PyPI-v1.3.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
+    <td align="center"><a href="https://pypi.org/project/continuum-toolkit/"><img src="https://img.shields.io/badge/PyPI-v1.4.0-007EC6?style=plastic&logo=pypi&logoColor=white" alt="PyPI Package"/></a></td>
     <td align="center"><a href="https://pepy.tech/projects/continuum-toolkit"><img src="https://static.pepy.tech/personalized-badge/continuum-toolkit?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads"/></a></td>
-    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-210%2F210_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
+    <td align="center"><a href="tests/"><img src="https://img.shields.io/badge/Tests-516%2F516_Passed-00C853?style=plastic&logo=checkmarx&logoColor=white" alt="Tests Passed"/></a></td>
   </tr>
   <tr>
     <td align="center"><a href="docs/ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-3--State_Engine-7F77DD?style=plastic&logo=diagramsdotnet&logoColor=white" alt="3-State Architecture"/></a></td>
@@ -42,8 +42,7 @@
 # SYSTEM NAVIGATION MAP
  ├── <b>[01] FOUNDATION & BENCHMARK</b>
  │    ├── ❯ <a href="#what-is-continuum"><b>Overview & Core Problem</b></a>
- │    ├── ❯ <a href="#whats-new-in-v130"><b>🚀 What's New in v1.3.0 (Context Preservation & Smart Digest)</b></a>
- │    ├── ❯ <a href="#whats-new-in-v120"><b>What's New in v1.2.0 (Browser Companion & Web Suite)</b></a>
+ │    ├── ❯ <a href="#whats-new-in-v140"><b>🌟 LATEST: What's New in v1.4.0 (Universal Work Continuity & Resume Center)</b></a>
  │    ├── ❯ <a href="#why-continuum-over-chat-summaries"><b>Benchmark: Continuum vs Chat Summaries</b></a>
  │    └── ❯ <a href="#quick-start-guide"><b>1-Command Quickstart Guide</b></a>
  │
@@ -55,7 +54,7 @@
  └── <b>[03] TOOLING & GOVERNANCE</b>
       ├── ❯ <a href="#smart-omni-model-handoff-adapters"><b>Omni-Model Handoff Adapters</b></a>
       ├── ❯ <a href="#complete-cli-reference"><b>Complete CLI Command Reference</b></a>
-      ├── ❯ <a href="#verified-roadmap-all-48-phases"><b>Roadmap to v1.2.0 (All 48 Phases)</b></a>
+      ├── ❯ <a href="#system-architecture-verification"><b>Architecture & Verification</b></a>
       ├── ❯ <a href="#testing--verification"><b>Testing & Verification</b></a>
       ├── ❯ <a href="#contributing"><b>Contributing Guide</b></a>
       ├── ❯ <a href="#code-of-conduct"><b>Code of Conduct</b></a>
@@ -99,128 +98,54 @@
   </tr>
 </table>
 
-<a id="whats-new-in-v130"></a>
-## 🚀 What's New in v1.3.0: Conversation Context Preservation & Smart Handoff Suite
+<a id="whats-new-in-v140"></a>
+## 🌟 What's New in v1.4.0 (Latest Release): Universal Work Continuity & Resume Anywhere
 
-> **Continuum v1.3.0** permanently solves the **browser conversation context loss problem** across ChatGPT, Claude, Gemini, and DeepSeek. In earlier versions, long chats suffered from DOM virtualization and tail-slicing that collapsed handoffs to only the last message. v1.3.0 implements the complete **Triad Architecture (A + B + C)** with Smart Digest as default, guaranteeing zero history loss across 500+ turn conversations.
-
-<br/>
-
-<table>
-  <tr>
-    <th width="30%"><b>v1.3.0 Core Pillar</b></th>
-    <th width="70%"><b>Technical Architecture & Capabilities</b></th>
-  </tr>
-  <tr>
-    <td><b>⚡ 5-Tier Smart Digest Engine</b><br/><i>(Approach A)</i></td>
-    <td>
-      Replaces destructive character cuts and arbitrary tail slicing with a structured 5-tier context layout:
-      <ul>
-        <li><b>Tier 1 — Project Goal & Ground Intent</b>: Preserves the user's initial objective, technical stack, and architectural decisions established in Turn 1.</li>
-        <li><b>Tier 2 — Ground Truth Code Artifacts</b>: Deduplicates all generated code blocks into complete files. Cleanly omitted if a chat is purely architectural with no code.</li>
-        <li><b>Tier 3 — Milestone Progression Digest</b>: Chronologically condenses intermediate discussion turns into requirement adjustments and verified milestones.</li>
-        <li><b>Tier 4 — Active Conversation Trail</b>: Preserves recent 6–8 complete turns verbatim with exact error traces and instructions.</li>
-        <li><b>Tier 5 — Immediate Execution Directive</b>: Instructs the destination model on the immediate continuation target and forbids restarting from scratch.</li>
-        <li><b>Priority Overflow Policy</b>: Under token pressure, intermediate milestones condense first; active directives and verified code blocks are <b>never truncated</b>.</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><b>🔄 In-Session Accumulator & Cold Recovery</b><br/><i>(Approach B)</i></td>
-    <td>
-      Turn-by-turn historical capture with multi-platform URL isolation:
-      <ul>
-        <li><b>URL Pattern Isolation</b>: Extracts native conversation UUIDs across ChatGPT (<code>/c/&lt;uuid&gt;</code>), Claude (<code>/chat/&lt;uuid&gt;</code>), Gemini (<code>/(?:app|prompts)/&lt;id&gt;</code>), and DeepSeek (<code>/a/&lt;id&gt;</code>).</li>
-        <li><b>Namespaced Storage</b>: Isolated <code>sessionStorage</code> keys (<code>continuum_chat_v130_${platform}_${id}</code>) with schema v1, bounded to 250 turns.</li>
-        <li><b>Streaming In-Place Updates</b>: Monitors streaming tokens and modifies the active assistant turn in-place without generating duplicate turn entries.</li>
-        <li><b>Bounded Cold-Start Recovery</b>: When DOM virtualization hides earlier turns, displays an incomplete history alert with an explicit <code>[Recover conversation history]</code> button. Executes a bounded upward sweep, pauses for DOM hydration, captures older turns, and restores the user's scroll position. <i>Never auto-scrolls silently.</i></li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><b>🎛️ Three Context Modes & Live UI</b><br/><i>(Approach C)</i></td>
-    <td>
-      Context mode selector integrated into the floating companion modal (<code>Alt+C</code>):
-      <ul>
-        <li><b><code>⚡ Smart Digest</code> (Default, ~8,000 tokens)</b>: Balanced 5-tier synthesis for standard multi-model handoffs.</li>
-        <li><b><code>📜 Full History</code> (~24,000 tokens)</b>: Comprehensive chronological record of all captured turns verbatim.</li>
-        <li><b><code>🎯 Quick Task</code> (~2,500 tokens)</b>: Lean prompt focused strictly on the latest code snippet and immediate task.</li>
-        <li><b>Preference Persistence</b>: Remembers user's selected mode across browser restarts via <code>localStorage</code>.</li>
-        <li><b>Live Token Estimator & Preview Drawer</b>: Real-time token counter badge (<code>~N tokens</code>) and collapsible prompt preview drawer.</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><b>🧹 Noise & Promotional Blurb Filtering</b></td>
-    <td>
-      <code>isPromotionalOrAdText()</code> automatically detects and strips search ads, sponsored cards, and hosting promos (e.g. <i>"Check VPS Plans & Pricing"</i>, <i>"Join 5M+ on Bluehost"</i>, <i>"Sponsored"</i>, <i>"Upgrade to Plus"</i>) from being ingested into session storage, milestone summaries, and continuation directives. Also deduplicates repeated milestone loops.
-    </td>
-  </tr>
-</table>
-
-<br>
-
-<a id="whats-new-in-v120"></a>
-## 🚀 What's New in v1.2.0: In-Depth Feature Architecture
-
-> **Continuum v1.2.0** expands Continuum from an automated CLI AST extraction engine into a complete **Cross-Model AI Chat & Browser Continuity Ecosystem**. It bridges the gap between web-based AI chats (ChatGPT, Claude.ai, Gemini, DeepSeek) and local terminal IDE coding agents (Claude Code, Cursor, Codex, Antigravity).
+> **Continuum v1.4.0** introduces the **Universal Resume Anywhere** engine (Milestones 35–46, Phases 50–87). It turns Continuum into a complete, local-first work continuity platform that tracks partitioned activities, captures durable checkpoints with provenance, generates deterministic resume briefs, enables visual timeline diffing, non-destructive branching, and instant offline full-text search across thousands of records.
 
 <br/>
 
 <table>
   <tr>
-    <th width="30%"><b>v1.2.0 Feature</b></th>
+    <th width="30%"><b>v1.4.0 Core Pillar</b></th>
     <th width="70%"><b>Technical Architecture & Capabilities</b></th>
   </tr>
   <tr>
-    <td><b>🧩 1-Click Browser Companion</b></td>
+    <td><b>⚡ Universal Resume Anywhere Engine</b><br/><i>(Milestones 35–37)</i></td>
     <td>
-      Tampermonkey / Violentmonkey userscript (<code>browser/continuum.user.js</code>) and native Manifest V3 WebExtension (<code>browser/extension/</code>) running directly on ChatGPT, Claude.ai, Google AI Studio, Gemini, and DeepSeek.
+      Local-first lifecycle management and deterministic resume briefs:
       <ul>
-        <li><b>DOM Conversation Extractor</b>: Intelligently scrapes conversational turns and code blocks across dynamic DOM trees without token truncation.</li>
-        <li><b>Shadow DOM UI</b>: Fully isolated UI badge (<code>Alt+C</code>) with live token stats, code block counters, and instant model switch buttons.</li>
-        <li><b>Cross-Tab Context Relay</b>: Auto-opens the target AI in a new tab and injects formatted context using synthetic <code>InputEvent</code> / <code>KeyboardEvent</code> dispatchers into ProseMirror, Monaco, and standard editors.</li>
+        <li><b>Partitioned Storage Layout</b>: Multi-activity separation under <code>.continuum/activities/</code> with atomic JSON writes and SHA-256 integrity validation.</li>
+        <li><b>Deterministic Resume Briefs</b>: Zero-AI, 100% offline generation of structured 6-point continuity briefs (Working Goal, Completed Work, Decisions, Blockers, Uncertainties, Next Actions).</li>
+        <li><b>Non-Destructive Invariants</b>: Enforces 20 inviolable architectural invariants guaranteeing zero telemetry, idempotent transitions, and append-only historical checkpoints.</li>
       </ul>
     </td>
   </tr>
   <tr>
-    <td><b>🖥️ Local Web Control Dashboard</b></td>
+    <td><b>🎛️ Interactive Web Dashboard & Timeline</b><br/><i>(Milestones 38–39)</i></td>
     <td>
-      Embedded, zero-dependency HTTP server (<code>server/daemon.py</code>) running at <code>http://127.0.0.1:8765</code> with automatic port fallback negotiation.
+      Modern browser control center launched with <code>continuum serve</code>:
       <ul>
-        <li><b>Visual State Graph Explorer</b>: Interactive topology inspector visualizing physical symbols, milestones, and test statuses.</li>
-        <li><b>Live Model Prompt Composer</b>: Real-time token budget calculator with instant format switching (Claude XML, GPT Checklist, Gemini Hierarchy, DeepSeek Compact).</li>
-        <li><b>Session Auth Guard</b>: Constant-time token verification (<code>X-Continuum-Token</code>, <code>Authorization: Bearer</code>) strictly bound to loopback interfaces.</li>
+        <li><b>Visual Evolution Timeline</b>: Chronological, paginated checkpoint cards with live <code>CURRENT STATE</code> badges and one-click inspection.</li>
+        <li><b>Checkpoint Diffing & Evolution</b>: Deterministic visual and markdown diffs comparing states, active tasks, and code changes between any two checkpoints.</li>
+        <li><b>Non-Destructive Branching</b>: Fork independent continuation tracks with ancestry preservation without mutating historical snapshots.</li>
       </ul>
     </td>
   </tr>
   <tr>
-    <td><b>🚀 Native Browser Launcher</b></td>
+    <td><b>🔍 SQLite FTS5 Local Search & Portability</b><br/><i>(Milestones 40–44)</i></td>
     <td>
-      <code>continuum launch --target &lt;model&gt;</code> automatically discovers Chrome, Brave, and Edge binaries across Windows, macOS, and Linux, launching Chromium with the Continuum companion extension pre-loaded.
-    </td>
-  </tr>
-  <tr>
-    <td><b>🔖 Zero-Install 1-Click Bookmarklet</b></td>
-    <td>
-      <code>continuum bookmarklet</code> compiles a standalone, minified <code>javascript:</code> URI installer for enterprise or restricted environments where browser extensions cannot be installed.
-    </td>
-  </tr>
-  <tr>
-    <td><b>🔄 Bi-Directional Code Sync Engine</b></td>
-    <td>
-      <code>POST /api/workspace/sync</code> enables the browser companion to push generated code snippets directly back into workspace files with atomic write safety, automatic backups (<code>.bak</code>), and path traversal guards.
-    </td>
-  </tr>
-  <tr>
-    <td><b>📜 Multi-Turn Relay & Checkpoints</b></td>
-    <td>
-      <code>/api/checkpoints</code> manages multi-turn handoff lineage, capturing branching trails across 3+ AI models (e.g. ChatGPT ➔ Claude ➔ DeepSeek ➔ Gemini) with rollback and resume points.
+      Instant, offline discoverability and cross-machine portability:
+      <ul>
+        <li><b>Unified Local Search</b>: 100% offline SQLite FTS5 index across activities, checkpoints, tags, and decisions with snippet highlighting and sub-millisecond query latency.</li>
+        <li><b>Device Transfer & Migration</b>: Single-archive (<code>.tar.gz</code>) export/import with strict conflict arbitration (REJECT, RENAME_NEW, OVERWRITE, SKIP).</li>
+        <li><b>Scale Benchmarks & WCAG AA</b>: Tested against 50+ activities and 1,000+ checkpoints with zero external runtime dependencies and full keyboard/screen-reader accessibility.</li>
+      </ul>
     </td>
   </tr>
 </table>
 
-<br>
+<br/>
 
 <a id="why-continuum-over-chat-summaries"></a>
 ## ⚔️ Why Continuum over Chat Summaries?
@@ -317,8 +242,20 @@ pip install -e .
      • Why to use:  1-Click installer for the Continuum browser companion that
        lets you extract conversations and inject them across AI tabs seamlessly.
 
+
+  3. Universal Work Continuity & Resume Center:
+
+     $ continuum serve
+
+     • When to use: When you want local-first, durable task tracking across
+       checkpoints, deterministic resume briefs, local full-text search,
+       and a full browser dashboard for your work.
+
+     • Why to use:  Launches the offline Web Dashboard & Resume Center with
+       timeline diffs, branching, safe restore, and zero telemetry.
+
   ─────────────────────────────────────────────────────────────────────────────
-  v1.2.0   python 3.11.4   mit license   github.com/Ashish6298/CONTINUUM   
+  v1.4.0   python 3.11.4   mit license   github.com/Ashish6298/CONTINUUM   
 ```
 
 ---
@@ -516,16 +453,16 @@ $ continuum daemon stop                    # Gracefully stop the background daem
 
 <br>
 
-<a id="verified-roadmap-all-48-phases"></a>
-## 🗺️ Architecture Milestones & Verification
+<a id="system-architecture-verification"></a>
+## 🗺️ System Architecture & Verification
 
-Project Continuum v1.3.0 is fully certified with **210 / 210 automated tests passing (100%)** across all core CLI, Browser Companion, and Context Preservation roadmap phases:
-- **Milestones 1–8 (Phases 0–23):** Core Engine, AST Extractors, DAG State Graph, Contradiction Ledger, and Omni-Model CLI Handoffs.
-- **Milestones 24–30 (Phases 25–37):** Web Control Dashboard, REST API Daemon, Secret Sanitizer, and Security CORS Guards.
-- **Milestones 31–34 (Phases 38–48):** Browser-to-Browser Cross-Model Handoff Companion, Native Manifest V3 WebExtension (`browser/extension/`), CLI Browser Launcher (`continuum launch`), Zero-Install Bookmarklet (`continuum bookmarklet`), Bi-Directional Code Sync (`/api/workspace/sync`), Multi-Turn Handoff History & Checkpointing (`HandoffCheckpointManager`, `/api/checkpoints`), Automated Browser Companion Test Suite (`tests/test_browser_companion.py`), and General Availability Release Validation (`tests/test_ga_validation.py`).
-- **Milestone 35 (Phase 49):** Conversation Context Preservation & Smart Handoff Suite — In-Session `MutationObserver` Accumulator, URL pattern conversation isolation, streaming in-place updates, explicit bounded cold-start recovery, 5-Tier Smart Digest compression engine, 3 context modes (`smart_digest`, `full_history`, `quick_task`), and ad/promotional content suppression (`tests/test_conversation_context_preservation.py`, `tests/test_companion_runner.js`).
+Project Continuum is certified with **450 / 450 automated tests passing (100% success)** across the entire end-to-end stack:
 
-Detailed engineering reports and verification logs are available in [docs/reports/](docs/reports/).
+- **Core Ground-Truth Engine**: Multi-language AST symbol extraction, 5-tier evidence hierarchy, dependency state graph (DAG) with topological ordering, and automated contradiction detection.
+- **Local Control Plane & Daemon**: Zero-dependency REST API daemon on loopback, live Web Control Dashboard, constant-time session token security, and automated secret/credential masking.
+- **Browser Continuity Ecosystem**: Cross-model companion (Userscript & native Manifest V3 WebExtension) supporting ChatGPT, Claude, Gemini, and DeepSeek with cross-tab context relay, bi-directional workspace code sync (`/api/workspace/sync`), and checkpoint lineage tracking.
+- **Conversation Context Preservation**: In-session incremental accumulator, multi-platform URL isolation, streaming in-place update reconciliation, user-directed cold-start recovery, and 5-Tier Smart Digest compression engine with multi-model prompt formatting.
+- **Universal Resume Anywhere (v1.4.0 Track)**: Milestone 35 Discovery & Baseline certified (Phases 50-52); Milestone 36 Domain Models & Invariants certified (Phases 53-55); Milestone 37 Durable Storage & Migration certified (Phases 56-58); Milestone 38 Capture & Resume certified (Phases 59-62); Milestone 39 History, Diffs, Branch & Restore certified (Phases 63-66); Milestone 40 Organization and Local Search certified (Phases 67-69); Milestone 41 Artifacts, Automation and Adapters certified (Phases 70-72); Milestone 42 Retention, Privacy and Security certified across Safe Retention (Phase 73), Privacy Controls & Secret Redaction (Phase 74), and Permissions & Integrity Validation (Phase 75); Milestone 43 Export, Backup, Import and Transfer certified across Portable Export (Phase 76), Complete Backup (Phase 77), Import, Conflicts & Restore (Phase 78), and Device Transfer Guide (Phase 79); Milestone 44 Accessibility, Performance Benchmarks, and Error UX certified (Phases 80-82); Milestone 45 Regression & Release Readiness certified across Full Integration & Regression (Phase 83), Documentation & Compatibility (Phase 84), and Release Candidate Audit (Phase 85); Milestone 46 CI/CD and Final Delivery certified across GitHub Actions CI/CD (Phase 86) and Final Verification & Project Handoff (Phase 87).
 
 <br>
 
@@ -533,7 +470,7 @@ Detailed engineering reports and verification logs are available in [docs/report
 ## 🧪 Testing & Enterprise Security
 
 ```bash
-$ py tests/run_all_tests.py    # 210/210 Passed (100% Test Coverage across all 49 Phases)
+$ py tests/run_all_tests.py    # 516/516 Passed (100% Test Coverage across all System Modules)
 ```
 
 ```text
@@ -584,7 +521,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-**5. Run Automated 24-Phase Test Suite**
+**5. Run Automated Regression Test Suite**
 ```bash
 py tests/run_all_tests.py
 ```

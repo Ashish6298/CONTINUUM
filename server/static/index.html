@@ -17,7 +17,7 @@
         <span class="logo-symbol">∞</span>
         <span class="logo-text">CONTINUUM</span>
       </div>
-      <span class="version-badge" id="appVersion">v1.2.0</span>
+      <span class="version-badge" id="appVersion">v1.4.0</span>
       <div class="status-indicator online" id="connectionStatus">
         <span class="dot"></span>
         <span class="status-text">Daemon Connected</span>
@@ -31,6 +31,15 @@
       </div>
       <button class="btn btn-outline btn-sm" id="btnRefresh" title="Refresh State">
         <span class="btn-icon">🔄</span> Refresh
+      </button>
+      <button class="btn btn-outline btn-sm" id="btnToggleResumeCenter" title="Open Resume Center (Activities & Timeline)">
+        <span class="btn-icon">⚡</span> Resume Center
+      </button>
+      <button class="btn btn-outline btn-sm" id="btnToggleSearch" title="Search Activities & Checkpoints (Alt+S)">
+        <span class="btn-icon">🔍</span> Search
+      </button>
+      <button class="btn btn-outline btn-sm" id="btnOpenManualCapture" title="Capture Activity Checkpoint">
+        <span class="btn-icon">📸</span> Capture Checkpoint
       </button>
       <a class="btn btn-outline btn-sm" id="btnInstallCompanion" href="/continuum.user.js" target="_blank" title="Install Browser Companion Userscript (Tampermonkey / Violentmonkey)">
         <span class="btn-icon">🧩</span> Install Companion
@@ -82,8 +91,221 @@
       </div>
     </section>
 
+    <!-- Resume Center View (Phase 61: Universal Resume Anywhere) -->
+    <section class="resume-center-view glass-panel" id="resumeCenterView" style="display: none;">
+      <div class="resume-center-header">
+        <div class="resume-title-group">
+          <h2>⚡ Universal Resume Center</h2>
+          <span class="badge" id="activityCountBadge">0 activities</span>
+        </div>
+        <div class="resume-actions-group">
+          <button class="btn btn-primary btn-sm" id="btnResumeNewActivity">
+            <span class="btn-icon">+</span> New Activity
+          </button>
+          <button class="btn btn-outline btn-sm" id="btnCloseResumeCenter">
+            <span class="btn-icon">✕</span> Back to Composer
+          </button>
+        </div>
+      </div>
+
+      <div class="resume-center-grid">
+        <!-- Left: Activities List -->
+        <div class="activities-list-card">
+          <div class="card-subtitle">Recent & Active Activities</div>
+          <div class="activities-list-container" id="activitiesListContainer" role="listbox" aria-label="Activities">
+            <div class="loading-state">Loading activities...</div>
+          </div>
+        </div>
+
+        <!-- Right: Prominent Resume Brief & Timeline -->
+        <div class="activity-detail-card" id="activityDetailCard">
+          <div class="empty-state" id="resumeDetailEmptyState">
+            <span class="empty-icon">📂</span>
+            <h3>No Activity Selected</h3>
+            <p>Select an activity from the left list to view its latest continuity brief, metrics, and timeline.</p>
+          </div>
+
+          <div class="detail-content" id="resumeDetailContent" style="display: none;">
+            <!-- Activity Header Details -->
+            <div class="detail-header-row">
+              <div>
+                <h3 id="detailActivityTitle">Activity Title</h3>
+                <div class="detail-meta">
+                  <span class="badge" id="detailActivityType">coding</span>
+                  <span class="status-pill" id="detailActivityStatus">active</span>
+                  <span class="meta-date" id="detailActivityUpdated">Updated: Just now</span>
+                </div>
+              </div>
+              <div class="detail-actions">
+                <button class="btn btn-outline btn-sm" id="btnDetailCaptureCheckpoint">
+                  <span class="btn-icon">📸</span> Capture
+                </button>
+                <button class="btn btn-primary btn-sm" id="btnDetailCopyBrief">
+                  <span class="btn-icon">📋</span> Copy Brief
+                </button>
+              </div>
+            </div>
+
+            <!-- Prominent Deterministic Resume Brief Panel -->
+            <div class="prominent-brief-panel">
+              <div class="brief-header">
+                <h4>🚀 Actionable Continuity Brief</h4>
+                <span class="brief-gen-id" id="detailBriefGenId">deterministic_local</span>
+              </div>
+              <div class="brief-body" id="detailBriefMarkdown">
+                <!-- Formatted brief markdown -->
+              </div>
+            </div>
+
+            <!-- Checkpoint Timeline (Phase 63) -->
+            <div class="timeline-panel">
+              <div class="timeline-header">
+                <h4>📜 Checkpoint Evolution Timeline</h4>
+                <div class="timeline-controls">
+                  <span class="timeline-count" id="detailTimelineCount">0 checkpoints</span>
+                  <button class="btn btn-outline btn-xs" id="btnToggleTimelineOrder" title="Toggle chronological order (Newest/Oldest First)">
+                    ⬇️ Newest First
+                  </button>
+                </div>
+              </div>
+              <div class="timeline-list" id="detailTimelineList" role="region" aria-label="Checkpoint Timeline" tabindex="0">
+                <!-- Checkpoints list -->
+              </div>
+              <div class="timeline-footer" id="timelineFooter" style="display:none; text-align:center; padding-top:0.4rem;">
+                <button class="btn btn-secondary btn-sm" id="btnLoadMoreTimeline" style="width:100%;">
+                  ⏬ Load More Checkpoints
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Unified Search Center View (Phase 69: Search UI, Filters, Result Context) -->
+    <section class="search-center-view glass-panel" id="searchCenterView" style="display: none;" role="region" aria-label="Unified Local Search">
+      <div class="search-center-header">
+        <div class="search-title-group">
+          <h2>🔍 Unified Local Search</h2>
+          <span class="badge badge-accent">100% Offline • Zero AI • SQLite FTS5</span>
+        </div>
+        <div class="search-actions-group">
+          <button class="btn btn-outline btn-sm" id="btnRebuildSearchIndex" title="Rebuild search index from authoritative JSON records">
+            <span class="btn-icon">🔄</span> Rebuild Index
+          </button>
+          <button class="btn btn-outline btn-sm" id="btnCloseSearchCenter" title="Close Search (Esc)">
+            <span class="btn-icon">✕</span> Close
+          </button>
+        </div>
+      </div>
+
+      <div class="search-controls-container">
+        <!-- Search Input Bar -->
+        <div class="search-input-row">
+          <input type="search" id="globalSearchInput" placeholder="Search keywords across title, description, notes, decisions, actions, artifacts... (Press Enter or Alt+S)" class="input-search search-main-input" aria-label="Search keywords">
+          <button class="btn btn-primary" id="btnGlobalSearchSubmit">
+            <span class="btn-icon">🔍</span> Search
+          </button>
+          <button class="btn btn-outline" id="btnGlobalSearchClear" title="Clear search query and filters">
+            Clear
+          </button>
+        </div>
+
+        <!-- Filter Controls Row -->
+        <div class="search-filters-grid" role="group" aria-label="Search Filters">
+          <div class="filter-item">
+            <label for="filterRecordType" class="filter-label">Target:</label>
+            <select id="filterRecordType" class="filter-select" aria-label="Filter by record type">
+              <option value="">All Records</option>
+              <option value="activity">Activities</option>
+              <option value="checkpoint">Checkpoints</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label for="filterStatus" class="filter-label">Status:</label>
+            <select id="filterStatus" class="filter-select" aria-label="Filter by status">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="completed">Completed</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label for="filterType" class="filter-label">Type:</label>
+            <select id="filterType" class="filter-select" aria-label="Filter by activity type">
+              <option value="">All Types</option>
+              <option value="coding">Coding</option>
+              <option value="study">Study</option>
+              <option value="research">Research</option>
+              <option value="writing">Writing</option>
+              <option value="work_task">Work Task</option>
+              <option value="ai_agent">AI Agent</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label for="filterDatePreset" class="filter-label">Date:</label>
+            <select id="filterDatePreset" class="filter-select" aria-label="Filter by date range">
+              <option value="">All Time</option>
+              <option value="today">Today</option>
+              <option value="7d">Past 7 Days</option>
+              <option value="30d">Past 30 Days</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label for="filterTag" class="filter-label">Tag:</label>
+            <input type="text" id="filterTag" placeholder="Filter by tag..." class="filter-input" aria-label="Filter by tag">
+          </div>
+
+          <div class="filter-item">
+            <label for="filterCollection" class="filter-label">Collection:</label>
+            <input type="text" id="filterCollection" placeholder="Filter by collection..." class="filter-input" aria-label="Filter by collection">
+          </div>
+
+          <div class="filter-item filter-actions">
+            <button class="btn btn-outline btn-sm" id="btnResetSearchFilters" title="Reset all search filters">
+              Reset Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Results Status Bar (Screen Reader Accessible) -->
+      <div class="search-status-bar">
+        <div class="search-results-summary" id="searchResultSummary" aria-live="polite">
+          Ready to search. Enter keywords or select filters to explore activities and checkpoints.
+        </div>
+        <div class="search-pagination-summary" id="searchPaginationSummary"></div>
+      </div>
+
+      <!-- Search Results Feed -->
+      <div class="search-results-container" id="searchResultsList" role="feed" aria-label="Search Results">
+        <div class="search-empty-state">
+          <span class="empty-icon">🔍</span>
+          <h3>Explore Activities and Checkpoints</h3>
+          <p>Search across titles, descriptions, resume briefs, decisions, actions, notes, and artifact metadata. Everything runs locally with zero AI and zero network egress.</p>
+        </div>
+      </div>
+
+      <!-- Bounded Pagination Controls -->
+      <div class="search-pagination-toolbar" id="searchPagination" style="display: none;">
+        <button class="btn btn-outline btn-sm" id="btnSearchPrevPage" disabled aria-label="Previous Page">
+          ◀ Previous
+        </button>
+        <span class="pagination-info" id="searchPageInfo">Page 1 of 1</span>
+        <button class="btn btn-outline btn-sm" id="btnSearchNextPage" disabled aria-label="Next Page">
+          Next ▶
+        </button>
+      </div>
+    </section>
+
     <!-- Workspace Explorer & Token Budget -->
-    <div class="workspace-layout">
+    <div class="workspace-layout" id="workspaceComposerView">
       <!-- Left: Interactive File Tree & Quick Context Toggles -->
       <aside class="sidebar-panel glass-panel">
         <div class="panel-header">
@@ -212,6 +434,260 @@
 
   <!-- Toast Notification Container -->
   <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Manual Checkpoint Capture Modal (Phase 59) -->
+  <div id="modalManualCapture" class="modal-backdrop" style="display: none;">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="captureModalTitle">
+      <div class="modal-header">
+        <h3 id="captureModalTitle">📸 Capture Activity Checkpoint</h3>
+        <button class="btn-close" id="btnCloseCaptureModal" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="captureActivitySelect">Target Activity <span class="required">*</span></label>
+          <div class="input-row">
+            <select id="captureActivitySelect" class="form-control">
+              <option value="">-- Select or create an activity --</option>
+            </select>
+            <button class="btn btn-outline btn-sm" id="btnQuickNewActivity" title="Create New Activity">+ New</button>
+          </div>
+        </div>
+        <div class="form-group" id="groupNewActivityTitle" style="display: none;">
+          <label for="newActivityTitle">New Activity Title <span class="required">*</span></label>
+          <input type="text" id="newActivityTitle" class="form-control" placeholder="e.g. Implement Universal Resume Anywhere">
+        </div>
+        <div class="form-group">
+          <label for="captureContext">Context & Notes</label>
+          <textarea id="captureContext" class="form-control" rows="2" placeholder="Brief description of current working state..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="captureCompletedWork">Completed Work (one per line)</label>
+          <textarea id="captureCompletedWork" class="form-control" rows="2" placeholder="• Implemented authentication handlers&#10;• Verified unit test coverage"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="capturePendingActions">Pending Actions (one per line)</label>
+          <textarea id="capturePendingActions" class="form-control" rows="2" placeholder="• Connect REST routes to UI&#10;• Write comprehensive end-to-end tests"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="captureBlockers">Blockers / Constraints (optional, one per line)</label>
+          <textarea id="captureBlockers" class="form-control" rows="2" placeholder="• Awaiting upstream schema review"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="captureArtifacts">
+            Artifacts & References (Phase 70)
+            <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal; margin-left:6px;">References by default; optional snapshots</span>
+          </label>
+          <textarea id="captureArtifacts" class="form-control" rows="2" placeholder="e.g. docs/architecture.md, src/main.py, https://example.com/spec (one per line)"></textarea>
+          <div style="display:flex; align-items:center; gap:12px; margin-top:6px; font-size:0.75rem; color:var(--text-secondary);">
+            <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="radio" name="artifactCaptureMode" value="reference" checked id="radioArtReference">
+              <span>🔗 Link as References (0 bytes stored, live disk link)</span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="radio" name="artifactCaptureMode" value="snapshot" id="radioArtSnapshot">
+              <span>📸 Copy as Snapshots (safe text &lt;512KB, immutable history)</span>
+            </label>
+          </div>
+        </div>
+        <div class="privacy-notice">
+          <span class="privacy-icon">🛡️</span>
+          <span class="privacy-text">Client-side & engine privacy sanitization active: API keys, tokens, and secrets are automatically redacted before commit.</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" id="btnCancelCapture">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btnSubmitCapture">
+          <span class="btn-icon">💾</span> Commit Checkpoint
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Skippable Onboarding & Templates Modal (Phase 62) -->
+  <div id="modalOnboarding" class="modal-backdrop" style="display: none;">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="onboardingModalTitle">
+      <div class="modal-header">
+        <h3 id="onboardingModalTitle">✨ Welcome to Continuum Resume Anywhere</h3>
+        <button class="btn-close" id="btnCloseOnboardingModal" aria-label="Skip">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--text-secondary); font-size:0.85rem; line-height:1.5;">
+          Continuum automatically tracks, checkpoints, and packages your deep project context so you can pause work and resume instantly across human, AI agent, or IDE sessions without reconstructing state manually.
+        </p>
+
+        <div class="form-group">
+          <label>Select an Activity Template or Start Blank:</label>
+          <div class="template-grid" id="templateGrid">
+            <!-- Dynamically populated or static cards -->
+            <button class="template-card active" data-type="coding">
+              <span class="template-icon">💻</span>
+              <span class="template-title">Coding</span>
+            </button>
+            <button class="template-card" data-type="research">
+              <span class="template-icon">🔬</span>
+              <span class="template-title">Research</span>
+            </button>
+            <button class="template-card" data-type="writing">
+              <span class="template-icon">✍️</span>
+              <span class="template-title">Writing</span>
+            </button>
+            <button class="template-card" data-type="study">
+              <span class="template-icon">📚</span>
+              <span class="template-title">Study</span>
+            </button>
+            <button class="template-card" data-type="work_task">
+              <span class="template-icon">📋</span>
+              <span class="template-title">Work Task</span>
+            </button>
+            <button class="template-card" data-type="ai_agent">
+              <span class="template-icon">🤖</span>
+              <span class="template-title">AI-Agent</span>
+            </button>
+            <button class="template-card" data-type="custom">
+              <span class="template-icon">⚡</span>
+              <span class="template-title">Custom / Blank</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="onboardingActivityTitle">Activity Title <span class="required">*</span></label>
+          <input type="text" id="onboardingActivityTitle" class="form-control" placeholder="e.g. Implement Universal Resume Anywhere" value="Coding Session">
+        </div>
+
+        <div class="form-group">
+          <label for="onboardingNextAction">First Next Action (optional)</label>
+          <input type="text" id="onboardingNextAction" class="form-control" placeholder="e.g. Inspect architecture and plan milestones" value="Plan architecture">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" id="btnSkipOnboarding">Skip for Now</button>
+        <button class="btn btn-primary btn-sm" id="btnCreateFromOnboarding">
+          <span class="btn-icon">🚀</span> Start Activity & Checkpoint
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Read-Only Checkpoint Snapshot Modal (Phase 63) -->
+  <div class="modal" id="modalSnapshotDetail" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="snapshotModalTitle">
+    <div class="modal-dialog glass-panel" style="max-width: 650px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <h3 id="snapshotModalTitle" style="margin:0;">🔍 Checkpoint Snapshot</h3>
+          <span class="badge" style="background: rgba(99,102,241,0.2); color: var(--accent-primary);">🔒 Read-Only History</span>
+        </div>
+        <button class="btn-close" id="btnCloseSnapshotModal" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" id="snapshotModalBody" style="max-height: 65vh; overflow-y: auto; display:flex; flex-direction:column; gap:0.85rem;">
+        <!-- Populated dynamically by dashboard.js -->
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">
+          🛡️ Non-destructive inspection (I-03): Historical views never mutate repository or activity state.
+        </span>
+        <button class="btn btn-secondary btn-sm" id="btnCloseSnapshotFooter">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checkpoint Comparison / Diff Modal (Phase 64) -->
+  <div class="modal" id="modalCheckpointDiff" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="diffModalTitle">
+    <div class="modal-dialog glass-panel" style="max-width: 750px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <h3 id="diffModalTitle" style="margin:0;">⚖️ Checkpoint Comparison</h3>
+          <span class="badge" style="background: rgba(99,102,241,0.2); color: var(--accent-primary);">Deterministic Diff</span>
+        </div>
+        <button class="btn-close" id="btnCloseDiffModal" aria-label="Close comparison">&times;</button>
+      </div>
+      <div class="modal-body" id="diffModalBody" style="max-height: 68vh; overflow-y: auto; display:flex; flex-direction:column; gap:0.85rem;">
+        <!-- Populated dynamically by dashboard.js -->
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">
+          🛡️ Non-destructive comparison (I-03): Checkpoint diffs never mutate historical snapshots.
+        </span>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-outline btn-sm" id="btnCopyMarkdownDiff">📋 Copy Markdown</button>
+          <button class="btn btn-secondary btn-sm" id="btnCloseDiffFooter">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Branch Creation Dialog (Phase 65 & Phase 80) -->
+  <div class="modal" id="modalBranchDialog" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="branchDialogTitle">
+    <div class="modal-dialog glass-panel" style="max-width: 550px;">
+      <div class="modal-header">
+        <h3 id="branchDialogTitle" style="margin:0;">🌿 Branch from Checkpoint</h3>
+        <button class="btn-close" id="btnCloseBranchModal" aria-label="Close branch dialog">&times;</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:0.75rem;">
+        <label for="txtBranchName">Branch Name:</label>
+        <input type="text" id="txtBranchName" class="form-input" placeholder="e.g. experimental-architecture" aria-required="true" />
+        <p style="font-size:0.78rem; color:var(--text-muted);">
+          Branching creates an independent continuation with stable identity and ancestry without mutating historical checkpoints.
+        </p>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap:0.5rem;">
+        <button class="btn btn-secondary btn-sm" id="btnCancelBranch">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btnConfirmBranch">Create Branch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmed Restore Dialog (Phase 66 & Phase 80) -->
+  <div class="modal" id="modalRestoreDialog" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="restoreDialogTitle">
+    <div class="modal-dialog glass-panel" style="max-width: 550px;">
+      <div class="modal-header">
+        <h3 id="restoreDialogTitle" style="margin:0;">↺ Restore Checkpoint</h3>
+        <button class="btn-close" id="btnCloseRestoreModal" aria-label="Close restore dialog">&times;</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:0.75rem;">
+        <p style="font-size:0.85rem; color:var(--text-secondary);">
+          Restoring sets this historical snapshot as current state. Newer history is preserved as recovery checkpoints.
+        </p>
+        <label for="txtRestoreReason">Restore Reason (optional):</label>
+        <input type="text" id="txtRestoreReason" class="form-input" placeholder="e.g. reverting regression" />
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap:0.5rem;">
+        <button class="btn btn-secondary btn-sm" id="btnCancelRestore">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btnConfirmRestore">Confirm Restore</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Offline Transfer / Import Dialog (Phase 78 & 79 & Phase 80) -->
+  <div class="modal" id="modalImportDialog" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="importDialogTitle">
+    <div class="modal-dialog glass-panel" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="importDialogTitle" style="margin:0;">📥 Import Transfer Package</h3>
+        <button class="btn-close" id="btnCloseImportModal" aria-label="Close import dialog">&times;</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:0.75rem;">
+        <label for="txtImportArchivePath">Archive Path (.tar.gz):</label>
+        <input type="text" id="txtImportArchivePath" class="form-input" placeholder="path/to/continuum_transfer.tar.gz" aria-required="true" />
+        <label for="selConflictStrategy">Conflict Strategy:</label>
+        <select id="selConflictStrategy" class="form-select">
+          <option value="REJECT">REJECT (Default fail-safe)</option>
+          <option value="RENAME_NEW">RENAME_NEW (Preserve local, assign new IDs)</option>
+          <option value="OVERWRITE">OVERWRITE (Explicit replacement)</option>
+          <option value="SKIP">SKIP (Keep local, ignore incoming)</option>
+        </select>
+        <div id="importPreviewStatus" role="status" aria-live="polite" style="font-size:0.8rem; color:var(--text-muted);"></div>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap:0.5rem;">
+        <button class="btn btn-secondary btn-sm" id="btnCancelImport">Cancel</button>
+        <button class="btn btn-outline btn-sm" id="btnPreviewImport">Preview</button>
+        <button class="btn btn-primary btn-sm" id="btnExecuteImport">Execute Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen Reader Announcements (ARIA Live Regions) -->
+  <div id="a11yAnnouncer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="a11yAlertAnnouncer" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
 
   <!-- Scripts -->
   <script src="/dashboard.js"></script>

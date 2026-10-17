@@ -1,0 +1,128 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING AUDIT & IMPLEMENTATION REPORT
+Milestone 37: Durable Storage and Migration
+Phase 57: Versioned, Idempotent Migration
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS (Ready for Phase 58)
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 57 implements the versioned, idempotent data migration engine for Project
+Continuum v1.4.0 "Universal Resume Anywhere". Conforming to invariants I-14
+(Validated, Recoverable, Idempotent Migration) and I-18 (Backward Compatibility),
+this phase delivers:
+1. `ContinuumMigrator`: Automatic schema version detection, migration planning,
+   dry-run preview, and robust execution.
+2. Verified Pre-Migration Backup: Prior to mutating any live data, an immutable
+   recovery snapshot is captured in `<workspace_root>/.continuum/backup/pre_migration_<timestamp>/`.
+3. Conservative Record Mapping:
+   - Root Workspace Activity: Legacy `state.json` is mapped into a persistent root
+     activity (`act_migrated_workspace`) and active checkpoint (`chk_migrated_active_1_0_0`).
+   - Legacy Handoffs: Files in `.continuum/handoffs/` are mapped via
+     `UniversalCheckpoint.from_legacy_handoff_checkpoint()`, preserving IDs,
+     timestamps, model metadata, and provenance.
+   - Legacy History: Snapshots in `.continuum/history/` are safely converted into
+     historical checkpoints linked to the root activity.
+4. Idempotency & Repeat Runs: Re-running migration on an already upgraded or partially
+   upgraded workspace produces zero duplicate records and safely confirms success.
+5. Malformed Input & Unsupported Versions:
+   - Corrupted or non-JSON files are quarantined and cataloged in `records_skipped`.
+   - Unsupported schema versions (e.g. unknown future versions) are rejected with
+     typed `MigrationError`, leaving live data untouched.
+6. Post-Migration Verification Gate: Rebuilt entities are verified against
+   `ActivityCheckpointStore` and SQLite index before writing `.continuum/migration.json`.
+   Catastrophic failures trigger automated rollback.
+
+2. INSPECTED & CHANGED FILES
+--------------------------------------------------------------------------------
+- Inspected Existing Files:
+  * `storage/recovery.py`: Snapshot recovery conventions.
+  * `storage/activity_store.py`: Activity and checkpoint CRUD engine.
+  * `core/activity.py`: Activity model.
+  * `core/checkpoint.py`: Universal checkpoint and legacy handoff adapter.
+  * `core/invariants.py`: Invariant definitions and MigrationError.
+- Changed / Created Files:
+  * `storage/migration.py`: Implemented `ContinuumMigrator`, `MigrationResult`,
+    `MigrationRecord`, and version detection logic.
+  * `storage/__init__.py`: Exported migrator and result dataclasses.
+  * `tests/test_phase57_migration.py`: Comprehensive test suite (7 test cases).
+  * `docs/reports/PHASE_57_VERSIONED_MIGRATION_REPORT.txt`: This engineering report.
+
+3. ARCHITECTURAL CONTRACTS & INVARIANTS ENFORCED
+--------------------------------------------------------------------------------
+A. Idempotency & Replay Safety (I-14):
+   - Migrations can be run repeatedly without duplicating activities or checkpoints.
+   - `detect_version()` evaluates `.continuum/migration.json` and partitioned activity
+     directories to short-circuit redundant passes.
+
+B. Pre-Migration Recovery Point (I-14):
+   - `create_pre_migration_backup()` copies `state.json`, `history/`, and `handoffs/`
+     into timestamped directories under `.continuum/backup/`.
+   - `rollback()` safely restores from backup if post-migration verification fails.
+
+C. Preservation of IDs, Provenance & Lineage (I-18):
+   - Original checkpoint IDs (e.g. `chk_handoff_legacy_01`) are preserved.
+   - `ProvenanceRecord` records original model metadata, schema versions, and timestamps.
+   - Forward and backward compatibility maintained across all supported legacy schemas.
+
+D. Resilient Skipping of Corrupted Fixtures:
+   - Partial or unparseable files do not halt migration. They are logged in
+     `records_skipped` with human-readable error reasons.
+
+4. VERIFICATION TESTS AND REAL OUTCOMES
+--------------------------------------------------------------------------------
+Command: `pytest tests/test_phase57_migration.py -v`
+Outcome: 7 passed in 0.54s (100% success rate, 0 failures, 0 errors).
+
+Executed Test Cases:
+1. `test_fresh_install_migration`: PASS
+   Verifies empty workspace is recognized as fresh install, preview plan succeeds,
+   and storage is initialized directly to v1.4.0 with migration.json created.
+2. `test_upgrade_from_v1_0_0_legacy_workspace`: PASS
+   Verifies upgrading full v1.0.0 workspace with active state, history snapshots, and
+   handoff checkpoints; validates backup creation and post-migration store reads.
+3. `test_repeated_migration_idempotence`: PASS
+   Verifies that executing migration multiple times does not duplicate activities or
+   checkpoints and reports idempotent success.
+4. `test_malformed_input_handling_and_skipped_reporting`: PASS
+   Verifies that corrupted files are isolated and recorded in skipped_records while
+   valid records migrate losslessly.
+5. `test_unsupported_version_rejection`: PASS
+   Verifies that unknown schema versions (e.g. 99.0.0) raise `MigrationError` without
+   mutating workspace files.
+6. `test_recovery_and_rollback_on_failure`: PASS
+   Verifies that calling rollback restores the original state.json and directories
+   from pre-migration backup point.
+7. `test_interrupted_migration_safe_retry`: PASS
+   Verifies that re-running an interrupted/partial migration safely resumes and completes.
+
+5. REGRESSION & COMBINED SUITE OUTCOMES
+--------------------------------------------------------------------------------
+Command: `pytest tests/test_phase50_discovery.py tests/test_phase51_audit.py tests/test_phase52_baseline.py tests/test_phase53_activity.py tests/test_phase54_checkpoint.py tests/test_phase55_invariants_and_adr.py tests/test_phase56_persistence.py tests/test_phase57_migration.py`
+Outcome: 58 passed in 2.51s (100% success rate).
+
+6. ACCEPTANCE CHECKLIST
+--------------------------------------------------------------------------------
+[x] Actual schema versioning strategy implemented (fresh_install, 1.0.0-1.3.0, 1.4.0).
+[x] Dry-run preview mode implemented and verified.
+[x] Pre-migration recovery backup created before live data mutation.
+[x] ID, relations, and provenance preserved during legacy record conversion.
+[x] Repeat migration execution is strictly idempotent with zero data duplication.
+[x] Malformed records isolated and detailed in skipped_records.
+[x] Unsupported schema versions rejected cleanly with MigrationError.
+[x] Rollback and recovery verified.
+[x] 7 / 7 automated Phase 57 unit tests passing.
+[x] Zero third-party dependencies added (`dependencies = []`).
+
+7. FINAL STATUS & NEXT-PHASE PREREQUISITES
+--------------------------------------------------------------------------------
+Final Status: PASS
+Readiness for Next Phase: READY
+Prerequisites for Phase 58 (Consistency and Recovery):
+- Phase 56 `ActivityCheckpointStore` is operational.
+- Phase 57 `ContinuumMigrator` is verified.
+- Storage partition layout and migration paths are certified.
+- Ready to implement consistency checks, orphan detection, and repair mechanisms in Phase 58.
+================================================================================

@@ -1,0 +1,148 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING AUDIT & IMPLEMENTATION REPORT
+Milestone 36: Domain Model and Invariants
+Phase 54: Checkpoint and Provenance Model
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS (Ready for Phase 55)
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 54 implements the core Checkpoint and Provenance domain model for Continuum
+v1.4.0 "Universal Resume Anywhere". Conforming to invariants I-01 (Stable IDs),
+I-06 (Authoritative vs Derived Briefs), I-08 (Provenance Types), I-09 (Snapshots vs
+Live References), and I-18 (Schema Backward Compatibility), this model enables
+universal continuity across any AI model, tool, or IDE.
+
+Key capabilities delivered:
+- `UniversalCheckpoint` model with unique immutable ID (`chk_<hex>`), activity association
+  (`activity_id`), chronological timestamp, parent ancestry (`parent_checkpoint_id`),
+  and progress percentage.
+- First-class structured domain entities:
+  * `completed_work`: List of completed tasks with timestamps and evidence.
+  * `pending_actions`: Prioritized next tasks with blockers.
+  * `decisions`: Architectural and design rationales (`DecisionRecord`).
+  * `blockers`: Active impediment strings.
+  * `artifacts`: References to workspace files or code snapshots (`ArtifactReference`),
+    supporting `REFERENCE` (live file path/hash) and `SNAPSHOT` (inlined content).
+  * `provenance`: Granular origin tracking (`ProvenanceRecord`) distinguishing
+    USER_CONFIRMED, AUTOMATIC_CAPTURED, IMPORTED, and AI_GENERATED content.
+  * `resume_brief`: Derived, non-authoritative resume instructions (`ResumeBrief`).
+  * `structured_state`: Underlying 3-State engine snapshot dictionary.
+- Strict separation of authoritative fields from derived briefs: summaries or briefs
+  are never treated as primary ground truth (I-06).
+- Full backwards compatibility with legacy `HandoffCheckpoint` records (I-18).
+
+2. INSPECTED & CHANGED FILES
+--------------------------------------------------------------------------------
+- Inspected Existing Files:
+  * `core/state_models.py`: Legacy `HandoffCheckpoint`, `CanonicalProjectState`.
+  * `core/enums.py`: `ProvenanceType`, `ArtifactMode`.
+  * `core/activity.py`: Activity identity relationships.
+- Changed / Created Files:
+  * `core/checkpoint.py`: Implemented `UniversalCheckpoint`, `ProvenanceRecord`,
+    `DecisionRecord`, `ArtifactReference`, `ResumeBrief`, and `CheckpointValidationError`.
+  * `core/__init__.py`: Exported all checkpoint and provenance entities.
+  * `tests/test_phase54_checkpoint.py`: Comprehensive test suite containing 6 test cases.
+
+3. ARCHITECTURAL INVARIANTS ENFORCED
+--------------------------------------------------------------------------------
+A. Authoritative vs Derived Fields (I-06):
+   The authoritative ground truth of any checkpoint is stored in its structured
+   fields (`completed_work`, `pending_actions`, `decisions`, `blockers`, `artifacts`,
+   `structured_state`, `provenance`). The `resume_brief` is explicitly designated as
+   a derived summary (`is_authoritative = False` by default). Restoring an activity
+   or rebuilding state always hydrates from authoritative fields.
+
+B. Multi-Tier Provenance (I-08):
+   Every checkpoint and discrete item can declare provenance via `ProvenanceRecord`:
+   - `USER_CONFIRMED`: Directly entered or confirmed by the human engineer.
+   - `AUTOMATIC_CAPTURED`: Harvested by filesystem watchers, git status, or test runners.
+   - `IMPORTED`: Ingested from external chat transcripts, markdown exports, or tools.
+   - `AI_GENERATED`: Proposed or drafted by an LLM / AI agent.
+
+C. Live References vs Code Snapshots (I-09):
+   `ArtifactReference` tracks files using two modes:
+   - `ArtifactMode.REFERENCE`: Stores `file_path`, `content_hash`, and line numbers
+     pointing to live workspace files.
+   - `ArtifactMode.SNAPSHOT`: Stores explicit content in `snapshot_content` for
+     crash or disaster recovery when files may be deleted or modified.
+
+D. Legacy Backward Compatibility (I-18):
+   `UniversalCheckpoint.from_legacy_handoff_checkpoint()` provides lossless migration
+   from existing `core.state_models.HandoffCheckpoint` objects, extracting
+   `pending_actions`, `decisions`, and `completed_work` while setting provenance to
+   `AUTOMATIC_CAPTURED`.
+
+4. VERIFICATION TESTS AND REAL OUTCOMES
+--------------------------------------------------------------------------------
+Command: `pytest tests/test_phase54_checkpoint.py -v`
+Outcome: 6 passed in 0.05s (100% success rate, 0 failures, 0 errors).
+
+Executed Test Cases:
+1. `test_checkpoint_minimal_creation_and_defaults`: PASS
+   Verifies creating checkpoint with only required fields (`activity_id`). Optional
+   fields default to clean empty lists/dicts. Stable `chk_` ID and UTC timestamp generated.
+2. `test_checkpoint_full_serialization_roundtrip`: PASS
+   Verifies complete checkpoint with decisions, artifacts, provenance, pending actions,
+   and resume brief converts losslessly to and from dictionary format.
+3. `test_checkpoint_validation_rules`: PASS
+   Verifies validation checks: empty activity ID rejected, progress out of bounds (0-100)
+   rejected, invalid timestamps rejected, and reference mode without file path rejected.
+4. `test_authoritative_vs_derived_fields_isolation`: PASS
+   Verifies authoritative state is distinct from derived resume briefs, and mutating
+   brief does not alter authoritative structured state.
+5. `test_legacy_handoff_checkpoint_migration_compatibility`: PASS
+   Verifies legacy `core.state_models.HandoffCheckpoint` instances migrate seamlessly
+   into `UniversalCheckpoint` with legacy provenance recorded.
+6. `test_checkpoint_ancestry_and_provenance_immutability`: PASS
+   Verifies parent-child checkpoint lineages (`chk_root` -> `chk_child`), provenance
+   origin tracking, and stable IDs across modifications.
+
+5. COMBINED SUITE REGRESSION METRICS
+--------------------------------------------------------------------------------
+Command: `pytest tests/test_phase53_activity.py tests/test_phase54_checkpoint.py`
+Outcome: 15 passed in 0.13s (100%).
+
+Command: `python tests/run_all_tests.py`
+Outcome: 247 passed in 29.71s (100% success rate across all 247 test cases).
+
+6. FAILURE CASES TESTED
+--------------------------------------------------------------------------------
+- Empty or whitespace `activity_id`: Raised `CheckpointValidationError` (Verified).
+- Progress percentage < 0.0 or > 100.0: Raised `CheckpointValidationError` (Verified).
+- Invalid timestamp strings: Raised `CheckpointValidationError` (Verified).
+- `ArtifactMode.REFERENCE` missing `file_path`: Raised `CheckpointValidationError` (Verified).
+- Deserialization of corrupt dictionaries: Raised `CheckpointValidationError` (Verified).
+
+7. COMPATIBILITY IMPACT & LIMITATIONS
+--------------------------------------------------------------------------------
+- Backward Compatibility: Zero disruption to existing v1.0.0-v1.3.0 code. Legacy
+  `HandoffCheckpoint` continues to function, and bridge methods allow seamless conversion.
+- Limitations: Physical file persistence on disk and SQLite/JSONL indexes will be
+  constructed in Milestone 37 (Storage & Durability).
+
+8. ACCEPTANCE CHECKLIST
+--------------------------------------------------------------------------------
+[x] Checkpoint identity conforms to repository conventions (`chk_<hex>`).
+[x] Activity association, ancestry (`parent_checkpoint_id`), and progress defined.
+[x] Optional fields remain strictly optional with safe defaults.
+[x] 4-Tier provenance model implemented (USER, AUTO, IMPORT, AI).
+[x] Authoritative vs derived brief separation verified.
+[x] Live reference vs snapshot artifact modes supported.
+[x] Full roundtrip serialization (to_dict/from_dict) verified.
+[x] Legacy `HandoffCheckpoint` migration verified.
+[x] 15 / 15 combined Phase 53 & Phase 54 unit tests passing.
+[x] 247 / 247 total project regression suite passing.
+
+9. FINAL STATUS & NEXT-PHASE PREREQUISITES
+--------------------------------------------------------------------------------
+Final Status: PASS
+Readiness for Next Phase: READY
+Prerequisites for Phase 55 (Invariant Matrix and Architecture Decision):
+- Phase 53 Activity model is complete, tested, and certified.
+- Phase 54 Checkpoint model is complete, tested, and certified.
+- System is prepared for formal Invariant Matrix and Architecture Decision Record (ADR)
+  documentation in Phase 55.
+================================================================================

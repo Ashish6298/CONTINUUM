@@ -1,0 +1,104 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING AUDIT & IMPLEMENTATION REPORT
+Milestone 38: Capture and Resume
+Phase 61: Resume Center and Activity Detail
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS (Ready for Phase 62: Skippable Onboarding and Templates)
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 61 continues Milestone 38 (Capture and Resume) of Project Continuum v1.4.0
+"Universal Resume Anywhere". Conforming to invariants I-03 (Read-Only Historical Views),
+I-06 (Derived Briefs are Non-Authoritative), and I-12 (Non-Regression of Core Workflows),
+this phase implements:
+1. Dedicated Universal Resume Center UI:
+   - Recent & active activity listing with type, status, and last update time.
+   - Prominent Deterministic Resume Brief display answering the 6 core continuity questions.
+   - Checkpoint timeline evolution panel listing historical milestones.
+   - 1-Click "Copy Brief" and "Capture Checkpoint" action triggers.
+2. Unobtrusive Integrated Entry Points:
+   - Header button "⚡ Resume Center" smoothly flips the view between Prompt Composer
+     and Resume Center without page reloads or layout breakage.
+   - Keyboard accessibility: Enter/Space navigation on activity lists, ARIA listbox roles.
+3. Loading, Empty, and Error States:
+   - Displays animated loading indicator during data retrieval.
+   - Helpful empty states guiding users to create their first activity.
+   - Error banners handling network/storage failures.
+4. REST API Endpoint:
+   - `GET /api/v1/activities/detail?activity_id=<id>` returning activity metadata,
+     latest checkpoint, timeline summary, and preformatted markdown resume brief.
+5. End-to-End Continuity Gate Verification:
+   - Create activity -> capture checkpoint -> close/reopen process -> resume works
+     100% offline with zero external network or service requirements.
+
+2. INSPECTED & CHANGED FILES
+--------------------------------------------------------------------------------
+- Inspected Existing Files:
+  * `phasev1.4.0.txt`: Phase 61 specifications and gate criteria.
+  * `server/static/index.html`, `dashboard.js`, `dashboard.css`: Dashboard SPA.
+  * `server/routes.py`: REST dispatching and activity queries.
+  * `storage/activity_store.py`: Activity and checkpoint store operations.
+- Changed / Created Files:
+  * `server/routes.py`: Added `GET /api/v1/activities/detail` endpoint.
+  * `server/static/index.html`: Added Resume Center toggle and view markup.
+  * `server/static/dashboard.css`: Added Resume Center styling and timeline layout.
+  * `server/static/dashboard.js`: Added view switching and activity selection logic.
+  * `tests/test_phase61_resume_center.py`: 4 comprehensive unit and gate tests.
+  * `docs/reports/PHASE_61_RESUME_CENTER_REPORT.txt`: This engineering report.
+
+3. ARCHITECTURAL CONTRACTS & INVARIANTS ENFORCED
+--------------------------------------------------------------------------------
+A. Offline Continuity Gate:
+   - Verified that an activity created and snapshotted survives process termination and
+     can be resumed cleanly offline without external servers or accounts.
+
+B. Non-Regression of Core Workflows (I-12):
+   - Prompt composer, file tree selection, live diff toggles, token gauges, and export
+     features remain completely intact and unaffected.
+
+C. Read-Only Timeline Semantics (I-03):
+   - Browsing historical checkpoints in the timeline displays state and briefs
+     without mutating repository or activity state.
+
+4. AUTOMATED TESTS & VERIFICATION
+--------------------------------------------------------------------------------
+- Test Suite: `tests/test_phase61_resume_center.py`
+  * `test_create_checkpoint_reopen_resume_offline`: PASSED
+  * `test_activity_detail_with_multiple_checkpoints`: PASSED
+  * `test_empty_activity_detail_resilience`: PASSED
+  * `test_activity_not_found_error`: PASSED
+  * Outcomes: 4 passed in 0.40s (100% success).
+
+- Full Milestone 35–38 Checkpoint Verification:
+  * Phases 50–61 tests: 86 passed in 4.20s (100% success).
+
+- Full Repository Test Execution:
+  * `python tests/run_all_tests.py`
+  * Total Tests Run: 296
+  * Total Passed: 296
+  * Failures: 0
+  * Errors: 0
+  * Overall Status: SUCCESS (100% Passed in 32.706s)
+
+5. COMPATIBILITY & LIMITATIONS
+--------------------------------------------------------------------------------
+- Backward Compatibility:
+  * Existing REST endpoints and dashboard functions are 100% preserved.
+- Limitations:
+  * Checkpoint timeline in detail view currently displays top 50 recent records;
+    extended pagination for massive histories is implemented in Phase 63.
+
+6. ACCEPTANCE CHECKLIST & GATE EVALUATION
+--------------------------------------------------------------------------------
+[x] Add dedicated Resume Center with recent/active activities, status, last checkpoint, and prominent Resume Brief.
+[x] Expose detail and timeline evolution.
+[x] Integrate entry points into existing workflows without unrelated redesign.
+[x] Provide loading, empty, and error states.
+[x] Provide keyboard navigation (Enter/Space on activity items) and ARIA semantics.
+[x] Gate verification: create activity -> checkpoint -> leave/reopen -> resume works offline.
+
+FINAL STATUS: PASS
+READY FOR NEXT PHASE: YES (Proceed to Phase 62 — Skippable Onboarding and Templates)
+================================================================================

@@ -1,0 +1,91 @@
+================================================================================
+CONTINUUM PHASE 67 VERIFICATION AND AUDIT REPORT
+MILESTONE 40: ORGANIZATION AND LOCAL SEARCH
+PHASE 67: LIFECYCLE, TAGS, COLLECTIONS, RELATED ACTIVITIES
+================================================================================
+Date: 2026-10-16
+Branch: ashish
+Environment: Windows (PowerShell, Python 3.11 Standard Library Only)
+Dependencies: Zero External Dependencies
+
+1. OBJECTIVES AND SCOPE
+--------------------------------------------------------------------------------
+Phase 67 completes domain lifecycle transitions, tag organization, custom types,
+optional collections, recent/chronological sorting, related-activity links, and
+archived activity recovery.
+
+Key requirements addressed:
+1. Complete Status Lifecycle: ACTIVE, PAUSED, COMPLETED, ARCHIVED with explicit
+   valid transitions and strict rejection of illegal state jumps.
+2. Reopen & Recovery: COMPLETED activities can reopen to ACTIVE; ARCHIVED
+   activities remain fully preserved and recoverable to ACTIVE or PAUSED.
+3. Separation of Status and History: Lifecycle status changes update only activity
+   metadata and state indices; historical checkpoints are never deleted or rewritten.
+4. Custom Types & Dynamic Tags: Arbitrary activity types supported (built-in coding,
+   study, research, writing, work_task, ai_agent, plus custom string types).
+   Tags are normalized, lowercase, and deduplicated.
+5. Collections: Optional grouping of activities under named collections, with
+   aggregated counts and filtering.
+6. Related Activity Links: Bidirectional and unidirectional relations between
+   activities without contaminating historical state.
+7. Recent Sorting & Bounded Pagination: Sorting by 'recent' (updated_at desc),
+   'created', or 'title' with strict limit/offset bounds (I-17).
+8. REST Endpoints: Added handlers and routes for:
+   - GET /api/v1/activities (enhanced filtering, collections, tags, sorting)
+   - GET /api/v1/collections (aggregated collection statistics)
+   - GET /api/v1/tags (aggregated tag statistics)
+   - POST /api/v1/activities/transition (status lifecycle transitions)
+   - POST /api/v1/activities/update (metadata/tag/collection/type edits)
+   - POST /api/v1/activities/links (linking and unlinking activities)
+
+2. GATE VERIFICATION
+--------------------------------------------------------------------------------
+Phase 67 Gate: "completed/archived data remains recoverable."
+
+[VERIFIED - PASSED]
+- When an activity transitions from ACTIVE -> PAUSED -> COMPLETED -> ARCHIVED,
+  all historical checkpoints remain 100% accessible via list_checkpoints() and
+  get_checkpoint().
+- Archiving hides the activity from default listings unless explicitly requested
+  (include_archived=True or status=archived).
+- Restoring an archived activity restores its active status, leaves all historical
+  checkpoints unmutated, and re-indexes the activity in SQLite and JSON manifests.
+
+3. INVARIANTS COMPLIANCE
+--------------------------------------------------------------------------------
+- I-01 (Stable Local-Generated IDs): Renaming, updating tags/collections, or
+  transitioning lifecycle status preserves the immutable activity ID.
+- I-16 (Lifecycle History Preservation): Transitions strictly prohibit deleting
+  or modifying committed checkpoints.
+- I-17 (Bounded Queries & Pagination): All activity and collection queries
+  enforce default and clamped pagination limits.
+
+4. AUTOMATED TEST RESULTS
+--------------------------------------------------------------------------------
+Phase 67 Test Suite: tests/test_phase67_lifecycle.py
+Ran 11 tests in 0.711s:
+- test_status_transitions_and_history_preservation: PASSED
+- test_invalid_transitions_rejected: PASSED
+- test_custom_activity_types_and_tags: PASSED
+- test_collections_and_tags_aggregation: PASSED
+- test_recent_sorting_and_filtering: PASSED
+- test_related_activity_links: PASSED
+- test_http_get_activities_filtering_and_sorting: PASSED
+- test_http_collections_and_tags: PASSED
+- test_http_transition: PASSED
+- test_http_update: PASSED
+- test_http_links: PASSED
+
+Repository Full Test Suite: python tests/run_all_tests.py
+- Total Tests: 342
+- Passed: 342
+- Failures: 0
+- Errors: 0
+- Pass Rate: 100.0%
+
+5. READINESS FOR NEXT PHASE
+--------------------------------------------------------------------------------
+Is Phase 67 complete and ready for Phase 68? YES.
+Phase 68 (Search Source and Index) can now build upon the complete activity
+and checkpoint schema to implement local derived FTS search with secret redaction.
+================================================================================

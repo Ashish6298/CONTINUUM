@@ -14,6 +14,7 @@ import sys
 import traceback
 from typing import Any, Dict, List, Optional
 import urllib.parse
+import uuid
 
 from core.enums import TargetModel
 from core.state_models import CanonicalProjectState
@@ -21,8 +22,6 @@ from extractors.git_extractor import GitEvidenceExtractor
 from extractors.workspace_extractor import WorkspaceEvidenceExtractor
 from handoff.packager import UniversalHandoffPackager
 from handoff.adapters import get_adapter_for_model
-from pipeline.orchestrator import ContinuumPipeline
-from storage.manager import ContinuumStorageManager
 
 
 from server.auth import CorsOriginGuard, SessionAuthManager
@@ -134,11 +133,26 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         encoded = json.dumps(sanitized_data, indent=2, ensure_ascii=False).encode("utf-8")
         self.wfile.write(encoded)
 
-    def _send_error_response(self, message: str, status_code: int = 400, details: Optional[Any] = None) -> None:
-        """Sends a standardized JSON error response."""
+    def _send_error_response(
+        self,
+        message: str,
+        status_code: int = 400,
+        details: Optional[Any] = None,
+        what_failed: Optional[str] = None,
+        data_committed: bool = False,
+        next_steps: Optional[str] = None,
+    ) -> None:
+        """
+        Sends a standardized JSON error response adhering to Phase 82 Error UX.
+        Errors state what failed, whether data committed, and next steps without leaking secrets.
+        """
         error_payload = {
             "error": message,
             "status_code": status_code,
+            "what_failed": what_failed or message,
+            "data_committed": bool(data_committed),
+            "data_committed_statement": "YES (Data was committed to disk)" if data_committed else "NO (Authoritative records remain unchanged)",
+            "next_steps": next_steps or "Review the request parameters and retry.",
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if details is not None:
@@ -170,6 +184,36 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                     self.handle_get_diff()
                 elif path == "/api/checkpoints":
                     self.handle_get_checkpoints()
+                elif path in ("/api/v1/activities/branch/ancestry", "/api/activities/branch/ancestry"):
+                    self.handle_get_v1_activity_branch_ancestry(query)
+                elif path in ("/api/v1/activities/detail", "/api/activities/detail"):
+                    self.handle_get_v1_activity_detail(query)
+                elif path in ("/api/v1/activities", "/api/activities"):
+                    self.handle_get_v1_activities(query)
+                elif path in ("/api/v1/collections", "/api/collections"):
+                    self.handle_get_v1_collections()
+                elif path in ("/api/v1/tags", "/api/tags"):
+                    self.handle_get_v1_tags()
+                elif path in ("/api/v1/checkpoints/compare", "/api/checkpoints/compare"):
+                    self.handle_get_v1_checkpoints_compare(query)
+                elif path in ("/api/v1/checkpoints", "/api/checkpoints/v1"):
+                    self.handle_get_v1_checkpoints(query)
+                elif path in ("/api/v1/resume/brief", "/api/resume/brief"):
+                    self.handle_get_v1_resume_brief(query)
+                elif path in ("/api/v1/templates", "/api/templates"):
+                    self.handle_get_v1_templates()
+                elif path in ("/api/v1/search", "/api/search"):
+                    self.handle_get_v1_search(query)
+                elif path in ("/api/v1/artifacts/status", "/api/artifacts/status"):
+                    self.handle_get_v1_artifacts_status(query)
+                elif path in ("/api/v1/triggers/status", "/api/triggers/status", "/api/v1/triggers/config", "/api/triggers/config"):
+                    self.handle_get_v1_triggers_status()
+                elif path in ("/api/v1/retention/preview", "/api/retention/preview"):
+                    self.handle_get_v1_retention_preview(query)
+                elif path in ("/api/v1/privacy/config", "/api/privacy/config"):
+                    self.handle_get_v1_privacy_config()
+                elif path in ("/api/v1/backup/scope", "/api/backup/scope"):
+                    self.handle_get_v1_backup_scope()
                 else:
                     self._send_error_response(f"Endpoint not found: {path}", status_code=404)
             except Exception as e:
@@ -359,6 +403,58 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 self.handle_post_workspace_sync()
             elif path == "/api/checkpoints":
                 self.handle_post_checkpoint()
+            elif path in ("/api/v1/activities/transition", "/api/activities/transition"):
+                self.handle_post_v1_activity_transition()
+            elif path in ("/api/v1/activities/update", "/api/activities/update"):
+                self.handle_post_v1_activity_update()
+            elif path in ("/api/v1/activities/links", "/api/activities/links"):
+                self.handle_post_v1_activity_links()
+            elif path in ("/api/v1/activities/branch", "/api/activities/branch"):
+                self.handle_post_v1_activity_branch()
+            elif path in ("/api/v1/activities", "/api/activities"):
+                self.handle_post_v1_activity()
+            elif path in ("/api/v1/checkpoints/restore/preview", "/api/checkpoints/restore/preview"):
+                self.handle_post_v1_checkpoint_restore_preview()
+            elif path in ("/api/v1/checkpoints/restore/confirm", "/api/checkpoints/restore/confirm"):
+                self.handle_post_v1_checkpoint_restore_confirm()
+            elif path in ("/api/v1/checkpoints/compare", "/api/checkpoints/compare"):
+                self.handle_post_v1_checkpoints_compare()
+            elif path in ("/api/v1/checkpoints/manual", "/api/checkpoints/manual"):
+                self.handle_post_v1_checkpoint_manual()
+            elif path in ("/api/v1/search/rebuild", "/api/search/rebuild"):
+                self.handle_post_v1_search_rebuild()
+            elif path in ("/api/v1/search", "/api/search"):
+                self.handle_post_v1_search()
+            elif path in ("/api/v1/artifacts/inspect", "/api/artifacts/inspect"):
+                self.handle_post_v1_artifacts_inspect()
+            elif path in ("/api/v1/triggers/config", "/api/triggers/config"):
+                self.handle_post_v1_triggers_config()
+            elif path in ("/api/v1/triggers/evaluate", "/api/triggers/evaluate"):
+                self.handle_post_v1_triggers_evaluate()
+            elif path in ("/api/v1/retention/prune", "/api/retention/prune"):
+                self.handle_post_v1_retention_prune()
+            elif path in ("/api/v1/retention/undo", "/api/retention/undo"):
+                self.handle_post_v1_retention_undo()
+            elif path in ("/api/v1/privacy/config", "/api/privacy/config"):
+                self.handle_post_v1_privacy_config()
+            elif path in ("/api/v1/privacy/redact", "/api/privacy/redact"):
+                self.handle_post_v1_privacy_redact()
+            elif path in ("/api/v1/backup/create", "/api/backup/create"):
+                self.handle_post_v1_backup_create()
+            elif path in ("/api/v1/backup/verify", "/api/backup/verify"):
+                self.handle_post_v1_backup_verify()
+            elif path in ("/api/v1/import/preview", "/api/import/preview"):
+                self.handle_post_v1_import_preview()
+            elif path in ("/api/v1/import/execute", "/api/import/execute"):
+                self.handle_post_v1_import_execute()
+            elif path in ("/api/v1/import/recover", "/api/import/recover"):
+                self.handle_post_v1_import_recover()
+            elif path in ("/api/v1/transfer/package", "/api/transfer/package"):
+                self.handle_post_v1_transfer_package()
+            elif path in ("/api/v1/transfer/inspect", "/api/transfer/inspect"):
+                self.handle_post_v1_transfer_inspect()
+            elif path in ("/api/v1/transfer/import", "/api/transfer/import"):
+                self.handle_post_v1_transfer_import()
             else:
                 self._send_error_response(f"Endpoint not found: {path}", status_code=404)
         except Exception as e:
@@ -414,6 +510,937 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
+    def handle_get_v1_activities(self, query: Dict[str, List[str]]) -> None:
+        """GET /api/v1/activities - List activities with filtering, sorting, and bounded pagination (I-17, Phase 67)."""
+        from storage.activity_store import ActivityCheckpointStore
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        limit = int(query.get("limit", [50])[0])
+        offset = int(query.get("offset", [0])[0])
+
+        status_q = query.get("status", [None])[0]
+        status = None
+        if status_q:
+            parts = [s.strip().lower() for s in status_q.split(",") if s.strip()]
+            status = parts if len(parts) > 1 else (parts[0] if parts else None)
+
+        type_q = query.get("type", [None])[0] or query.get("activity_type", [None])[0]
+        act_type = type_q.strip().lower() if type_q else None
+
+        tag = query.get("tag", [None])[0]
+        collection = query.get("collection", [None])[0]
+
+        include_archived_param = str(query.get("include_archived", ["false"])[0]).lower()
+        include_archived = include_archived_param in ("true", "1", "yes")
+
+        sort_by = str(query.get("sort_by", ["recent"])[0]).lower()
+        order = str(query.get("order", ["desc"])[0]).lower()
+
+        activities, total = store.list_activities(
+            status=status,
+            activity_type=act_type,
+            tag=tag,
+            collection=collection,
+            include_archived=include_archived,
+            sort_by=sort_by,
+            order=order,
+            limit=limit,
+            offset=offset
+        )
+
+        self._send_json_response({
+            "status": "success",
+            "total": total,
+            "count": len(activities),
+            "limit": limit,
+            "offset": offset,
+            "sort_by": sort_by,
+            "order": order,
+            "activities": [a.to_dict() for a in activities],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_collections(self) -> None:
+        """GET /api/v1/collections - Aggregated collections and counts (Phase 67)."""
+        from storage.activity_store import ActivityCheckpointStore
+        store = ActivityCheckpointStore(self.workspace_root)
+        collections = store.list_collections()
+        self._send_json_response({
+            "status": "success",
+            "count": len(collections),
+            "collections": collections,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_tags(self) -> None:
+        """GET /api/v1/tags - Aggregated tags and usage counts (Phase 67)."""
+        from storage.activity_store import ActivityCheckpointStore
+        store = ActivityCheckpointStore(self.workspace_root)
+        tags = store.list_tags()
+        self._send_json_response({
+            "status": "success",
+            "count": len(tags),
+            "tags": tags,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_activity_detail(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/activities/detail (Phase 61)
+        Retrieves complete activity detail including metadata, latest checkpoint,
+        timeline summary, and prominent deterministic resume brief.
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+        from core.resume_generator import DeterministicResumeBriefGenerator
+        from core.checkpoint import UniversalCheckpoint
+
+        activity_id = query.get("activity_id", [None])[0] or query.get("id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            activity = store.get_activity(activity_id)
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+
+        limit = int(query.get("limit", [20])[0])
+        offset = int(query.get("offset", [0])[0])
+        order = query.get("order", ["desc"])[0]
+
+        checkpoints, total_chk = store.list_checkpoints(activity_id, limit=limit, offset=offset, order=order)
+        newest_checkpoints, _ = store.list_checkpoints(activity_id, limit=1, offset=0, order="desc")
+        latest_chk = newest_checkpoints[0] if newest_checkpoints else None
+
+        if not latest_chk:
+            latest_chk = UniversalCheckpoint.create_minimal(activity_id=activity.id, context=activity.description)
+
+        generator = DeterministicResumeBriefGenerator()
+        brief = generator.generate_brief(activity, latest_chk)
+
+        self._send_json_response({
+            "status": "success",
+            "activity": activity.to_dict(),
+            "total_checkpoints": total_chk,
+            "latest_checkpoint": latest_chk.to_dict(),
+            "timeline": [c.to_dict() for c in checkpoints],
+            "timeline_limit": limit,
+            "timeline_offset": offset,
+            "timeline_order": order,
+            "timeline_has_more": (offset + len(checkpoints)) < total_chk,
+            "is_read_only_history": True,
+            "resume_brief": brief.to_dict(),
+            "resume_brief_markdown": generator.format_brief_as_markdown(brief, activity_title=activity.title),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_checkpoints(self, query: Dict[str, List[str]]) -> None:
+        """GET /api/v1/checkpoints - List checkpoints for an activity."""
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+
+        activity_id = query.get("activity_id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        limit = int(query.get("limit", [50])[0])
+        offset = int(query.get("offset", [0])[0])
+        order = query.get("order", ["desc"])[0]
+
+        try:
+            checkpoints, total = store.list_checkpoints(activity_id, limit=limit, offset=offset, order=order)
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+
+        # Distinguish current state (newest checkpoint) from historical state
+        # In descending order, offset=0 index=0 is the current active state
+        self._send_json_response({
+            "status": "success",
+            "activity_id": activity_id,
+            "total": total,
+            "count": len(checkpoints),
+            "limit": limit,
+            "offset": offset,
+            "order": order,
+            "has_more": (offset + len(checkpoints)) < total,
+            "is_read_only_history": True,
+            "checkpoints": [c.to_dict() for c in checkpoints],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_checkpoints_compare(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/checkpoints/compare (Phase 64)
+        Compares two compatible checkpoints for changes, progress, work, actions, decisions, and notes.
+        Query params:
+        - base_checkpoint_id / base_id / from_id (required)
+        - target_checkpoint_id / target_id / to_id (required)
+        - activity_id (optional)
+        - format: 'json' (default) or 'markdown' / 'md'
+        - max_items: optional int (defaults to 100, clamped to 500)
+        - max_chars: optional int (defaults to 4000, clamped to 50000)
+        """
+        from storage.activity_store import ActivityCheckpointStore, CheckpointNotFoundError, ActivityNotFoundError
+        from core.checkpoint_diff import CheckpointDiffEngine
+
+        base_id = query.get("base_checkpoint_id", [None])[0] or query.get("base_id", [None])[0] or query.get("from_id", [None])[0] or query.get("base", [None])[0]
+        target_id = query.get("target_checkpoint_id", [None])[0] or query.get("target_id", [None])[0] or query.get("to_id", [None])[0] or query.get("target", [None])[0]
+
+        if not base_id or not target_id:
+            self._send_error_response("Query parameters 'base_checkpoint_id' and 'target_checkpoint_id' are required.", status_code=400)
+            return
+
+        activity_id = query.get("activity_id", [None])[0]
+        try:
+            max_items = max(1, min(int(query.get("max_items", [100])[0]), 500))
+        except (ValueError, TypeError):
+            max_items = 100
+        try:
+            max_chars = max(100, min(int(query.get("max_chars", [4000])[0]), 50000))
+        except (ValueError, TypeError):
+            max_chars = 4000
+        fmt = str(query.get("format", ["json"])[0]).lower()
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            base_chk = store.get_checkpoint(base_id, activity_id=activity_id)
+        except (CheckpointNotFoundError, ActivityNotFoundError):
+            self._send_error_response(f"Base checkpoint '{base_id}' not found.", status_code=404)
+            return
+
+        try:
+            target_chk = store.get_checkpoint(target_id, activity_id=activity_id)
+        except (CheckpointNotFoundError, ActivityNotFoundError):
+            self._send_error_response(f"Target checkpoint '{target_id}' not found.", status_code=404)
+            return
+
+        engine = CheckpointDiffEngine(
+            max_list_items=max_items,
+            max_text_diff_chars=max_chars,
+            allow_cross_activity=False,
+        )
+        diff_result = engine.compare(base_chk, target_chk)
+
+        if fmt in ("md", "markdown", "text"):
+            self._set_headers(200, "text/markdown; charset=utf-8")
+            self.wfile.write(diff_result.markdown_diff.encode("utf-8"))
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "diff": diff_result.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_checkpoints_compare(self) -> None:
+        """
+        POST /api/v1/checkpoints/compare (Phase 64)
+        Programmatic endpoint comparing two checkpoints supplied by ID or body.
+        """
+        from storage.activity_store import ActivityCheckpointStore, CheckpointNotFoundError, ActivityNotFoundError
+        from core.checkpoint_diff import CheckpointDiffEngine
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        base_id = data.get("base_checkpoint_id") or data.get("base_id") or data.get("from_id") or data.get("base")
+        target_id = data.get("target_checkpoint_id") or data.get("target_id") or data.get("to_id") or data.get("target")
+
+        if not base_id or not target_id:
+            self._send_error_response("Fields 'base_checkpoint_id' and 'target_checkpoint_id' are required.", status_code=400)
+            return
+
+        activity_id = data.get("activity_id")
+        try:
+            max_items = max(1, min(int(data.get("max_items", 100)), 500))
+        except (ValueError, TypeError):
+            max_items = 100
+        try:
+            max_chars = max(100, min(int(data.get("max_chars", 4000)), 50000))
+        except (ValueError, TypeError):
+            max_chars = 4000
+        fmt = str(data.get("format", "json")).lower()
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            base_chk = store.get_checkpoint(base_id, activity_id=activity_id)
+        except (CheckpointNotFoundError, ActivityNotFoundError):
+            self._send_error_response(f"Base checkpoint '{base_id}' not found.", status_code=404)
+            return
+
+        try:
+            target_chk = store.get_checkpoint(target_id, activity_id=activity_id)
+        except (CheckpointNotFoundError, ActivityNotFoundError):
+            self._send_error_response(f"Target checkpoint '{target_id}' not found.", status_code=404)
+            return
+
+        engine = CheckpointDiffEngine(
+            max_list_items=max_items,
+            max_text_diff_chars=max_chars,
+            allow_cross_activity=False,
+        )
+        diff_result = engine.compare(base_chk, target_chk)
+
+        if fmt in ("md", "markdown", "text"):
+            self._set_headers(200, "text/markdown; charset=utf-8")
+            self.wfile.write(diff_result.markdown_diff.encode("utf-8"))
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "diff": diff_result.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_resume_brief(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/resume/brief (Phase 60)
+        Generates a deterministic Resume Brief for an activity and its latest checkpoint.
+        Query params:
+        - activity_id: required
+        - checkpoint_id: optional (defaults to latest checkpoint of activity)
+        - format: 'json' (default) or 'markdown'
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError, CheckpointNotFoundError
+        from core.resume_generator import DeterministicResumeBriefGenerator
+
+        activity_id = query.get("activity_id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            activity = store.get_activity(activity_id)
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+
+        checkpoint_id = query.get("checkpoint_id", [None])[0]
+        checkpoint = None
+        if checkpoint_id:
+            try:
+                checkpoint = store.get_checkpoint(checkpoint_id, activity_id=activity_id)
+            except CheckpointNotFoundError:
+                self._send_error_response(f"Checkpoint '{checkpoint_id}' not found.", status_code=404)
+                return
+        else:
+            # Load latest checkpoint for activity
+            checkpoints, total = store.list_checkpoints(activity_id, limit=1, offset=0)
+            if checkpoints:
+                checkpoint = checkpoints[0]
+
+        if not checkpoint:
+            # If activity has no checkpoints yet, fabricate a minimal checkpoint representing initial activity state
+            from core.checkpoint import UniversalCheckpoint
+            checkpoint = UniversalCheckpoint.create_minimal(activity_id=activity.id, context=activity.description)
+
+        generator = DeterministicResumeBriefGenerator()
+        brief = generator.generate_brief(activity, checkpoint)
+
+        resp_format = query.get("format", ["json"])[0].lower()
+        if resp_format in ("md", "markdown", "text"):
+            markdown_content = generator.format_brief_as_markdown(brief, activity_title=activity.title)
+            self._set_headers(200, "text/markdown; charset=utf-8")
+            self.wfile.write(markdown_content.encode("utf-8"))
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "activity_id": activity.id,
+            "activity_title": activity.title,
+            "checkpoint_id": checkpoint.id,
+            "resume_brief": brief.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_templates(self) -> None:
+        """
+        GET /api/v1/templates (Phase 62)
+        Lists all available built-in and custom activity templates.
+        """
+        from core.activity import ACTIVITY_TEMPLATES, ActivityType
+
+        templates = []
+        for act_type, tpl in ACTIVITY_TEMPLATES.items():
+            key = act_type.value if hasattr(act_type, "value") else str(act_type)
+            templates.append({
+                "type": key,
+                "title": tpl.get("title", key.title()),
+                "description": tpl.get("description", ""),
+                "tags": list(tpl.get("tags", [])),
+                "default_steps": list(tpl.get("default_steps", [])),
+            })
+
+        # Append custom template option
+        templates.append({
+            "type": "custom",
+            "title": "Custom Activity",
+            "description": "Flexible blank activity for user-defined domains and workflows.",
+            "tags": ["custom"],
+            "default_steps": [],
+        })
+
+        self._send_json_response({
+            "status": "success",
+            "count": len(templates),
+            "templates": templates,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_activity(self) -> None:
+        """POST /api/v1/activities - Create a new Activity."""
+        import uuid
+        from storage.activity_store import ActivityCheckpointStore
+        from core.activity import Activity, ActivityType, ActivityStatus, ActivityValidationError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        title = data.get("title")
+        if not title or not isinstance(title, str) or not title.strip():
+            self._send_error_response("Field 'title' is required.", status_code=400)
+            return
+
+        type_str = data.get("activity_type") or data.get("type", "coding")
+        if isinstance(type_str, str) and type_str.strip():
+            try:
+                act_type = ActivityType(type_str.strip().lower()).value
+            except ValueError:
+                act_type = type_str.strip().lower()
+        else:
+            act_type = ActivityType.CODING.value
+
+        status_str = data.get("status", "active")
+        try:
+            act_status = ActivityStatus(str(status_str).lower())
+        except (ValueError, AttributeError):
+            act_status = ActivityStatus.ACTIVE
+
+        activity = Activity(
+            id=data.get("id") or f"act_{uuid.uuid4().hex[:12]}",
+            title=title.strip(),
+            activity_type=act_type,
+            status=act_status,
+            description=data.get("description", ""),
+            tags=list(data.get("tags", [])),
+            collection=data.get("collection"),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            created = store.create_activity(activity)
+        except Exception as e:
+            self._send_error_response(f"Failed to create activity: {e}", status_code=500)
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "message": f"Activity '{created.title}' created successfully.",
+            "activity": created.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }, status_code=201)
+
+    def handle_post_v1_activity_transition(self) -> None:
+        """
+        POST /api/v1/activities/transition (Phase 67)
+        Validates and applies a status transition (active, paused, completed, archived).
+        Completed can reopen to active; archived remains recoverable and can be restored.
+        Status changes never delete or rewrite history.
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+        from core.activity import InvalidStatusTransitionError, ActivityValidationError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        activity_id = data.get("activity_id") or data.get("id")
+        if not activity_id:
+            self._send_error_response("Field 'activity_id' is required.", status_code=400)
+            return
+
+        target_status = data.get("target_status") or data.get("status")
+        action = data.get("action")
+        if action == "archive":
+            target_status = "archived"
+        elif action in ("restore", "reopen"):
+            target_status = target_status or "active"
+
+        if not target_status:
+            self._send_error_response("Field 'target_status' or 'status' is required.", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            updated = store.transition_activity_status(activity_id, target_status)
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+        except InvalidStatusTransitionError as e:
+            self._send_error_response(f"Invalid status transition: {e}", status_code=422)
+            return
+        except ActivityValidationError as e:
+            self._send_error_response(f"Activity validation error: {e}", status_code=400)
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "message": f"Activity '{activity_id}' transitioned to '{updated.status.value}'.",
+            "activity": updated.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_activity_update(self) -> None:
+        """
+        POST /api/v1/activities/update (Phase 67)
+        Updates activity title, description, tags, collection, and custom activity_type.
+        Preserves stable activity ID (I-01) and historical checkpoints.
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+        from core.activity import ActivityValidationError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        activity_id = data.get("activity_id") or data.get("id")
+        if not activity_id:
+            self._send_error_response("Field 'activity_id' is required.", status_code=400)
+            return
+
+        title = data.get("title")
+        description = data.get("description")
+        tags = data.get("tags")
+        collection = data.get("collection")
+        activity_type = data.get("activity_type") or data.get("type")
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            updated = store.update_activity_details(
+                activity_id=activity_id,
+                title=title,
+                description=description,
+                tags=tags,
+                collection=collection,
+                activity_type=activity_type
+            )
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+        except ActivityValidationError as e:
+            self._send_error_response(f"Validation error: {e}", status_code=400)
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "message": f"Activity '{activity_id}' updated successfully.",
+            "activity": updated.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_activity_links(self) -> None:
+        """
+        POST /api/v1/activities/links (Phase 67)
+        Manages related-activity links (link / unlink, bidirectional).
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        source_id = data.get("source_activity_id") or data.get("source_id") or data.get("activity_id")
+        target_id = data.get("target_activity_id") or data.get("target_id") or data.get("related_id")
+        if not source_id or not target_id:
+            self._send_error_response("Fields 'source_activity_id' and 'target_activity_id' are required.", status_code=400)
+            return
+
+        action = str(data.get("action", "link")).lower()
+        bidirectional = bool(data.get("bidirectional", True))
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            if action in ("unlink", "remove", "delete"):
+                source_act, target_act = store.unlink_activities(source_id, target_id, bidirectional=bidirectional)
+                msg = f"Successfully unlinked '{source_id}' and '{target_id}'."
+            else:
+                source_act, target_act = store.link_activities(source_id, target_id, bidirectional=bidirectional)
+                msg = f"Successfully linked '{source_id}' and '{target_id}'."
+        except ActivityNotFoundError as e:
+            self._send_error_response(str(e), status_code=404)
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "message": msg,
+            "source_activity": source_act.to_dict(),
+            "target_activity": target_act.to_dict() if target_act else None,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_activity_branch(self) -> None:
+        """
+        POST /api/v1/activities/branch (Phase 65)
+        Creates an independent continuation activity branching from an existing checkpoint.
+        Reuses artifact references without file duplication, records branch ancestry,
+        and leaves the source branch strictly unmutated.
+        """
+        from storage.activity_store import (
+            ActivityCheckpointStore,
+            ActivityNotFoundError,
+            CheckpointNotFoundError,
+            CheckpointValidationError,
+        )
+        from core.invariants import CommitFailedError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        source_chk_id = data.get("source_checkpoint_id") or data.get("checkpoint_id")
+        if not source_chk_id or not isinstance(source_chk_id, str) or not source_chk_id.strip():
+            self._send_error_response("Field 'source_checkpoint_id' is required.", status_code=400)
+            return
+
+        new_title = data.get("title") or data.get("new_title")
+        branch_name = data.get("branch_name") or "branch"
+        description = data.get("description")
+        tags = data.get("tags")
+        if tags is not None and not isinstance(tags, list):
+            tags = [str(tags)]
+
+        new_activity_id = data.get("new_activity_id") or data.get("activity_id")
+        new_checkpoint_id = data.get("new_checkpoint_id")
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            new_activity, new_checkpoint = store.branch_from_checkpoint(
+                source_checkpoint_id=source_chk_id.strip(),
+                new_title=new_title,
+                branch_name=branch_name,
+                description=description,
+                tags=tags,
+                new_activity_id=new_activity_id,
+                new_checkpoint_id=new_checkpoint_id,
+            )
+            self._send_json_response({
+                "status": "success",
+                "message": f"Successfully branched activity '{new_activity.title}' from checkpoint '{source_chk_id}'.",
+                "activity": new_activity.to_dict(),
+                "checkpoint": new_checkpoint.to_dict(),
+                "branch_origin": {
+                    "source_activity_id": new_activity.metadata.get("branch_source_activity_id"),
+                    "source_checkpoint_id": source_chk_id,
+                    "branch_name": branch_name,
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, status_code=201)
+        except (CheckpointNotFoundError, ActivityNotFoundError) as e:
+            self._send_error_response(
+                str(e),
+                status_code=404,
+                what_failed=f"Branch source not found: {e}",
+                data_committed=False,
+                next_steps="Verify that the source activity and checkpoint exist before branching.",
+            )
+        except (CheckpointValidationError, ValueError) as e:
+            self._send_error_response(
+                str(e),
+                status_code=400,
+                what_failed=f"Branch validation failed: {e}",
+                data_committed=False,
+                next_steps="Check branch parameters and retry with valid identifiers. Source timeline is unchanged.",
+            )
+        except CommitFailedError as e:
+            self._send_error_response(
+                f"Branch commit failed: {e}",
+                status_code=500,
+                details=getattr(e, "internal_details", None),
+                what_failed=f"Branch creation commit failed: {e}",
+                data_committed=False,
+                next_steps="Ensure workspace directory is writable and disk space is available, then retry. Source timeline is unchanged.",
+            )
+        except Exception as e:
+            self._send_error_response(
+                f"Internal server error: {e}",
+                status_code=500,
+                details=traceback.format_exc(),
+                what_failed=f"Branch operation failed with unexpected error: {e}",
+                data_committed=False,
+                next_steps="Review server logs or restart the daemon. Source records were not modified.",
+            )
+
+    def handle_get_v1_activity_branch_ancestry(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/activities/branch/ancestry (Phase 65)
+        Returns the branch lineage and origin details for an activity.
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError
+
+        activity_id = query.get("activity_id", [None])[0] or query.get("id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            ancestry = store.get_branch_ancestry(activity_id)
+            self._send_json_response({
+                "status": "success",
+                "ancestry": ancestry,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+        except Exception as e:
+            self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
+
+    def handle_post_v1_checkpoint_restore_preview(self) -> None:
+        """
+        POST /api/v1/checkpoints/restore/preview (Phase 66)
+        Pre-flight explanation endpoint for restore operations.
+        Analyzes delta between current active state and historical target checkpoint.
+        """
+        from storage.activity_store import (
+            ActivityCheckpointStore,
+            ActivityNotFoundError,
+            CheckpointNotFoundError,
+            IncompatibleRestoreError,
+            CheckpointValidationError,
+        )
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        target_chk_id = data.get("target_checkpoint_id") or data.get("checkpoint_id")
+        if not target_chk_id or not isinstance(target_chk_id, str) or not target_chk_id.strip():
+            self._send_error_response("Field 'target_checkpoint_id' is required.", status_code=400)
+            return
+
+        activity_id = data.get("activity_id")
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            preview = store.preview_restore(
+                target_checkpoint_id=target_chk_id.strip(),
+                activity_id=activity_id.strip() if activity_id else None,
+            )
+            self._send_json_response({
+                "status": "success",
+                "preview": preview,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+        except (CheckpointNotFoundError, ActivityNotFoundError) as e:
+            self._send_error_response(str(e), status_code=404)
+        except (IncompatibleRestoreError, CheckpointValidationError, ValueError) as e:
+            self._send_error_response(str(e), status_code=400)
+        except Exception as e:
+            self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
+
+    def handle_post_v1_checkpoint_restore_confirm(self) -> None:
+        """
+        POST /api/v1/checkpoints/restore/confirm (Phase 66)
+        Executes a confirmed restore operation to a historical checkpoint.
+        Appends a restored state checkpoint, preserving all intermediate/newer history (I-03).
+        """
+        from storage.activity_store import (
+            ActivityCheckpointStore,
+            ActivityNotFoundError,
+            CheckpointNotFoundError,
+            IncompatibleRestoreError,
+            CheckpointValidationError,
+        )
+        from core.invariants import CommitFailedError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        target_chk_id = data.get("target_checkpoint_id") or data.get("checkpoint_id")
+        if not target_chk_id or not isinstance(target_chk_id, str) or not target_chk_id.strip():
+            self._send_error_response("Field 'target_checkpoint_id' is required.", status_code=400)
+            return
+
+        activity_id = data.get("activity_id")
+        reason = data.get("reason")
+        expected_head = data.get("expected_head_checkpoint_id") or data.get("expected_head")
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            act, restored_chk = store.confirm_restore(
+                target_checkpoint_id=target_chk_id.strip(),
+                activity_id=activity_id.strip() if activity_id else None,
+                reason=reason,
+                expected_head_checkpoint_id=expected_head,
+            )
+            self._send_json_response({
+                "status": "success",
+                "message": f"Successfully restored state from checkpoint '{target_chk_id}'. Newer history preserved.",
+                "activity": act.to_dict(),
+                "restored_checkpoint": restored_chk.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, status_code=201)
+        except (CheckpointNotFoundError, ActivityNotFoundError) as e:
+            self._send_error_response(
+                str(e),
+                status_code=404,
+                what_failed=f"Restore target not found: {e}",
+                data_committed=False,
+                next_steps="Verify that target checkpoint exists in the activity timeline. Existing workspace records were not altered.",
+            )
+        except (IncompatibleRestoreError, CheckpointValidationError, ValueError) as e:
+            self._send_error_response(
+                str(e),
+                status_code=400,
+                what_failed=f"Restore aborted due to validation failure: {e}",
+                data_committed=False,
+                next_steps="Review restore parameters or select a compatible historical checkpoint. Existing records were NOT altered.",
+            )
+        except CommitFailedError as e:
+            self._send_error_response(
+                f"Restore failed: {e}",
+                status_code=409 if "Concurrency" in str(e) else 500,
+                details=getattr(e, "internal_details", None),
+                what_failed=f"Restore commit failed: {e}",
+                data_committed=False,
+                next_steps="Refresh timeline to check for concurrent activity, then retry. Workspace state was preserved.",
+            )
+        except Exception as e:
+            self._send_error_response(
+                f"Internal server error: {e}",
+                status_code=500,
+                details=traceback.format_exc(),
+                what_failed=f"Restore operation encountered unexpected error: {e}",
+                data_committed=False,
+                next_steps="Review server logs or restart the daemon. Workspace records were not modified.",
+            )
+
+    def handle_post_v1_checkpoint_manual(self) -> None:
+        """
+        POST /api/v1/checkpoints/manual (Phase 59)
+        Manual checkpoint capture endpoint with privacy sanitization and double-submit defense.
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError, DanglingReferenceError
+        from core.manual_capture import (
+            ManualCaptureEngine,
+            ManualCaptureRequest,
+            DuplicateSubmissionError,
+            CaptureStorageError,
+        )
+        from core.checkpoint import CheckpointValidationError
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            data = json.loads(body_raw)
+        except Exception:
+            self._send_error_response("Malformed JSON body.", status_code=400)
+            return
+
+        try:
+            capture_req = ManualCaptureRequest.from_dict(data)
+        except CheckpointValidationError as e:
+            self._send_error_response(f"Validation error: {e}", status_code=400)
+            return
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        engine = ManualCaptureEngine(store, workspace_root=self.workspace_root)
+
+        try:
+            response = engine.capture_checkpoint(capture_req)
+            self._send_json_response({
+                "status": "success",
+                "message": f"Checkpoint {response.checkpoint_id} committed successfully.",
+                "data": response.to_dict(),
+            }, status_code=201)
+        except DuplicateSubmissionError as e:
+            self._send_error_response(str(e), status_code=409)
+        except ActivityNotFoundError as e:
+            self._send_error_response(str(e), status_code=404)
+        except DanglingReferenceError as e:
+            self._send_error_response(str(e), status_code=400)
+        except CaptureStorageError as e:
+            self._send_error_response(f"Persistence error: {e}", status_code=500)
+        except Exception as e:
+            self._send_error_response(f"Internal server error: {e}", status_code=500, details=traceback.format_exc())
+
     def handle_post_workspace_sync(self) -> None:
         """
         POST /api/workspace/sync (Phase 44)
@@ -448,6 +1475,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         create_backup = bool(data.get("create_backup", True))
         source_model = str(data.get("source", "browser"))
 
+        from storage.manager import ContinuumStorageManager
         storage = ContinuumStorageManager(str(self.workspace_root))
         storage.initialize_storage()
 
@@ -563,6 +1591,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         Filters out high-risk files (.env, *.key, etc.).
         """
         force_refresh = query.get("refresh", ["0"])[0] in ("1", "true", "yes")
+        from storage.manager import ContinuumStorageManager
         storage = ContinuumStorageManager(str(self.workspace_root))
 
         if not force_refresh and storage.state_exists():
@@ -628,6 +1657,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 pass  # Fall through to full pipeline scan on error
 
         # Full pipeline scan (slow, ~25s) - used on first load or ?refresh=1
+        from pipeline.orchestrator import ContinuumPipeline
         pipeline = ContinuumPipeline(self.workspace_root)
         state, summary, _ = pipeline.run_full_analysis()
 
@@ -832,12 +1862,14 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
         target_model = model_map.get(target_model_str, TargetModel.UNIVERSAL)
 
         # Load state from cache (fast ~50ms) or run full pipeline scan if needed
+        from storage.manager import ContinuumStorageManager
         storage = ContinuumStorageManager(str(self.workspace_root))
         if storage.state_exists():
             try:
                 state = storage.load_state(validate=False)
             except Exception:
                 # Fall back to pipeline scan if state is corrupted
+                from pipeline.orchestrator import ContinuumPipeline
                 pipeline = ContinuumPipeline(self.workspace_root)
                 state, _, _ = pipeline.run_full_analysis(
                     task_description=task_description,
@@ -845,6 +1877,7 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
                 )
         else:
             # No cached state - run pipeline and persist it
+            from pipeline.orchestrator import ContinuumPipeline
             pipeline = ContinuumPipeline(self.workspace_root)
             state, _, _ = pipeline.run_full_analysis(
                 task_description=task_description,
@@ -936,4 +1969,898 @@ class ContinuumApiHandler(BaseHTTPRequestHandler):
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         self._send_json_response(payload)
+
+    def handle_get_v1_search(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/search (Phase 68)
+        Executes offline full-text search across activities and checkpoints using FTS5.
+        """
+        from storage.activity_store import ActivityCheckpointStore
+
+        q_str = query.get("q", [None])[0] or query.get("query", [None])[0]
+        record_type = query.get("record_type", [None])[0]
+        activity_id = query.get("activity_id", [None])[0]
+        status = query.get("status", [None])[0]
+        activity_type = query.get("activity_type", [None])[0] or query.get("type", [None])[0]
+        tag = query.get("tag", [None])[0] or query.get("tags", [None])[0]
+        collection = query.get("collection", [None])[0]
+        date_from = query.get("date_from", [None])[0]
+        date_to = query.get("date_to", [None])[0]
+
+        try:
+            limit = int(query.get("limit", [20])[0])
+        except (ValueError, TypeError):
+            limit = 20
+
+        try:
+            offset = int(query.get("offset", [0])[0])
+        except (ValueError, TypeError):
+            offset = 0
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            results, total = store.search(
+                query=q_str,
+                record_type=record_type,
+                activity_id=activity_id,
+                status=status,
+                activity_type=activity_type,
+                tag=tag,
+                collection=collection,
+                date_from=date_from,
+                date_to=date_to,
+                limit=limit,
+                offset=offset
+            )
+            self._send_json_response({
+                "status": "success",
+                "query": q_str or "",
+                "total": total,
+                "count": len(results),
+                "limit": limit,
+                "offset": offset,
+                "results": [r.to_dict() if hasattr(r, "to_dict") else r for r in results],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(
+                f"Search query failed: {str(e)}",
+                status_code=500,
+                what_failed=f"Search execution failed: {str(e)}",
+                data_committed=False,
+                next_steps="Try rebuilding the search index or adjusting query filters. Authoritative records remain intact.",
+            )
+
+    def handle_post_v1_search(self) -> None:
+        """
+        POST /api/v1/search (Phase 68)
+        Programmatic full-text search endpoint accepting JSON payload.
+        """
+        from storage.activity_store import ActivityCheckpointStore
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        data = {}
+        if content_len > 0:
+            body_raw = self.rfile.read(content_len).decode("utf-8")
+            try:
+                data = json.loads(body_raw)
+            except Exception:
+                self._send_error_response("Malformed JSON body.", status_code=400)
+                return
+
+        q_str = data.get("query") or data.get("q")
+        record_type = data.get("record_type")
+        activity_id = data.get("activity_id")
+        status = data.get("status")
+        activity_type = data.get("activity_type") or data.get("type")
+        tag = data.get("tag") or data.get("tags")
+        collection = data.get("collection")
+        date_from = data.get("date_from")
+        date_to = data.get("date_to")
+        limit = int(data.get("limit", 20))
+        offset = int(data.get("offset", 0))
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            results, total = store.search(
+                query=q_str,
+                record_type=record_type,
+                activity_id=activity_id,
+                status=status,
+                activity_type=activity_type,
+                tag=tag,
+                collection=collection,
+                date_from=date_from,
+                date_to=date_to,
+                limit=limit,
+                offset=offset
+            )
+            self._send_json_response({
+                "status": "success",
+                "query": q_str or "",
+                "total": total,
+                "count": len(results),
+                "limit": limit,
+                "offset": offset,
+                "results": [r.to_dict() if hasattr(r, "to_dict") else r for r in results],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(
+                f"Search query failed: {str(e)}",
+                status_code=500,
+                what_failed=f"Search execution failed: {str(e)}",
+                data_committed=False,
+                next_steps="Try rebuilding the search index or adjusting query filters. Authoritative records remain intact.",
+            )
+
+    def handle_post_v1_search_rebuild(self) -> None:
+        """
+        POST /api/v1/search/rebuild (Phase 68)
+        Rebuilds derived search FTS5 index from authoritative filesystem data (I-06).
+        """
+        from storage.activity_store import ActivityCheckpointStore
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            indexed_count = store.rebuild_search_index()
+            self._send_json_response({
+                "status": "success",
+                "message": f"Successfully rebuilt search index with {indexed_count} record(s).",
+                "indexed_count": indexed_count,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(
+                f"Failed to rebuild search index: {str(e)}",
+                status_code=500,
+                what_failed=f"Search index rebuild failed: {str(e)}",
+                data_committed=False,
+                next_steps="Verify workspace directory permissions and disk space. Authoritative activity records are unaffected.",
+            )
+
+    def handle_post_v1_artifacts_inspect(self) -> None:
+        """
+        POST /api/v1/artifacts/inspect (Phase 70)
+        Inspects one or more workspace file paths or URIs to classify whether they
+        can be linked as references or captured as snapshots.
+        Enforces size bounds, privacy exclusions (I-10), and directory guards.
+        """
+        from core.artifact_manager import ArtifactManager
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        data = {}
+        if content_len > 0:
+            body_raw = self.rfile.read(content_len).decode("utf-8")
+            try:
+                data = json.loads(body_raw)
+            except Exception:
+                self._send_error_response("Malformed JSON body.", status_code=400)
+                return
+
+        path = data.get("path") or data.get("path_or_uri")
+        paths = data.get("paths", [])
+        if path and path not in paths:
+            paths = [path] + list(paths)
+
+        if not paths:
+            self._send_error_response("Missing 'path' or 'paths' in request body.", status_code=400)
+            return
+
+        results = []
+        for p in paths:
+            if not isinstance(p, str) or not p.strip():
+                continue
+            inspection = ArtifactManager.inspect_resource(p.strip(), self.workspace_root)
+            results.append(inspection)
+
+        self._send_json_response({
+            "status": "success",
+            "count": len(results),
+            "artifacts": results,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_artifacts_status(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/artifacts/status (Phase 70)
+        Resolves the current status of artifacts in a checkpoint or activity.
+        Determines whether references exist or are missing, and whether snapshots
+        remain valid or have diverged.
+        Query params:
+        - activity_id: required
+        - checkpoint_id: optional (if omitted, uses latest checkpoint)
+        """
+        from storage.activity_store import ActivityCheckpointStore, ActivityNotFoundError, CheckpointNotFoundError
+        from core.artifact_manager import ArtifactManager
+
+        activity_id = query.get("activity_id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        checkpoint_id = query.get("checkpoint_id", [None])[0]
+
+        store = ActivityCheckpointStore(self.workspace_root)
+        try:
+            if checkpoint_id:
+                chk = store.get_checkpoint(activity_id, checkpoint_id)
+            else:
+                chk = store.get_latest_checkpoint(activity_id)
+                if not chk:
+                    self._send_error_response(f"No checkpoints found for activity '{activity_id}'.", status_code=404)
+                    return
+        except ActivityNotFoundError:
+            self._send_error_response(f"Activity '{activity_id}' not found.", status_code=404)
+            return
+        except CheckpointNotFoundError:
+            self._send_error_response(f"Checkpoint '{checkpoint_id}' not found in activity '{activity_id}'.", status_code=404)
+            return
+
+        resolved_artifacts = []
+        for art in (chk.artifacts or []):
+            status_info = ArtifactManager.resolve_artifact_status(art, self.workspace_root)
+            resolved_artifacts.append(status_info)
+
+        self._send_json_response({
+            "status": "success",
+            "activity_id": activity_id,
+            "checkpoint_id": chk.id,
+            "count": len(resolved_artifacts),
+            "artifacts": resolved_artifacts,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_triggers_status(self) -> None:
+        """
+        GET /api/v1/triggers/status (Phase 71)
+        Returns current trigger configuration and recent trigger evaluation history.
+        """
+        from core.trigger_engine import TriggerEngine
+        engine = TriggerEngine(self.workspace_root)
+        status = engine.get_status()
+        self._send_json_response({
+            "status": "success",
+            **status,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_triggers_config(self) -> None:
+        """
+        POST /api/v1/triggers/config (Phase 71)
+        Updates trigger configuration (opt-in flags, thresholds, cooldowns).
+        """
+        from core.trigger_engine import TriggerEngine, TriggerConfig
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        engine = TriggerEngine(self.workspace_root)
+        current_cfg = engine.config.to_dict()
+        current_cfg.update(body)
+
+        updated_cfg = TriggerConfig.from_dict(current_cfg)
+        engine.save_config(updated_cfg)
+
+        self._send_json_response({
+            "status": "success",
+            "message": "Trigger configuration updated.",
+            "config": updated_cfg.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_triggers_evaluate(self) -> None:
+        """
+        POST /api/v1/triggers/evaluate (Phase 71)
+        Safely evaluates an automatic trigger event.
+        Payload:
+        {
+            "trigger_type": "git_commit" | "meaningful_change" | "scheduled",
+            "activity_id": optional str,
+            "payload": { ... }
+        }
+        """
+        from core.trigger_engine import TriggerEngine, TriggerType
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        trigger_type_str = body.get("trigger_type")
+        if not trigger_type_str:
+            self._send_error_response("Field 'trigger_type' is required.", status_code=400)
+            return
+
+        activity_id = body.get("activity_id")
+        event_payload = body.get("payload", {})
+        force = bool(body.get("force", False))
+
+        engine = TriggerEngine(self.workspace_root)
+
+        if trigger_type_str == TriggerType.GIT_COMMIT.value:
+            res = engine.evaluate_git_commit_trigger(
+                commit_hash=event_payload.get("commit_hash", ""),
+                commit_message=event_payload.get("commit_message", ""),
+                changed_files=event_payload.get("changed_files", []),
+                branch=event_payload.get("branch"),
+                activity_id=activity_id,
+            )
+        elif trigger_type_str == TriggerType.MEANINGFUL_CHANGE.value:
+            res = engine.evaluate_meaningful_change_trigger(
+                changed_files=event_payload.get("changed_files", []),
+                change_summary=event_payload.get("change_summary"),
+                activity_id=activity_id,
+            )
+        elif trigger_type_str == TriggerType.SCHEDULED.value:
+            res = engine.evaluate_scheduled_trigger(
+                activity_id=activity_id,
+                force=force,
+            )
+        else:
+            self._send_error_response(
+                f"Unsupported trigger_type '{trigger_type_str}'. Supported types: {[t.value for t in TriggerType]}",
+                status_code=400,
+            )
+            return
+
+        self._send_json_response({
+            "status": "success",
+            "result": res.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_retention_preview(self, query: Dict[str, List[str]]) -> None:
+        """
+        GET /api/v1/retention/preview (Phase 73)
+        Pre-flight inspection detailing which checkpoints will be preserved vs pruned.
+        Query params:
+        - activity_id: required
+        - max_checkpoints: optional int
+        - max_age_days: optional int
+        - max_storage_bytes: optional int
+        """
+        from core.retention import SafeRetentionEngine, RetentionPolicy
+        activity_id = query.get("activity_id", [None])[0]
+        if not activity_id:
+            self._send_error_response("Query parameter 'activity_id' is required.", status_code=400)
+            return
+
+        max_chk_raw = query.get("max_checkpoints", [None])[0]
+        max_age_raw = query.get("max_age_days", [None])[0]
+        max_storage_raw = query.get("max_storage_bytes", [None])[0]
+
+        policy = RetentionPolicy(
+            max_checkpoints=int(max_chk_raw) if max_chk_raw and max_chk_raw.isdigit() else None,
+            max_age_days=int(max_age_raw) if max_age_raw and max_age_raw.isdigit() else None,
+            max_storage_bytes=int(max_storage_raw) if max_storage_raw and max_storage_raw.isdigit() else None,
+        )
+
+        engine = SafeRetentionEngine(self.workspace_root)
+        try:
+            preview = engine.preview_retention(activity_id, policy)
+            self._send_json_response({
+                "status": "success",
+                "preview": preview.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Retention preview failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_retention_prune(self) -> None:
+        """
+        POST /api/v1/retention/prune (Phase 73)
+        Executes safe retention pruning with backup creation.
+        Payload:
+        {
+            "activity_id": str,
+            "max_checkpoints": optional int,
+            "max_age_days": optional int,
+            "max_storage_bytes": optional int,
+            "dry_run": optional bool
+        }
+        """
+        from core.retention import SafeRetentionEngine, RetentionPolicy
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        activity_id = body.get("activity_id")
+        if not activity_id:
+            self._send_error_response("Field 'activity_id' is required.", status_code=400)
+            return
+
+        dry_run = bool(body.get("dry_run", False))
+        policy = RetentionPolicy.from_dict(body)
+
+        engine = SafeRetentionEngine(self.workspace_root)
+        try:
+            res = engine.prune_checkpoints(activity_id, policy=policy, dry_run=dry_run)
+            self._send_json_response({
+                "status": "success",
+                "result": res.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Retention prune failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_retention_undo(self) -> None:
+        """
+        POST /api/v1/retention/undo (Phase 73)
+        Restores pruned checkpoints from a backup session folder.
+        Payload:
+        {
+            "backup_path": str
+        }
+        """
+        from core.retention import SafeRetentionEngine
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        backup_path = body.get("backup_path")
+        if not backup_path:
+            self._send_error_response("Field 'backup_path' is required.", status_code=400)
+            return
+
+        engine = SafeRetentionEngine(self.workspace_root)
+        try:
+            count = engine.restore_retention_backup(backup_path)
+            self._send_json_response({
+                "status": "success",
+                "restored_count": count,
+                "message": f"Successfully restored {count} checkpoints from backup.",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Retention undo failed: {str(e)}", status_code=400)
+
+    def handle_get_v1_privacy_config(self) -> None:
+        """
+        GET /api/v1/privacy/config (Phase 74)
+        Returns current PrivacyConfig settings.
+        """
+        from core.privacy import PrivacyManager
+        mgr = PrivacyManager.get_instance(self.workspace_root)
+        self._send_json_response({
+            "status": "success",
+            "config": mgr.config.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_privacy_config(self) -> None:
+        """
+        POST /api/v1/privacy/config (Phase 74)
+        Updates privacy settings, saves to disk, and triggers index rebuild.
+        """
+        from core.privacy import PrivacyManager, PrivacyConfig
+        from storage.activity_store import ActivityCheckpointStore
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        rebuild_index = bool(body.get("rebuild_index", True))
+        try:
+            new_config = PrivacyConfig.from_dict(body)
+            mgr = PrivacyManager.get_instance(self.workspace_root)
+            store = ActivityCheckpointStore(self.workspace_root)
+            updated = mgr.update_config(new_config, store=store, rebuild_index=rebuild_index)
+            self._send_json_response({
+                "status": "success",
+                "config": updated.to_dict(),
+                "index_rebuilt": rebuild_index,
+                "message": "Privacy settings updated successfully.",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Failed to update privacy settings: {str(e)}", status_code=400)
+
+    def handle_post_v1_privacy_redact(self) -> None:
+        """
+        POST /api/v1/privacy/redact (Phase 74)
+        Evaluates input text against privacy rules and returns redaction result with evidence.
+        """
+        from core.privacy import PrivacyManager
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        text = body.get("text", "")
+        mgr = PrivacyManager.get_instance(self.workspace_root)
+        result = mgr.redact_text(text)
+        self._send_json_response({
+            "status": "success",
+            "result": result.to_dict(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_get_v1_backup_scope(self) -> None:
+        """
+        GET /api/v1/backup/scope (Phase 77)
+        Returns the formal scope definition of complete backups.
+        """
+        from core.backup import CompleteBackupEngine
+        engine = CompleteBackupEngine(self.workspace_root)
+        self._send_json_response({
+            "status": "success",
+            "scope": engine.get_backup_scope(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    def handle_post_v1_backup_create(self) -> None:
+        """
+        POST /api/v1/backup/create (Phase 77)
+        Generates a complete, verified backup archive.
+        Payload:
+        {
+            "output_path": optional str,
+            "backup_name": optional str
+        }
+        """
+        from core.backup import CompleteBackupEngine
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = {}
+        if content_len > 0:
+            body_raw = self.rfile.read(content_len).decode("utf-8")
+            try:
+                body = json.loads(body_raw)
+            except Exception as e:
+                self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+                return
+
+        output_path = body.get("output_path")
+        backup_name = body.get("backup_name")
+
+        engine = CompleteBackupEngine(self.workspace_root)
+        try:
+            res = engine.create_backup(output_path=output_path, backup_name=backup_name)
+            self._send_json_response({
+                "status": "success",
+                "backup": res.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Backup creation failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_backup_verify(self) -> None:
+        """
+        POST /api/v1/backup/verify (Phase 77)
+        Verifies the integrity and completeness of a backup archive.
+        Payload:
+        {
+            "archive_path": str,
+            "raise_on_error": optional bool (default false)
+        }
+        """
+        from core.backup import CompleteBackupEngine
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        archive_path = body.get("archive_path")
+        if not archive_path:
+            self._send_error_response("Field 'archive_path' is required.", status_code=400)
+            return
+
+        raise_on_error = bool(body.get("raise_on_error", False))
+        engine = CompleteBackupEngine(self.workspace_root)
+        try:
+            res = engine.verify_backup(archive_path, raise_on_error=raise_on_error)
+            status_code = 200 if res.is_valid else 400
+            self._send_json_response({
+                "status": "success" if res.is_valid else "failed",
+                "result": res.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }, status_code=status_code)
+        except Exception as e:
+            self._send_error_response(f"Backup verification failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_import_preview(self) -> None:
+        """
+        POST /api/v1/import/preview (Phase 78)
+        Previews an archive import, checking validity and detecting conflicts without mutating state.
+        Payload:
+        {
+            "archive_path": str,
+            "conflict_strategy": optional str (default REJECT)
+        }
+        """
+        from core.import_engine import CompleteImportEngine
+        from core.enums import ConflictResolutionStrategy
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        archive_path = body.get("archive_path")
+        if not archive_path:
+            self._send_error_response("Field 'archive_path' is required.", status_code=400)
+            return
+
+        strategy_str = body.get("conflict_strategy", "REJECT")
+        try:
+            strategy = ConflictResolutionStrategy(strategy_str)
+        except ValueError:
+            self._send_error_response(f"Invalid conflict_strategy: {strategy_str}", status_code=400)
+            return
+
+        engine = CompleteImportEngine(self.workspace_root)
+        try:
+            plan = engine.preview_import(archive_path, conflict_strategy=strategy)
+            self._send_json_response({
+                "status": "success",
+                "plan": plan.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Import preview failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_import_execute(self) -> None:
+        """
+        POST /api/v1/import/execute (Phase 78)
+        Executes an atomic, staged import of a Continuum backup archive.
+        Payload:
+        {
+            "archive_path": str,
+            "conflict_strategy": optional str ("REJECT", "RENAME_NEW", "OVERWRITE", "SKIP", "DEDUPLICATE"),
+            "confirm_overwrite": optional bool (default false)
+        }
+        """
+        from core.import_engine import CompleteImportEngine
+        from core.enums import ConflictResolutionStrategy
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        archive_path = body.get("archive_path")
+        if not archive_path:
+            self._send_error_response("Field 'archive_path' is required.", status_code=400)
+            return
+
+        strategy_str = body.get("conflict_strategy", "REJECT")
+        try:
+            strategy = ConflictResolutionStrategy(strategy_str)
+        except ValueError:
+            self._send_error_response(f"Invalid conflict_strategy: {strategy_str}", status_code=400)
+            return
+
+        confirm_overwrite = bool(body.get("confirm_overwrite", False))
+        engine = CompleteImportEngine(self.workspace_root)
+        try:
+            result = engine.execute_import(
+                archive_path,
+                conflict_strategy=strategy,
+                confirm_overwrite=confirm_overwrite
+            )
+            self._send_json_response({
+                "status": "success",
+                "result": result.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(
+                f"Import execution failed: {str(e)}",
+                status_code=400,
+                what_failed=f"Archive import failed: {str(e)}",
+                data_committed=False,
+                next_steps="Review conflict strategy and archive integrity. Staged import was aborted; unrelated live records are completely unchanged.",
+            )
+
+    def handle_post_v1_import_recover(self) -> None:
+        """
+        POST /api/v1/import/recover (Phase 78)
+        Inspects staging area for incomplete/interrupted transactions and recovers state.
+        """
+        from core.import_engine import CompleteImportEngine
+        engine = CompleteImportEngine(self.workspace_root)
+        try:
+            recovered = engine.recover_interrupted_imports()
+            self._send_json_response({
+                "status": "success",
+                "recovered_sessions": recovered,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Import recovery failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_transfer_package(self) -> None:
+        """
+        POST /api/v1/transfer/package (Phase 79)
+        Creates an offline device transfer package archive.
+        Payload:
+        {
+            "output_path": optional str,
+            "package_name": optional str
+        }
+        """
+        from core.device_transfer import DeviceTransferManager
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = {}
+        if content_len > 0:
+            body_raw = self.rfile.read(content_len).decode("utf-8")
+            try:
+                body = json.loads(body_raw)
+            except Exception as e:
+                self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+                return
+
+        output_path = body.get("output_path")
+        package_name = body.get("package_name")
+
+        mgr = DeviceTransferManager(self.workspace_root)
+        try:
+            pkg_path = mgr.create_transfer_package(output_path=output_path, package_name=package_name)
+            self._send_json_response({
+                "status": "success",
+                "package_path": str(pkg_path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Transfer package creation failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_transfer_inspect(self) -> None:
+        """
+        POST /api/v1/transfer/inspect (Phase 79)
+        Inspects an offline transfer package without modifying destination workspace.
+        Payload:
+        {
+            "package_path": str
+        }
+        """
+        from core.device_transfer import DeviceTransferManager
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        package_path = body.get("package_path")
+        if not package_path:
+            self._send_error_response("Field 'package_path' is required.", status_code=400)
+            return
+
+        mgr = DeviceTransferManager(self.workspace_root)
+        try:
+            inspection = mgr.inspect_package(package_path)
+            self._send_json_response({
+                "status": "success",
+                "inspection": inspection.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Transfer package inspection failed: {str(e)}", status_code=400)
+
+    def handle_post_v1_transfer_import(self) -> None:
+        """
+        POST /api/v1/transfer/import (Phase 79)
+        Imports an offline transfer package with automatic missing-artifact reconciliation.
+        Payload:
+        {
+            "package_path": str,
+            "conflict_strategy": optional str ("REJECT", "RENAME_NEW", "OVERWRITE", "SKIP", "DEDUPLICATE"),
+            "confirm_overwrite": optional bool (default false),
+            "handle_missing_artifacts": optional bool (default true)
+        }
+        """
+        from core.device_transfer import DeviceTransferManager
+        from core.enums import ConflictResolutionStrategy
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._send_error_response("Request body must not be empty.", status_code=400)
+            return
+
+        body_raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(body_raw)
+        except Exception as e:
+            self._send_error_response(f"Invalid JSON payload: {str(e)}", status_code=400)
+            return
+
+        package_path = body.get("package_path")
+        if not package_path:
+            self._send_error_response("Field 'package_path' is required.", status_code=400)
+            return
+
+        strategy_str = body.get("conflict_strategy", "REJECT")
+        try:
+            strategy = ConflictResolutionStrategy(strategy_str)
+        except ValueError:
+            self._send_error_response(f"Invalid conflict_strategy: {strategy_str}", status_code=400)
+            return
+
+        confirm_overwrite = bool(body.get("confirm_overwrite", False))
+        handle_missing = bool(body.get("handle_missing_artifacts", True))
+
+        mgr = DeviceTransferManager(self.workspace_root)
+        try:
+            res = mgr.import_transfer_package(
+                package_path=package_path,
+                conflict_strategy=strategy,
+                confirm_overwrite=confirm_overwrite,
+                handle_missing_artifacts=handle_missing,
+            )
+            self._send_json_response({
+                "status": "success",
+                "result": res.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            self._send_error_response(f"Transfer import failed: {str(e)}", status_code=400)
+
+
 

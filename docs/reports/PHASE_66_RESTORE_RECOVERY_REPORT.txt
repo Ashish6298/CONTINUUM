@@ -1,0 +1,135 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING AUDIT & IMPLEMENTATION REPORT
+Milestone 39: History, Diffs, Branch and Restore
+Phase 66: Explicit Restore and Recovery
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS (Milestone 39 Complete; Ready for Milestone 40: Phase 67)
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 66 of Project Continuum v1.4.0 "Universal Resume Anywhere" implements the
+explicit, confirmed Restore and Recovery subsystem. Adhering strictly to Invariant
+I-03 (Never Rewrite History), Invariant I-02 (Durable Commits & Relational Integrity),
+and the Phase 66 Gate requirement:
+"No silent deletion or unrecoverable partial restore."
+
+Key Deliverables:
+1. Two-Phase Restore Protocol:
+   - Phase A: Pre-Flight Delta Preview (`preview_restore`):
+     * Compares the target historical checkpoint against the activity's current head
+       using the deterministic `CheckpointDiffEngine`.
+     * Explains the exact working state changes: progress rollback/advance, retracted
+       work, reinstated historical tasks, superseded decisions, and cleared/reinstated blockers.
+     * Computes the exact number of newer checkpoints that will remain preserved.
+     * Pure read-only operation: performs zero disk or database mutations (I-03).
+   - Phase B: Confirmed Execution (`confirm_restore`):
+     * Appends a brand-new Checkpoint representing the reinstated state.
+     * Preserves chronological linearity: `parent_checkpoint_id` points to the prior head.
+     * Records restore provenance: `restored_from_checkpoint_id`, `prior_head_checkpoint_id`,
+       and user-provided rationale.
+     * Generates a fresh Resume Brief with explicit restore notation.
+2. Gate Invariant Verification (No Silent Deletion / History Preserved):
+   - Restoring to an older checkpoint (e.g. restoring Checkpoint 1 when Checkpoint 3 is
+     head) NEVER deletes Checkpoints 2 or 3.
+   - All intermediate and newer checkpoints remain 100% preserved in partitioned JSON
+     files and in the SQLite derived index.
+   - Automated gate test `test_gate_no_silent_deletion_newer_history_preserved` proves
+     all prior records remain queryable and structurally intact.
+3. Compatibility & Concurrency Verification:
+   - Validates that target checkpoint belongs to the specified activity (`IncompatibleRestoreError`).
+   - Supports optimistic concurrency locking via `expected_head_checkpoint_id` to prevent
+     race conditions against background captures.
+   - Rejects non-existent checkpoints (`CheckpointNotFoundError`) and malformed IDs (`CheckpointValidationError`).
+4. Transactional Rollback Safety:
+   - Uses atomic temporary file writes (`.tmp_<pid>`), flush, `os.fsync`, and atomic rename.
+   - Any failure during serialization or indexing cleanly rolls back without leaving
+     partial records or modifying authoritative state.
+5. REST API & Web Dashboard Integration:
+   - Endpoint: `POST /api/v1/checkpoints/restore/preview` (pre-flight explanation).
+   - Endpoint: `POST /api/v1/checkpoints/restore/confirm` (confirmed atomic restore).
+   - UI: "⏪ Restore to this Checkpoint" action inside Historical Snapshot detail modal;
+     presents working state changes preview and confirmation dialog before executing.
+
+2. INSPECTED & CHANGED FILES
+--------------------------------------------------------------------------------
+- Modified Existing Files:
+  * `storage/activity_store.py`:
+    - Defined `IncompatibleRestoreError` exception class.
+    - Implemented `preview_restore(target_checkpoint_id, activity_id)`.
+    - Implemented `confirm_restore(target_checkpoint_id, activity_id, reason, expected_head, ...)`.
+  * `server/routes.py`:
+    - Added `handle_post_v1_checkpoint_restore_preview()` handler.
+    - Added `handle_post_v1_checkpoint_restore_confirm()` handler.
+    - Wired restore routes in `do_POST`.
+  * `server/static/dashboard.js`:
+    - Added "⏪ Restore to this Checkpoint" button in `openSnapshotModal` for historical states.
+    - Added `promptRestoreCheckpoint(chkId, activityId)` handling pre-flight preview,
+      user confirmation, and execution.
+- Created Files:
+  * `tests/test_phase66_restore.py`:
+    - 10 comprehensive unit and integration tests covering preview delta explanation,
+      successful state reinstatement, gate history preservation, cancel flow,
+      incompatibility rejection, concurrency safety, repeated restores, and REST API.
+  * `docs/reports/PHASE_66_RESTORE_RECOVERY_REPORT.txt`:
+    - This engineering audit and verification document.
+
+3. GATE & INVARIANT VERIFICATION
+--------------------------------------------------------------------------------
+- Phase 66 Gate:
+  "No silent deletion or unrecoverable partial restore."
+  * TESTED & VERIFIED: `test_gate_no_silent_deletion_newer_history_preserved` proves
+    that when restoring an activity from head (chk3) to an earlier point (chk1),
+    all intermediate checkpoints (chk1, chk2, chk3) remain intact on disk and in index.
+    A new checkpoint (chk4) is appended with parent=chk3 and restore_source=chk1.
+- Invariant I-01 (Stable Local Identities):
+  * Checkpoints maintain stable IDs. Restored checkpoint receives a unique ID.
+- Invariant I-02 (Durable Commits & Relational Integrity):
+  * Atomically committed to `.tmp`, synced to disk, and updated in SQLite index.
+- Invariant I-03 (Never Rewrite History):
+  * Restores are purely additive/append-only. History is never pruned or overwritten.
+- Invariant I-06 (Derived State from Authoritative Storage):
+  * SQLite index completely reflects all restored and preserved checkpoints.
+
+4. AUTOMATED TEST EXECUTION RESULTS
+--------------------------------------------------------------------------------
+Command Run:
+`python -m unittest tests/test_phase66_restore.py -v`
+
+Results:
+test_concurrency_conflict_safety (tests.test_phase66_restore.TestPhase66Restore.test_concurrency_conflict_safety)
+Verify that if expected_head_checkpoint_id does not match the actual current head, ... ok
+test_gate_no_silent_deletion_newer_history_preserved (tests.test_phase66_restore.TestPhase66Restore.test_gate_no_silent_deletion_newer_history_preserved)
+Gate Invariant: No silent deletion or unrecoverable partial restore. ... ok
+test_incompatibility_validation (tests.test_phase66_restore.TestPhase66Restore.test_incompatibility_validation)
+Verify that restoring across incompatible activities or invalid inputs ... ok
+test_repeated_restore (tests.test_phase66_restore.TestPhase66Restore.test_repeated_restore)
+Verify that multiple sequential restores back and forth across history ... ok
+test_restore_cancel_flow (tests.test_phase66_restore.TestPhase66Restore.test_restore_cancel_flow)
+Simulate user inspecting preview and deciding to cancel. ... ok
+test_restore_preview_explains_working_state_changes (tests.test_phase66_restore.TestPhase66Restore.test_restore_preview_explains_working_state_changes)
+Verify that preview_restore calculates exact working state differences ... ok
+test_successful_restore_and_state_reinstatement (tests.test_phase66_restore.TestPhase66Restore.test_successful_restore_and_state_reinstatement)
+Verify that confirming a restore creates a new checkpoint appended to the timeline ... ok
+test_api_restore_confirm_success (tests.test_phase66_restore.TestPhase66RestoreApi.test_api_restore_confirm_success) ... ok
+test_api_restore_missing_target (tests.test_phase66_restore.TestPhase66RestoreApi.test_api_restore_missing_target) ... ok
+test_api_restore_preview_success (tests.test_phase66_restore.TestPhase66RestoreApi.test_api_restore_preview_success) ... ok
+
+Ran 10 tests in 1.559s
+Status: OK (100% Passed)
+
+Full Suite Verification:
+Total Tests Run: 331
+Passed:         331
+Failures:       0
+Errors:         0
+Overall Status: SUCCESS (100% Passed)
+
+5. READINESS DETERMINATION
+--------------------------------------------------------------------------------
+Phase 66 implementation satisfies all functional requirements and gate invariants.
+Milestone 39 (History, Diffs, Branch and Restore) is now 100% COMPLETE.
+Repository status: READY FOR MILESTONE 40 — ORGANIZATION AND LOCAL SEARCH
+(Starting Phase 67: Lifecycle, Tags, Collections, Related Activities).
+================================================================================

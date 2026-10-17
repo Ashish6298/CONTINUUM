@@ -72,6 +72,8 @@ def print_serve_banner(status: DaemonServerStatus, token: str, watch_enabled: bo
     if os.name == "nt":
         os.system("")
 
+    import re
+
     RESET = "\033[0m"
     BOLD = "\033[1m"
     GREEN = "\033[32m"
@@ -82,21 +84,93 @@ def print_serve_banner(status: DaemonServerStatus, token: str, watch_enabled: bo
 
     authenticated_url = f"{status.server_url}?token={token}" if token else status.server_url
 
-    banner = f"""
-{BOLD}{MAGENTA}┌─ CONTINUUM WEB CONTROL DASHBOARD ──────────────────────────────────────────┐{RESET}
-│                                                                            │
-│  {GREEN}●{RESET} {BOLD}Dashboard URL  :{RESET} {CYAN}{status.server_url}{RESET}
-│  {GRAY}📁 Workspace Root:{RESET} {status.workspace_root}
-│  {YELLOW}🔑 Auth Token    :{RESET} {token if token else 'None'}
-│  {GRAY}👁️  Live Watcher  :{RESET} {'Enabled' if watch_enabled else 'Disabled'}
-│  {GRAY}⚙️  Process PID   :{RESET} {status.pid}
-│                                                                            │
-│  {BOLD}Shortcuts & Actions:{RESET}                                                     │
-│    • Press {BOLD}Ctrl+C{RESET} to gracefully stop server daemon                        │
-│    • Direct URL: {CYAN}{authenticated_url}{RESET}
-│                                                                            │
-{BOLD}{MAGENTA}└────────────────────────────────────────────────────────────────────────────┘{RESET}
-"""
+    def vis_len(s: str) -> int:
+        clean = re.sub(r"\033\[[0-9;]*m", "", s)
+        return len(clean)
+
+    def build_box(title: str, lines: list, color_code: str, box_width: int) -> str:
+        title_width = vis_len(title)
+        dashes_top = box_width - title_width - 5
+        top = f"{BOLD}{color_code}┌─ {title} " + ("─" * max(0, dashes_top)) + f"┐{RESET}"
+        bottom = f"{BOLD}{color_code}└" + ("─" * (box_width - 2)) + f"┘{RESET}"
+
+        rows = [top]
+        for line in lines:
+            if line == "":
+                rows.append(f"{BOLD}{color_code}│{RESET}" + (" " * (box_width - 2)) + f"{BOLD}{color_code}│{RESET}")
+                continue
+            if line == "---":
+                rows.append(f"{BOLD}{color_code}├" + ("─" * (box_width - 2)) + f"┤{RESET}")
+                continue
+
+            v_width = vis_len(line)
+            pad = box_width - v_width - 4
+            if pad < 0:
+                line = line[: box_width - 7] + "..."
+                pad = 0
+            rows.append(f"{BOLD}{color_code}│{RESET}  {line}" + (" " * pad) + f"{BOLD}{color_code}│{RESET}")
+
+        rows.append(bottom)
+        return "\n".join(rows)
+
+    b1 = [
+        "",
+        f"{GREEN}[*] ACTIVE{RESET}  {BOLD}Dashboard URL  :{RESET} {CYAN}{status.server_url}{RESET}",
+        f"{GRAY}[-] ROOT{RESET}    {BOLD}Workspace Path :{RESET} {status.workspace_root}",
+        f"{YELLOW}[-] TOKEN{RESET}   {BOLD}Auth Token     :{RESET} {token if token else 'None'}",
+        f"{CYAN}[-] WATCH{RESET}   {BOLD}Live Watcher   :{RESET} {'Enabled (Sub-millisecond AST Tracker)' if watch_enabled else 'Disabled'}",
+        f"{GRAY}[-] PID{RESET}     {BOLD}Process PID    :{RESET} {status.pid}",
+        "",
+        f"{BOLD}Direct Instant-Access Link:{RESET}",
+        f"{CYAN}{authenticated_url}{RESET}",
+        "",
+    ]
+
+    b2 = [
+        "",
+        f"{CYAN}[01] LAUNCH & ENTER{RESET}",
+        "     Browser opens automatically, or navigate via the Direct Link above.",
+        "",
+        f"{CYAN}[02] WORKSTREAM PARTITIONING{RESET}",
+        "     Select an activity in the left dock or create a new session (Coding,",
+        "     Study, Agent, Task) to keep deep context tracks strictly isolated.",
+        "",
+        f"{CYAN}[03] DURABLE CHECKPOINT CAPTURE{RESET}",
+        f"     Click {MAGENTA}'Capture Checkpoint'{RESET} as milestones complete. Snapshots active",
+        "     focus, finished tasks, and next actions durably to SQLite & JSON.",
+        "",
+        f"{CYAN}[04] DETERMINISTIC RESUME ENGINE{RESET}",
+        "     Continuum auto-synthesizes a 6-point Resume Brief. Zero hallucination.",
+        f"     Click {GREEN}'Copy Brief'{RESET} to immediately resume work where you left off.",
+        "",
+        f"{CYAN}[05] OMNI-MODEL AGENT HANDOFF{RESET}",
+        f"     Click {MAGENTA}'Export Handoff'{RESET} to package prompt context bundles tailored with",
+        "     token budgeting for Claude (200k), GPT-4o (128k), or Gemini (1M).",
+        "",
+        f"{CYAN}[06] TIME-TRAVEL & ISOLATED FORKING{RESET}",
+        f"     Click {CYAN}'Inspect'{RESET} on any historical checkpoint to view read-only state.",
+        f"     Click {GREEN}'Branch'{RESET} to fork an independent branch without mutating history.",
+        "",
+        f"{CYAN}[07] LOCAL FTS5 COGNITIVE SEARCH{RESET}",
+        f"     Press {YELLOW}Alt+S{RESET} or click {CYAN}'Search'{RESET} for sub-millisecond full-text retrieval",
+        "     across activities, decisions, and checkpoints -- 100% offline.",
+        "",
+        "---",
+        f"{BOLD}Control Keybindings & Daemon Management:{RESET}",
+        f"  * {YELLOW}Alt+S{RESET}   : Global FTS5 Search        * {YELLOW}Ctrl+C{RESET} : Graceful Server Stop",
+        f"  * Background Stop Command   : {CYAN}continuum serve --stop{RESET}",
+        "",
+    ]
+
+    # Calculate unified dynamic width so all boxes close cleanly
+    max_len = max([vis_len(l) for l in b1 + b2 if l not in ("", "---")] + [vis_len("UNIVERSAL RESUME ANYWHERE // OPERATIONAL PROTOCOL") + 5, 84])
+    unified_width = max_len + 4
+
+    box1_str = build_box("CONTINUUM WEB CONTROL DASHBOARD", b1, MAGENTA, unified_width)
+    box2_str = build_box("UNIVERSAL RESUME ANYWHERE // OPERATIONAL PROTOCOL", b2, CYAN, unified_width)
+
+    banner = "\n" + box1_str + "\n\n" + box2_str + "\n"
+
     try:
         if hasattr(sys.stdout, "buffer") and hasattr(sys.stdout.buffer, "write"):
             sys.stdout.buffer.write(banner.encode("utf-8"))

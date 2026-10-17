@@ -1,0 +1,185 @@
+================================================================================
+PROJECT CONTINUUM — ENGINEERING AUDIT REPORT
+Milestone 35: Repository Discovery and Baseline
+Phase 51: Data, Persistence, Security and Integration Audit
+Document Version: 1.0.0
+Date: 2026-10-16
+Status: PASS
+================================================================================
+
+1. EXECUTIVE SUMMARY & OBJECTIVE
+--------------------------------------------------------------------------------
+Phase 51 executes an exhaustive audit of Project Continuum's data persistence,
+atomic durability, corruption auto-recovery, cryptographic authentication, CORS
+origin filtering, secret sanitization, and omni-model adapter architecture.
+The goal is to establish verified empirical baselines before designing the v1.4.0
+activity and universal checkpoint domain models.
+
+Observed facts are strictly separated from recommendations, adhering to the
+non-negotiable core invariants of zero external telemetry and crash-safe durability.
+
+2. PERSISTENCE & DATA-FLOW MAP
+--------------------------------------------------------------------------------
+A. Storage Directory Topology:
+   - Root: `<workspace_root>/.continuum/`
+   - Active State: `.continuum/state.json` (CanonicalProjectState container)
+   - History Snapshots: `.continuum/history/state_<timestamp>_<tag>.json`
+   - Safety Backups: `.continuum/backup/state.json.bak` and file-sync copies
+   - Handoff Checkpoints: `.continuum/handoffs/checkpoint_<id>.json`
+   - Authentication Token: `.continuum/auth.token` (Owner read/write 0600 on POSIX)
+   - Process Lockfiles: `.continuum/daemon.pid` and `daemon_server.json`
+
+B. Data-Flow Architecture:
+   [Workspace Code & Git HEAD]
+              │
+              ▼ (Extraction via WorkspaceEvidenceExtractor & GitEvidenceExtractor)
+   [CanonicalProjectState (Memory)]
+              │
+              ▼ (Serialization & Schema Validation in `core/serializer.py`)
+   [Temporary File: `.continuum/state.json.tmp`]
+              │
+              ▼ (Atomic Replace: `Path.replace()` -> `MOVEFILE_REPLACE_EXISTING`)
+   [Authoritative File: `.continuum/state.json`]
+              │
+              ▼ (Timestamped Versioning & History Pruning)
+   [History Archive: `.continuum/history/state_YYYYMMDD_HHMMSS_ffffff.json`]
+
+C. Transaction & Durability Invariants:
+   - Atomic Write Guarantee: Serialization writes to a temporary file (`.tmp`)
+     in the same directory and executes an atomic replacement via `replace()`.
+     Zero possibility of partially written JSON files on sudden process termination.
+   - History Snapshotting: Every non-trivial state mutation creates a timestamped
+     snapshot. Retention is bounded to `MAX_HISTORY_SNAPSHOTS = 100` via FIFO/LRU.
+   - Auto-Recovery Mechanism (`storage/recovery.py`):
+     On initialization or read failure, `StateRecoveryManager` tests schema
+     integrity. If corruption or malformed bytes are encountered, it automatically
+     scans `.continuum/history/` for the newest valid snapshot and restores it.
+
+3. SECURITY & PRIVACY FINDINGS
+--------------------------------------------------------------------------------
+A. Ephemeral Authentication & Session Tokens (`server/auth.py`):
+   - Cryptographic Generation: Uses Python `secrets.token_hex(24)` (48 hex chars,
+     192 bits of entropy).
+   - Constant-Time Comparison: All token evaluations use `secrets.compare_digest()`
+     to eliminate timing-attack vulnerabilities.
+   - Storage Security: Persisted to `.continuum/auth.token` with restricted owner
+     file permissions (`0600`).
+
+B. CORS Origin Isolation (`server/auth.py:CorsOriginGuard`):
+   - Local Loopback: `http://localhost:*` and `http://127.0.0.1:*` (any port).
+   - Authorized AI Platforms:
+     - `https://chatgpt.com`
+     - `https://claude.ai`
+     - `https://aistudio.google.com`
+     - `https://gemini.google.com`
+     - `https://chat.deepseek.com`
+   - Third-Party Rejection: Any unauthorized external origin receives an immediate
+     `403 Forbidden` response and is denied CORS headers.
+
+C. Real-Time Secret Redaction & Sanitization (`server/sanitizer.py`):
+   - Excluded Sensitive Files: High-risk credential and key files (`.env*`,
+     `id_rsa`, `*.pem`, `*.key`, `*.pfx`, `credentials.json`, `auth.token`) are
+     filtered out of file trees and diffs.
+   - Inline Secret Patterns: Automatically matches and masks:
+     - Private keys (`-----BEGIN ... PRIVATE KEY-----`)
+     - AWS Access Key IDs (`AKIA...`)
+     - GitHub Personal Access Tokens (`ghp_...`, `gho_...`)
+     - GitLab Personal Access Tokens (`glpat-...`)
+     - OpenAI API Keys (`sk-...`)
+     - Anthropic API Keys (`sk-ant-...`)
+     - Google API Keys (`AIza...`)
+     - JSON Web Tokens (`eyJ...`)
+     - Database Connection Strings (`postgres://user:pass@host...`)
+   - Path Normalization: Converts host absolute paths (`C:\Users\...` or `/home/...`)
+     to workspace-relative POSIX paths, preventing host username disclosure.
+
+4. ADAPTER & EVENT SOURCE MAP
+--------------------------------------------------------------------------------
+A. Event Sources:
+   - File System Watcher: `watcher/detector.py:WorkspaceChangeDetector` (polling
+     interval default: 1.0s, computes file size and mtime hashes).
+   - Git Hooks: `storage/hooks.py:GitHookManager` (installs non-blocking
+     `post-commit` and `pre-commit` scripts).
+   - HTTP API Endpoints: `POST /api/checkpoints` and `POST /api/workspace/sync`.
+   - Browser Companion: `browser/continuum.user.js` (DOM `MutationObserver`,
+     `sessionStorage` namespaced per platform/conversation).
+
+B. Model Adapters (`handoff/adapters/`):
+   - `ClaudeHandoffAdapter`: XML-tagged context format (`<initial_requirements>`,
+     `<verified_code_artifacts>`, `<milestone_progression_digest>`).
+   - `CodexGptHandoffAdapter`: Markdown structured checklists, task queues, and diffs.
+   - `GeminiHandoffAdapter`: Hierarchical system topology, large-context code blocks.
+   - `LocalModelHandoffAdapter`: Concise, bounded Markdown prompt designed for
+     quantized local models (e.g. LLaMA, Mistral, Qwen).
+
+5. MIGRATION RISK REGISTER FOR v1.4.0
+--------------------------------------------------------------------------------
+[MIG-01] Canonical State Schema Evolution (v1.0.0 -> v1.4.0):
+- Observed Fact: Existing `CanonicalProjectState` uses `schema_version = "1.0.0"`
+  and strict Draft 2020-12 schema validation in `core/schema.py`.
+- Risk: Adding new required properties (e.g. `activities`, `checkpoints`) to
+  root schema without backward compatibility will cause validation failure on
+  existing v1.0.0/v1.3.0 `state.json` files.
+- Mitigation: In Milestone 3 (Phase 3.2), implement an idempotent schema
+  migration utility that safely up-converts `schema_version` while keeping
+  backward compatibility for v1.0.0 files.
+
+[MIG-02] Checkpoint Model Convergence:
+- Observed Fact: `HandoffCheckpoint` in `core/state_models.py` has 10 fields
+  focused on multi-model chat turns (`prompt_summary`, `compressed_prompt`).
+  v1.4.0 universal checkpoints introduce domain fields (`completed_work`,
+  `pending_actions`, `decisions`, `blockers`, `provenance`).
+- Risk: Re-writing or deleting `.continuum/handoffs/` would violate non-destructive
+  invariants.
+- Mitigation: Treat `HandoffCheckpoint` as a specialized subset or cleanly map it
+  into the universal checkpoint schema without modifying historical files.
+
+[MIG-03] Windows NTFS File Lock Handling:
+- Observed Fact: Python `Path.replace()` on Windows can raise `PermissionError`
+  if another thread or scanner has an open read handle on the destination file.
+- Mitigation: Ensure file handlers explicitly close file streams with context
+  managers (`with open(...)`) and introduce exponential backoff retries for
+  file replace operations.
+
+6. TEST EXECUTION & VERIFICATION OUTCOMES
+--------------------------------------------------------------------------------
+A. Phase 51 Audit Test Suite (`tests/test_phase51_audit.py`):
+   - `test_atomic_file_persistence_and_snapshots`: PASSED
+   - `test_checkpoint_record_migration_compatibility`: PASSED
+   - `test_cors_origin_whitelist_boundaries`: PASSED
+   - `test_loopback_host_security_enforcement`: PASSED
+   - `test_omni_model_adapters_contract`: PASSED
+   - `test_schema_validation_and_rejection`: PASSED
+   - `test_secret_redaction_and_path_normalization`: PASSED
+   - `test_session_token_cryptographic_verification`: PASSED
+   - `test_state_corruption_detection_and_auto_recovery`: PASSED
+   - Summary: 9 passed in 0.21s.
+
+B. Full Regression Suite Execution (`pytest`):
+   - Command: `pytest`
+   - Total Tests Collected: 227
+   - Total Tests Passed: 227 (100%)
+   - Failures / Errors: 0
+   - Execution Time: 30.01s
+
+7. ACCEPTANCE CHECKLIST
+--------------------------------------------------------------------------------
+[X] Schema validation and error detection verified against JSON Schema.
+[X] Atomic write and crash-safe replace contracts tested and verified.
+[X] Auto-recovery from corrupted state tested and verified.
+[X] CORS origin filtering and third-party rejection verified.
+[X] Ephemeral session token constant-time comparison verified.
+[X] Secret redaction and path normalization pipeline verified.
+[X] Omni-model adapters tested against unified interface.
+[X] Handoff checkpoint deserialization and migration compatibility validated.
+[X] Phase 51 test suite implemented and passing (9/9).
+[X] Full regression test suite passing with zero failures (227/227).
+[X] Report saved as .txt in docs/reports/PHASE_51_DATA_PERSISTENCE_SECURITY_AUDIT.txt.
+
+8. FINAL STATUS & READINESS
+--------------------------------------------------------------------------------
+STATUS: PASS
+READINESS FOR NEXT PHASE: READY
+Prerequisites for Milestone 1 Phase 1.3 (Phase 52: Baseline Verification) are
+fully satisfied.
+================================================================================
