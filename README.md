@@ -42,8 +42,7 @@
 # SYSTEM NAVIGATION MAP
  ├── <b>[01] FOUNDATION & BENCHMARK</b>
  │    ├── ❯ <a href="#what-is-continuum"><b>Overview & Core Problem</b></a>
- │    ├── ❯ <a href="#whats-new-in-v140"><b>🌟 What's New in v1.4.0 (Universal Work Continuity & Resume Center)</b></a>
- │    ├── ❯ <a href="#whats-new-in-v130"><b>🚀 What's New in v1.3.0 (Context Preservation & Smart Digest)</b></a>
+ │    ├── ❯ <a href="#whats-new-in-v140"><b>🌟 LATEST: What's New in v1.4.0 (Universal Work Continuity & Resume Center)</b></a>
  │    ├── ❯ <a href="#why-continuum-over-chat-summaries"><b>Benchmark: Continuum vs Chat Summaries</b></a>
  │    └── ❯ <a href="#quick-start-guide"><b>1-Command Quickstart Guide</b></a>
  │
@@ -100,7 +99,7 @@
 </table>
 
 <a id="whats-new-in-v140"></a>
-## 🌟 What's New in v1.4.0: Universal Work Continuity & Resume Anywhere
+## 🌟 What's New in v1.4.0 (Latest Release): Universal Work Continuity & Resume Anywhere
 
 > **Continuum v1.4.0** introduces the **Universal Resume Anywhere** engine (Milestones 35–46, Phases 50–87). It turns Continuum into a complete, local-first work continuity platform that tracks partitioned activities, captures durable checkpoints with provenance, generates deterministic resume briefs, enables visual timeline diffing, non-destructive branching, and instant offline full-text search across thousands of records.
 
@@ -147,67 +146,6 @@
 </table>
 
 <br/>
-
-<a id="whats-new-in-v130"></a>
-## 🚀 What's New in v1.3.0: Conversation Context Preservation & Smart Handoff Suite
-
-> **Continuum v1.3.0** permanently solves the **browser conversation context loss problem** across ChatGPT, Claude, Gemini, and DeepSeek. In earlier versions, long chats suffered from DOM virtualization and tail-slicing that collapsed handoffs to only the last message. v1.3.0 implements the complete **Triad Architecture (A + B + C)** with Smart Digest as default, guaranteeing zero history loss across 500+ turn conversations.
-
-<br/>
-
-<table>
-  <tr>
-    <th width="30%"><b>v1.3.0 Core Pillar</b></th>
-    <th width="70%"><b>Technical Architecture & Capabilities</b></th>
-  </tr>
-  <tr>
-    <td><b>⚡ 5-Tier Smart Digest Engine</b><br/><i>(Approach A)</i></td>
-    <td>
-      Replaces destructive character cuts and arbitrary tail slicing with a structured 5-tier context layout:
-      <ul>
-        <li><b>Tier 1 — Project Goal & Ground Intent</b>: Preserves the user's initial objective, technical stack, and architectural decisions established in Turn 1.</li>
-        <li><b>Tier 2 — Ground Truth Code Artifacts</b>: Deduplicates all generated code blocks into complete files. Cleanly omitted if a chat is purely architectural with no code.</li>
-        <li><b>Tier 3 — Milestone Progression Digest</b>: Chronologically condenses intermediate discussion turns into requirement adjustments and verified milestones.</li>
-        <li><b>Tier 4 — Active Conversation Trail</b>: Preserves recent 6–8 complete turns verbatim with exact error traces and instructions.</li>
-        <li><b>Tier 5 — Immediate Execution Directive</b>: Instructs the destination model on the immediate continuation target and forbids restarting from scratch.</li>
-        <li><b>Priority Overflow Policy</b>: Under token pressure, intermediate milestones condense first; active directives and verified code blocks are <b>never truncated</b>.</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><b>🔄 In-Session Accumulator & Cold Recovery</b><br/><i>(Approach B)</i></td>
-    <td>
-      Turn-by-turn historical capture with multi-platform URL isolation:
-      <ul>
-        <li><b>URL Pattern Isolation</b>: Extracts native conversation UUIDs across ChatGPT (<code>/c/&lt;uuid&gt;</code>), Claude (<code>/chat/&lt;uuid&gt;</code>), Gemini (<code>/(?:app|prompts)/&lt;id&gt;</code>), and DeepSeek (<code>/a/&lt;id&gt;</code>).</li>
-        <li><b>Namespaced Storage</b>: Isolated <code>sessionStorage</code> keys (<code>continuum_chat_v130_${platform}_${id}</code>) with schema v1, bounded to 250 turns.</li>
-        <li><b>Streaming In-Place Updates</b>: Monitors streaming tokens and modifies the active assistant turn in-place without generating duplicate turn entries.</li>
-        <li><b>Bounded Cold-Start Recovery</b>: When DOM virtualization hides earlier turns, displays an incomplete history alert with an explicit <code>[Recover conversation history]</code> button. Executes a bounded upward sweep, pauses for DOM hydration, captures older turns, and restores the user's scroll position. <i>Never auto-scrolls silently.</i></li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><b>🎛️ Three Context Modes & Live UI</b><br/><i>(Approach C)</i></td>
-    <td>
-      Context mode selector integrated into the floating companion modal (<code>Alt+C</code>):
-      <ul>
-        <li><b><code>⚡ Smart Digest</code> (Default, ~8,000 tokens)</b>: Balanced 5-tier synthesis for standard multi-model handoffs.</li>
-        <li><b><code>📜 Full History</code> (~24,000 tokens)</b>: Comprehensive chronological record of all captured turns verbatim.</li>
-        <li><b><code>🎯 Quick Task</code> (~2,500 tokens)</b>: Lean prompt focused strictly on the latest code snippet and immediate task.</li>
-        <li><b>Preference Persistence</b>: Remembers user's selected mode across browser restarts via <code>localStorage</code>.</li>
-        <li><b>Live Token Estimator & Preview Drawer</b>: Real-time token counter badge (<code>~N tokens</code>) and collapsible prompt preview drawer.</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><b>🧹 Noise & Promotional Blurb Filtering</b></td>
-    <td>
-      <code>isPromotionalOrAdText()</code> automatically detects and strips search ads, sponsored cards, and hosting promos (e.g. <i>"Check VPS Plans & Pricing"</i>, <i>"Join 5M+ on Bluehost"</i>, <i>"Sponsored"</i>, <i>"Upgrade to Plus"</i>) from being ingested into session storage, milestone summaries, and continuation directives. Also deduplicates repeated milestone loops.
-    </td>
-  </tr>
-</table>
-
-<br>
 
 <a id="why-continuum-over-chat-summaries"></a>
 ## ⚔️ Why Continuum over Chat Summaries?
