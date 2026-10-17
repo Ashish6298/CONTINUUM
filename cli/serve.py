@@ -83,7 +83,7 @@ def print_serve_banner(status: DaemonServerStatus, token: str, watch_enabled: bo
     authenticated_url = f"{status.server_url}?token={token}" if token else status.server_url
 
     banner = f"""
-{BOLD}{MAGENTA}┌─ CONTINUUM WEB CONTROL DASHBOARD ──────────────────────────────────────────┐{RESET}
+{BOLD}{MAGENTA}┌─ CONTINUUM WEB CONTROL DASHBOARD & RESUME CENTER ──────────────────────────┐{RESET}
 │                                                                            │
 │  {GREEN}●{RESET} {BOLD}Dashboard URL  :{RESET} {CYAN}{status.server_url}{RESET}
 │  {GRAY}📁 Workspace Root:{RESET} {status.workspace_root}
@@ -91,10 +91,27 @@ def print_serve_banner(status: DaemonServerStatus, token: str, watch_enabled: bo
 │  {GRAY}👁️  Live Watcher  :{RESET} {'Enabled' if watch_enabled else 'Disabled'}
 │  {GRAY}⚙️  Process PID   :{RESET} {status.pid}
 │                                                                            │
-│  {BOLD}Shortcuts & Actions:{RESET}                                                     │
-│    • Press {BOLD}Ctrl+C{RESET} to gracefully stop server daemon                        │
-│    • Direct URL: {CYAN}{authenticated_url}{RESET}
+│  {BOLD}Direct Login URL:{RESET}                                                        │
+│  {CYAN}{authenticated_url}{RESET}
 │                                                                            │
+├─ 📖 QUICK START & USAGE GUIDE ─────────────────────────────────────────────┤
+│                                                                            │
+│  {BOLD}1. Open Dashboard:{RESET} Open your browser at the URL above (opens auto).     │
+│  {BOLD}2. Select Activity:{RESET} In the left sidebar, choose an activity or create    │
+│     a new one (e.g. Coding, Study, Task) to track separate workstreams.   │
+│  {BOLD}3. Capture Checkpoints:{RESET} Click "📸 Capture Checkpoint" as you complete   │
+│     milestones to durably save active focus, finished tasks & next steps.  │
+│  {BOLD}4. Deterministic Resume:{RESET} Continuum auto-generates a 6-point Resume      │
+│     Brief without hallucinations. Click "Copy Brief" to continue work.     │
+│  {BOLD}5. AI Handoff Export:{RESET} Click "📦 Export Handoff" to package prompt       │
+│     context bundles tailored for Claude, GPT-4o, or Gemini.                │
+│  {BOLD}6. Branch & Compare:{RESET} Inspect historical snapshots, fork clean branches  │
+│     with "🌿 Branch", or compare changes with "⚖️ Compare".                 │
+│  {BOLD}7. Instant Search:{RESET} Press {BOLD}Alt+S{RESET} or click "🔍 Search" for offline FTS5   │
+│     full-text search across all your activities and checkpoints.           │
+│                                                                            │
+│  {BOLD}To Stop Server:{RESET} Press {BOLD}Ctrl+C{RESET} in this terminal, or run:                 │
+│                 {CYAN}$ continuum serve --stop{RESET}                                    │
 {BOLD}{MAGENTA}└────────────────────────────────────────────────────────────────────────────┘{RESET}
 """
     try:
