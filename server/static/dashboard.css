@@ -613,7 +613,8 @@ body {
 /* ==========================================================================
    Modal Dialog & Form Controls (Phase 59: Manual Checkpoint Capture)
    ========================================================================== */
-.modal-backdrop {
+.modal-backdrop,
+.modal {
   position: fixed;
   top: 0;
   left: 0;
@@ -629,7 +630,8 @@ body {
   padding: 1.5rem;
 }
 
-.modal-card {
+.modal-card,
+.modal-dialog {
   max-width: 620px;
   width: 100%;
   max-height: 90vh;
